@@ -525,8 +525,9 @@ async function refreshLiveData_() {
       // question wording Google Forms falls back to, plus a couple of
       // legacy/optional numeric fields some forms also ask.
       const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID');
-      BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID'])).map((r) => ({
+      BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID']) || pick_(r, ['Full_Name','Full Name'])).map((r) => ({
         participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
+        fullName: pick_(r, ['Full_Name','Full Name']) || '',
         timestamp: pick_(r, ['Timestamp']) || null,
         weekEnding: pick_(r, ['Week_Ending','Week ending','Which week is this check-in for?']) || pick_(r, ['Timestamp']) || null,
         email: pick_(r, ['Email_Address','Email Address','Email']) || '',
@@ -713,8 +714,18 @@ function computeEngine(p){
 }
 
 // ---------- weekly check-ins ----------
-function checkinsFor(participantId){
-  const list = (BUNDLE.checkins||[]).filter(c=>c.participantId===participantId);
+// Accepts either a participant object (preferred, enables name-fallback
+// matching) or a plain participant ID string.
+function checkinsFor(p){
+  const id = (typeof p === 'string') ? p : p.id;
+  const nameKey = (typeof p === 'string') ? null : (p.name||'').trim().toLowerCase();
+  const list = (BUNDLE.checkins||[]).filter(c=>{
+    if(c.participantId && c.participantId===id) return true;
+    // Participant_ID formula can be blank/broken on some rows — fall back
+    // to matching by full name so those check-ins aren't silently dropped.
+    if(!c.participantId && nameKey && (c.fullName||'').trim().toLowerCase()===nameKey) return true;
+    return false;
+  });
   list.sort((a,b)=> new Date(b.weekEnding||b.timestamp||0) - new Date(a.weekEnding||a.timestamp||0));
   return list;
 }
@@ -929,7 +940,7 @@ function renderCheckinsTable(){
   subEl.textContent = `${(BUNDLE.checkins||[]).length} submission${(BUNDLE.checkins||[]).length===1?'':'s'} across ${list.length} participant${list.length===1?'':'s'} shown${demoNote}`;
 
   tbody.innerHTML = list.map(p=>{
-    const entries = checkinsFor(p.id);
+    const entries = checkinsFor(p);
     const latest = entries[0];
     const latestDate = latest ? new Date(latest.weekEnding || latest.timestamp) : null;
     return `<tr data-id="${p.id}">
@@ -956,7 +967,7 @@ async function openCheckinDrawer(id){
   const p = participants.find(x=>x.id===id);
   if(!p) return;
   activeId = id;
-  const entries = checkinsFor(id);
+  const entries = checkinsFor(p);
 
   let bodyHtml;
   if(!entries.length){
