@@ -1376,18 +1376,25 @@ function openAssignMentorsDrawer(){
     </div>
     <div class="drawer-body">
       <div class="field-group">
-        <label>Current load</label>
+        <label>Current load (this browser's working draft — not yet saved to the master sheet)</label>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${TEAM_MEMBERS.map(m=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>${m}</span><span class="muted">${counts[m]||0} participants</span></div>`).join('')}
           <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>Unassigned</span><span class="muted">${unassigned} participants</span></div>
         </div>
       </div>
-      <div class="muted" style="font-size:11.5px;">Edit the <code>TEAM_MEMBERS</code> array near the top of the script to change these 4 names. Assignments save to your private local storage and are also given below as text to paste into the Assigned_Mentor column of ParticipantDB, so the master tracker stays the source of truth.</div>
+      <div class="muted" style="font-size:11.5px;">
+        This button only drafts an assignment in your browser — it does not write to Google Sheets.
+        Run it, then copy the list it gives you into the <b>Assigned_Mentor</b> column of ParticipantDB yourself.
+        Once that column is filled in on the real sheet, every visitor's Dashboard → <b>By mentor</b> panel
+        (below "By programme") and the "All mentors" filter above the table will show it correctly —
+        no further local step needed after that.
+      </div>
       <div id="assignResults"></div>
     </div>
     <div class="save-row" style="flex-direction:column;gap:8px;">
       <button class="primary" id="assignUnassignedBtn" style="width:100%;">Assign the ${unassigned} unassigned participant${unassigned===1?'':'s'} only</button>
       <button id="assignAllBtn" style="width:100%;">Reassign everyone (overwrite existing)</button>
+      <button class="danger-ghost" id="clearLocalMentorsBtn" style="width:100%;">Clear this browser's draft (start over)</button>
       <button class="ghost" id="closeBtnAssign" style="width:100%;">Close</button>
     </div>
   `;
@@ -1403,6 +1410,24 @@ function openAssignMentorsDrawer(){
     const changes = await runMentorAssignment('all');
     showAssignResults(changes);
   };
+  document.getElementById('clearLocalMentorsBtn').onclick = clearLocalMentorAssignments;
+}
+
+async function clearLocalMentorAssignments(){
+  if(!confirm("This clears the draft mentor assignments saved in THIS browser only — it does not touch your Google Sheet, which is unaffected either way. Continue?")) return;
+  for(const p of participants){
+    const ov = await loadOverrides(p.id);
+    if('mentor' in ov){
+      delete ov.mentor;
+      if(Object.keys(ov).length){
+        await saveOverride(p.id, ov);
+      }else{
+        try{ await window.storage.delete(STORE_PREFIX+':edit:'+p.id, false); }catch(e){}
+      }
+    }
+  }
+  showToast('Cleared — reloading…');
+  setTimeout(()=>location.reload(), 700);
 }
 
 function showAssignResults(changes){
