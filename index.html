@@ -295,7 +295,7 @@
       <table>
         <thead>
           <tr>
-            <th>Participant</th><th>Programme</th><th># Check-ins</th><th>Last check-in</th><th>Latest confidence</th>
+            <th>Participant</th><th>Programme</th><th># Check-ins</th><th>Last check-in</th><th>Latest status</th>
           </tr>
         </thead>
         <tbody id="checkinsTbody"></tbody>
@@ -376,12 +376,12 @@ const DATA_SOURCE = {
   // Weekly check-in responses. Point this at the "Publish to web > CSV" link
   // for the response sheet behind your check-in Google Form. Leave blank to
   // keep the Weekly Check-ins tab in its empty/demo state.
-  checkinsCsvUrl: '',
+  checkinsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=357954573&single=true&output=csv',
 };
 
 // Link to the actual Google Form participants fill in. Shown as a button on
 // the Weekly Check-ins tab. Leave blank to hide the button.
-const CHECKIN_FORM_URL = '';
+const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1kbn8H38ypaUmuLfudIxHSUGaQkqHoUOhP-EA/viewform';
 
 /**
  * Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines.
@@ -517,15 +517,28 @@ async function refreshLiveData_() {
     if (DATA_SOURCE.checkinsCsvUrl) {
       // Google Form response sheets use the literal question text as the
       // column header (no junk rows above it), so we don't need to hunt
-      // for a required header row — row 1 is always it.
+      // for a required header row — row 1 is always it. Candidate lists
+      // cover both your WeeklyFeedback tab's actual column names
+      // (Topics_Studied_This_Week, Current_Module, Met_Study_Commitment,
+      // Study_Days_Completed, Challenges, Plan_Next_Week) and the raw
+      // question wording Google Forms falls back to, plus a couple of
+      // legacy/optional numeric fields some forms also ask.
       const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, null);
       BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID'])).map((r) => ({
         participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
         timestamp: pick_(r, ['Timestamp']) || null,
         weekEnding: pick_(r, ['Week_Ending','Week ending','Which week is this check-in for?']) || pick_(r, ['Timestamp']) || null,
+        email: pick_(r, ['Email_Address','Email Address','Email']) || '',
+        cohortId: pick_(r, ['Cohort_ID','Cohort ID']) || '',
+        topicsThisWeek: pick_(r, ['Topics_Studied_This_Week','Topics studied this week','What topics did you study this week?']) || '',
+        currentModule: pick_(r, ['Current_Module','Current module','What module are you currently on?']) || '',
+        metCommitment: pick_(r, ['Met_Study_Commitment','Did you meet your study commitment this week?']) || '',
+        daysKept: toNum_(pick_(r, ['Study_Days_Completed','Days_Kept_To_Schedule','Days kept to schedule','How many days did you study this week?']), null),
+        challenges: pick_(r, ['Challenges','Any challenges this week?']) || '',
+        planNextWeek: pick_(r, ['Plan_Next_Week','Plan for next week','What is your plan for next week?']) || '',
+        // Legacy/optional fields — populated only if your form happens to ask them.
         modulesThisWeek: toNum_(pick_(r, ['Modules_Completed_This_Week','Modules completed this week','How many modules did you complete this week?']), null),
         hoursThisWeek: toNum_(pick_(r, ['Hours_Studied_This_Week','Hours studied this week','How many hours did you study this week?']), null),
-        daysKept: toNum_(pick_(r, ['Days_Kept_To_Schedule','Days kept to schedule','How many days did you study this week?']), null),
         confidence: toNum_(pick_(r, ['Confidence_Rating','Confidence rating','How confident do you feel about staying on track? (1-5)']), null),
         comments: pick_(r, ['Comments','Blockers_Comments','Any blockers, questions, or comments?']) || '',
       }));
@@ -923,7 +936,7 @@ function renderCheckinsTable(){
       <td><span class="prog-code">${p.programme}</span></td>
       <td>${entries.length}</td>
       <td>${latestDate && !isNaN(latestDate) ? fmtShort(latestDate) : '<span class="muted">—</span>'}</td>
-      <td>${latest && latest.confidence!=null ? confDots(latest.confidence) : '<span class="muted">—</span>'}</td>
+      <td>${latest && latest.confidence!=null ? confDots(latest.confidence) : (latest && latest.metCommitment ? `<span class="badge ${/yes/i.test(latest.metCommitment)?'green':'amber'}">${latest.metCommitment}</span>` : '<span class="muted">—</span>')}</td>
     </tr>`;
   }).join('');
   tbody.querySelectorAll('tr').forEach(tr=>{
@@ -961,12 +974,14 @@ async function openCheckinDrawer(id){
             ${applied ? '<span class="applied-tag">Applied to profile</span>' : ''}
           </div>
           <div class="checkin-metrics">
-            <div class="m"><div class="k">Modules this week</div><div class="v">${entry.modulesThisWeek ?? '—'}</div></div>
-            <div class="m"><div class="k">Hours studied</div><div class="v">${entry.hoursThisWeek ?? '—'}</div></div>
-            <div class="m"><div class="k">Days kept to plan</div><div class="v">${entry.daysKept ?? '—'}${p.preferredDays?(' / '+p.preferredDays):''}</div></div>
+            <div class="m"><div class="k">Current module</div><div class="v" style="font-size:13px;">${entry.currentModule || (entry.modulesThisWeek!=null ? entry.modulesThisWeek+' completed' : '—')}</div></div>
+            <div class="m"><div class="k">Days studied</div><div class="v">${entry.daysKept ?? '—'}${p.preferredDays?(' / '+p.preferredDays):''}</div></div>
+            <div class="m"><div class="k">Met commitment</div><div class="v" style="font-size:13px;">${entry.metCommitment || '—'}</div></div>
           </div>
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft);margin-bottom:3px;">Confidence</div>
-          ${confDots(entry.confidence)}
+          ${entry.confidence!=null ? `<div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft);margin-bottom:3px;">Confidence</div>${confDots(entry.confidence)}` : ''}
+          ${entry.topicsThisWeek ? `<div class="checkin-comments" style="margin-top:10px;"><b>Topics studied:</b> ${entry.topicsThisWeek}</div>` : ''}
+          ${entry.challenges ? `<div class="checkin-comments" style="margin-top:10px;"><b>Challenges:</b> ${entry.challenges}</div>` : ''}
+          ${entry.planNextWeek ? `<div class="checkin-comments" style="margin-top:10px;"><b>Plan for next week:</b> ${entry.planNextWeek}</div>` : ''}
           ${entry.comments ? `<div class="checkin-comments" style="margin-top:10px;">${entry.comments}</div>` : ''}
           <div class="staff-note" style="margin-top:10px;">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft);margin-bottom:3px;">Staff note</div>
@@ -974,7 +989,7 @@ async function openCheckinDrawer(id){
           </div>
           <div class="ci-actions">
             <button class="ci-save-note">Save note</button>
-            <button class="ci-apply" ${applied?'disabled':''}>${applied?'Applied ✓':'Apply modules to profile'}</button>
+            <button class="ci-apply" ${applied?'disabled':''}>${applied?'Applied ✓':'Apply to profile'}</button>
           </div>
         </div>
       `;
@@ -1015,7 +1030,9 @@ async function openCheckinDrawer(id){
 
 async function applyCheckinToProfile(p, entry, key){
   const delta = entry.modulesThisWeek || 0;
-  p.modulesCompleted = (p.modulesCompleted||0) + delta;
+  if(delta) p.modulesCompleted = (p.modulesCompleted||0) + delta;
+  if(entry.currentModule) p.currentModuleWeek = entry.currentModule;
+  if(entry.topicsThisWeek) p.currentTopic = entry.topicsThisWeek;
   const entryDate = entry.weekEnding || entry.timestamp;
   if(entryDate){
     const d = new Date(entryDate);
@@ -1024,10 +1041,11 @@ async function applyCheckinToProfile(p, entry, key){
   await saveOverride(p.id, {
     name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
     paymentStatus:p.paymentStatus, modulesCompleted:p.modulesCompleted,
+    currentModuleWeek:p.currentModuleWeek, currentTopic:p.currentTopic,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
   });
   await markCheckinApplied(key);
-  showToast('Applied — profile totals updated.');
+  showToast('Applied — profile updated.');
   renderAll();
   openCheckinDrawer(p.id);
 }
