@@ -238,6 +238,7 @@
           <option value="Defaulted">Defaulted</option>
           <option value="Completed">Completed</option>
         </select>
+        <button id="assignMentorsBtn">Assign mentors</button>
         <button class="primary" id="addBtn">+ Add participant</button>
       </div>
     </div>
@@ -383,6 +384,12 @@ const DATA_SOURCE = {
 // the Weekly Check-ins tab. Leave blank to hide the button.
 const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1kbn8H38ypaUmuLfudIxHSUGaQkqHoUOhP-EA/viewform';
 
+// The Self-Paced Learning Team members who each get an even share of
+// participants for weekly follow-up (Assigned_Mentor). Edit these 4 names
+// to match your real team, then use the "Assign mentors" button on the
+// Dashboard tab to distribute participants evenly and round-robin.
+const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
+
 /**
  * Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines.
  * Your sheets have a title row and a description row above the real headers
@@ -451,6 +458,13 @@ function findSetting_(rows, needle, fallback) {
 }
 
 /**
+ * Tracks exactly what happened on the last check-ins fetch, so the empty
+ * state can tell you precisely what's wrong instead of always showing the
+ * same generic "not connected" text.
+ */
+let CHECKIN_STATUS = { configured: false, error: null, rawCount: null, matchedCount: null };
+
+/**
  * If DATA_SOURCE URLs are configured, fetches fresh CSV from the
  * published Google Sheet and overwrites BUNDLE.participants /
  * BUNDLE.programmes / SETTINGS in place. On any failure (blank URL,
@@ -460,6 +474,7 @@ function findSetting_(rows, needle, fallback) {
 async function refreshLiveData_() {
   const badge = document.getElementById('dataSourceBadge');
   const anyConfigured = DATA_SOURCE.participantsCsvUrl || DATA_SOURCE.programmesCsvUrl || DATA_SOURCE.settingsCsvUrl;
+  CHECKIN_STATUS.configured = !!DATA_SOURCE.checkinsCsvUrl;
   if (!anyConfigured) {
     badge.textContent = 'Demo data — data source not configured (see README).';
     badge.className = 'rule-pill demo';
@@ -525,6 +540,7 @@ async function refreshLiveData_() {
       // question wording Google Forms falls back to, plus a couple of
       // legacy/optional numeric fields some forms also ask.
       const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID');
+      CHECKIN_STATUS.rawCount = rows.length;
       BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID']) || pick_(r, ['Full_Name','Full Name'])).map((r) => ({
         participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
         fullName: pick_(r, ['Full_Name','Full Name']) || '',
@@ -544,6 +560,8 @@ async function refreshLiveData_() {
         confidence: toNum_(pick_(r, ['Confidence_Rating','Confidence rating','How confident do you feel about staying on track? (1-5)']), null),
         comments: pick_(r, ['Comments','Blockers_Comments','Any blockers, questions, or comments?']) || '',
       }));
+      CHECKIN_STATUS.matchedCount = BUNDLE.checkins.length;
+      CHECKIN_STATUS.error = null;
     }
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -552,6 +570,7 @@ async function refreshLiveData_() {
   } catch (err) {
     badge.textContent = 'Could not reach data source — showing last-known snapshot.';
     badge.className = 'rule-pill error';
+    if (DATA_SOURCE.checkinsCsvUrl) CHECKIN_STATUS.error = err.message;
     console.error('refreshLiveData_ failed:', err);
   }
 }
@@ -929,6 +948,26 @@ function renderCheckinsTable(){
   const hasAnyCheckins = (BUNDLE.checkins||[]).length > 0;
   if(!hasAnyCheckins){
     tbody.innerHTML = '';
+    let msg;
+    if(!CHECKIN_STATUS.configured){
+      msg = `Weekly check-in data source isn't connected yet.<br>
+        Add your published response-sheet CSV link to <code>DATA_SOURCE.checkinsCsvUrl</code>
+        (and the form link to <code>CHECKIN_FORM_URL</code>) near the top of the script.`;
+    } else if(CHECKIN_STATUS.error){
+      msg = `Could not reach the check-in sheet: <code>${CHECKIN_STATUS.error}</code>.<br>
+        Check that the tab is Published to the web (File → Share → Publish to web) and that
+        <code>DATA_SOURCE.checkinsCsvUrl</code> still points at it.`;
+    } else if(CHECKIN_STATUS.rawCount === 0){
+      msg = `Connected to the sheet, but it has 0 rows below the header — no check-ins have
+        been submitted yet.`;
+    } else if(CHECKIN_STATUS.matchedCount === 0){
+      msg = `Connected — found ${CHECKIN_STATUS.rawCount} row(s) in the sheet, but none could
+        be matched to a participant. Check that Participant_ID or Full_Name in those rows match
+        your participant list exactly (spelling, spacing, casing).`;
+    } else {
+      msg = `No check-ins yet.`;
+    }
+    emptyEl.innerHTML = msg;
     emptyEl.style.display = 'block';
     subEl.textContent = 'No check-in data source connected';
     return;
@@ -1124,6 +1163,13 @@ async function openDrawer(id){
             </select>
           </div>
           <div class="field-group">
+            <label>Assigned mentor</label>
+            <select id="f_mentor">
+              <option value="">— Unassigned —</option>
+              ${TEAM_MEMBERS.map(m=>`<option ${m===p.mentor?'selected':''}>${m}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field-group">
             <label>Modules completed (of ${eng.totalModules})</label>
             <input type="number" id="f_completed" min="0" max="${eng.totalModules}" value="${p.modulesCompleted||0}">
           </div>
@@ -1171,6 +1217,7 @@ async function saveDrawer(p){
   p.programme = document.getElementById('f_programme').value;
   p.cohortId = document.getElementById('f_cohortId').value.trim();
   p.paymentStatus = document.getElementById('f_payment').value;
+  p.mentor = document.getElementById('f_mentor').value || null;
   p.modulesCompleted = parseInt(document.getElementById('f_completed').value,10) || 0;
   p.preferredDays = parseInt(document.getElementById('f_days').value,10) || 2;
   p.lastCheckin = document.getElementById('f_checkin').value || null;
@@ -1178,7 +1225,7 @@ async function saveDrawer(p){
 
   await saveOverride(p.id, {
     name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
-    paymentStatus:p.paymentStatus, modulesCompleted:p.modulesCompleted,
+    paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
   });
   showToast('Saved — recalculated live.');
@@ -1204,6 +1251,103 @@ function showToast(msg){
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// ---------- mentor auto-assignment ----------
+function computeMentorCounts(){
+  const counts = {};
+  TEAM_MEMBERS.forEach(m=>counts[m]=0);
+  participants.forEach(p=>{ if(p.mentor && counts[p.mentor]!==undefined) counts[p.mentor]++; });
+  return counts;
+}
+
+// mode 'unassigned' only fills participants with no mentor yet, balancing
+// against current load. mode 'all' ignores existing assignments and
+// redistributes everyone evenly, in Participant_ID order for stability.
+async function runMentorAssignment(mode){
+  const counts = (mode==='all')
+    ? Object.fromEntries(TEAM_MEMBERS.map(m=>[m,0]))
+    : computeMentorCounts();
+  const targets = (mode==='all' ? participants.slice() : participants.filter(p=>!p.mentor))
+    .sort((a,b)=> (a.id||'').localeCompare(b.id||''));
+
+  const changes = [];
+  for(const p of targets){
+    let best = TEAM_MEMBERS[0];
+    TEAM_MEMBERS.forEach(m=>{ if(counts[m] < counts[best]) best = m; });
+    p.mentor = best;
+    counts[best] = (counts[best]||0) + 1;
+    changes.push(p);
+  }
+  for(const p of changes){
+    await saveOverride(p.id, {
+      name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
+      paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
+      preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
+    });
+  }
+  return changes;
+}
+
+function openAssignMentorsDrawer(){
+  const counts = computeMentorCounts();
+  const unassigned = participants.filter(p=>!p.mentor).length;
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>Assign mentors</h3>
+      <div class="muted">Distributes participants evenly across your ${TEAM_MEMBERS.length} team members for weekly follow-up.</div>
+    </div>
+    <div class="drawer-body">
+      <div class="field-group">
+        <label>Current load</label>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${TEAM_MEMBERS.map(m=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>${m}</span><span class="muted">${counts[m]||0} participants</span></div>`).join('')}
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>Unassigned</span><span class="muted">${unassigned} participants</span></div>
+        </div>
+      </div>
+      <div class="muted" style="font-size:11.5px;">Edit the <code>TEAM_MEMBERS</code> array near the top of the script to change these 4 names. Assignments save to your private local storage and are also given below as text to paste into the Assigned_Mentor column of ParticipantDB, so the master tracker stays the source of truth.</div>
+      <div id="assignResults"></div>
+    </div>
+    <div class="save-row" style="flex-direction:column;gap:8px;">
+      <button class="primary" id="assignUnassignedBtn" style="width:100%;">Assign the ${unassigned} unassigned participant${unassigned===1?'':'s'} only</button>
+      <button id="assignAllBtn" style="width:100%;">Reassign everyone (overwrite existing)</button>
+      <button class="ghost" id="closeBtnAssign" style="width:100%;">Close</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeBtnAssign').onclick = closeDrawer;
+  document.getElementById('assignUnassignedBtn').onclick = async ()=>{
+    if(unassigned===0){ showToast('No unassigned participants.'); return; }
+    const changes = await runMentorAssignment('unassigned');
+    showAssignResults(changes);
+  };
+  document.getElementById('assignAllBtn').onclick = async ()=>{
+    if(!confirm('This overwrites the mentor for ALL participants, including ones already assigned. Continue?')) return;
+    const changes = await runMentorAssignment('all');
+    showAssignResults(changes);
+  };
+}
+
+function showAssignResults(changes){
+  const header = 'Participant_ID\tFull_Name\tAssigned_Mentor';
+  const rows = changes.map(p=>`${p.id}\t${p.name}\t${p.mentor}`).join('\n');
+  const resultsEl = document.getElementById('assignResults');
+  if(!resultsEl) return;
+  resultsEl.innerHTML = `
+    <div class="field-group">
+      <label>${changes.length} participant${changes.length===1?'':'s'} assigned — copy into ParticipantDB</label>
+      <textarea id="assignCsvOut" style="min-height:160px;font-family:var(--mono);font-size:11px;" readonly>${header}\n${rows}</textarea>
+    </div>
+    <button id="copyAssignBtn">Copy to clipboard</button>
+  `;
+  document.getElementById('copyAssignBtn').onclick = ()=>{
+    const ta = document.getElementById('assignCsvOut');
+    ta.select();
+    try{ navigator.clipboard.writeText(ta.value); }catch(e){ document.execCommand('copy'); }
+    showToast('Copied — paste into ParticipantDB.');
+  };
+  renderAll();
+  showToast('Mentors assigned — recalculated live.');
 }
 
 // ---------- add participant ----------
@@ -1282,6 +1426,7 @@ async function boot(){
     document.getElementById(id).addEventListener('input', renderAll);
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
+  document.getElementById('assignMentorsBtn').addEventListener('click', openAssignMentorsDrawer);
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeDrawer(); });
 
   document.getElementById('tabDashboard').addEventListener('click', ()=>switchTab('dashboard'));
