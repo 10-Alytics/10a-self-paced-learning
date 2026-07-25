@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SPLMS — Self-Paced Tracker</title>
+<style>
+  :root{
+    --ink:#0F172A;
+    --ink-soft:#475569;
+    --line:#E2E8F0;
+    --paper:#FFFFFF;
+    --canvas:#F4F6F9;
+    --navy:#0B1324;
+    --navy-2:#16213D;
+    --teal:#0D9488;
+    --teal-soft:#CCFBF1;
+    --amber:#B45309;
+    --amber-soft:#FEF3C7;
+    --rose:#BE123C;
+    --rose-soft:#FFE4E6;
+    --green-soft:#DCFCE7;
+    --green:#15803D;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);}
+  ::selection{background:var(--teal-soft);}
+
+  /* ---- header ---- */
+  .app-header{
+    background:linear-gradient(160deg,var(--navy) 0%, var(--navy-2) 100%);
+    color:#fff;padding:22px 28px 60px;position:relative;overflow:hidden;
+  }
+  .app-header::after{
+    content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;border-radius:50%;
+    background:radial-gradient(circle at center, rgba(13,148,136,.35), transparent 70%);
+  }
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;position:relative;z-index:1;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{width:38px;height:38px;border-radius:10px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none;}
+  .brand h1{margin:0;font-size:19px;letter-spacing:.2px;}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:#A9B4C9;}
+  .rule-pill{
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:10px;
+    padding:10px 14px;font-size:12px;color:#CBD5E1;max-width:360px;line-height:1.5;
+  }
+  .rule-pill b{color:#fff;}
+  .rule-pill code{background:rgba(255,255,255,.12);padding:1px 5px;border-radius:4px;font-family:var(--mono);}
+  #dataSourceBadge{max-width:260px;}
+  #dataSourceBadge.live{border-color:rgba(21,128,61,.5);background:rgba(21,128,61,.15);}
+  #dataSourceBadge.demo{border-color:rgba(180,83,9,.5);background:rgba(180,83,9,.15);}
+  #dataSourceBadge.error{border-color:rgba(190,18,60,.5);background:rgba(190,18,60,.15);}
+
+  /* ---- KPI cards, pulled up over header ---- */
+  .kpis{
+    position:relative;z-index:2;margin:-40px 24px 0;
+    display:grid;grid-template-columns:repeat(7,1fr);gap:10px;
+  }
+  .kpi{
+    background:var(--paper);border-radius:12px;padding:14px 14px 12px;box-shadow:0 8px 24px -12px rgba(15,23,42,.25);
+    border:1px solid var(--line);
+  }
+  .kpi .num{font-size:22px;font-weight:700;font-family:var(--mono);}
+  .kpi .lbl{font-size:11px;color:var(--ink-soft);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
+  .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
+  .kpi.teal .num{color:var(--teal);}
+
+  /* ---- main layout ---- */
+  .main{max-width:1360px;margin:28px auto 60px;padding:0 24px;}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .panel + .panel{margin-top:20px;}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap;}
+  .panel-head h2{font-size:14.5px;margin:0;letter-spacing:.2px;}
+  .panel-head .sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+
+  /* controls */
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  input[type=text], select{
+    font-family:var(--sans);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+  }
+  input[type=text]{width:200px;}
+  button{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:8px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);cursor:pointer;
+  }
+  button:hover{border-color:#CBD5E1;background:#F8FAFC;}
+  button.primary{background:var(--navy);color:#fff;border-color:var(--navy);}
+  button.primary:hover{background:#1c2947;}
+  button.ghost{border:none;background:transparent;color:var(--ink-soft);}
+  button.danger-ghost{border:none;background:transparent;color:var(--rose);}
+
+  /* table */
+  table{width:100%;border-collapse:collapse;font-size:12.8px;}
+  thead th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);
+    padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none;
+  }
+  thead th:hover{color:var(--ink);}
+  tbody td{padding:10px 12px;border-bottom:1px solid #EEF1F5;vertical-align:middle;}
+  tbody tr:hover{background:#FAFBFD;cursor:pointer;}
+  .pid{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);}
+  .name{font-weight:600;}
+  .email{font-size:11px;color:var(--ink-soft);}
+  .prog-code{
+    font-size:10.5px;font-weight:700;background:#EEF2FF;color:#3730A3;border-radius:5px;padding:2px 6px;
+  }
+  .badge{font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 9px;display:inline-block;white-space:nowrap;}
+  .badge.green{background:var(--green-soft);color:var(--green);}
+  .badge.amber{background:var(--amber-soft);color:var(--amber);}
+  .badge.rose{background:var(--rose-soft);color:var(--rose);}
+  .badge.slate{background:#E2E8F0;color:#475569;}
+  .progress-track{width:80px;height:6px;background:#E5E9F0;border-radius:99px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--teal);}
+  .timeline{width:120px;height:16px;position:relative;}
+  .timeline .bar{position:absolute;left:0;right:0;top:6px;height:4px;background:#E5E9F0;border-radius:99px;}
+  .timeline .fill{position:absolute;left:0;top:6px;height:4px;border-radius:99px;}
+  .timeline .today{position:absolute;top:2px;width:2px;height:12px;background:var(--navy);}
+  .muted{color:var(--ink-soft);}
+  .flag-banner{
+    background:#FFF7ED;border:1px solid #FED7AA;color:#9A3412;padding:12px 16px;border-radius:10px;
+    font-size:12.5px;margin:0 24px 18px;line-height:1.5;
+  }
+  .flag-banner b{font-weight:700;}
+
+  /* drawer */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:stretch;justify-content:flex-end;z-index:50;}
+  .overlay.open{display:flex;}
+  .drawer{width:420px;max-width:92vw;background:#fff;height:100%;overflow-y:auto;box-shadow:-16px 0 40px rgba(0,0,0,.2);}
+  .drawer-head{padding:20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2;}
+  .drawer-head h3{margin:0 0 3px;font-size:16px;}
+  .drawer-body{padding:20px;display:flex;flex-direction:column;gap:18px;}
+  .field-group label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft);margin-bottom:4px;}
+  .field-group input, .field-group select, .field-group textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:var(--sans);font-size:13px;}
+  .field-group textarea{resize:vertical;min-height:56px;}
+  .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .metric{background:var(--canvas);border-radius:10px;padding:10px 12px;}
+  .metric .k{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;}
+  .metric .v{font-size:14px;font-weight:700;font-family:var(--mono);margin-top:2px;}
+  .section-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);font-weight:700;margin-bottom:2px;}
+  hr.sep{border:none;border-top:1px solid var(--line);margin:2px 0;}
+  .save-row{display:flex;gap:8px;position:sticky;bottom:0;background:#fff;padding:14px 20px;border-top:1px solid var(--line);}
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:var(--navy);color:#fff;padding:10px 18px;border-radius:10px;font-size:12.5px;transition:all .25s ease;z-index:100;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
+  .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
+  @media (max-width:1100px){ .kpis{grid-template-columns:repeat(4,1fr);} }
+  @media (max-width:640px){ .kpis{grid-template-columns:repeat(2,1fr);margin:-24px 12px 0;} .main{padding:0 12px;} }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="header-row">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div>
+        <h1>SPLMS Tracker</h1>
+        <p>Self-Paced Learning · live cohort &amp; risk engine</p>
+      </div>
+    </div>
+    <div class="rule-pill">
+      <b>Cohort_End_Date rule:</b> every cohort runs a standard 6 months from its start month, read
+      straight from the cohort code — <code>C26-05</code> → started May 2026 → ends Nov 2026.
+      Everything below (grace period, weekly pace, risk, escalation) is computed live from that.
+    </div>
+    <div class="rule-pill" id="dataSourceBadge">Checking data source…</div>
+  </div>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<div id="flagArea"></div>
+
+<div class="main">
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Participants</h2>
+        <div class="sub" id="tableSub">—</div>
+      </div>
+      <div class="controls">
+        <input type="text" id="search" placeholder="Search name, ID, email…">
+        <select id="filterProg"><option value="">All programmes</option></select>
+        <select id="filterRisk">
+          <option value="">All risk</option>
+          <option value="Green">Green</option>
+          <option value="Yellow">Yellow</option>
+          <option value="Red">Red</option>
+        </select>
+        <select id="filterStatus">
+          <option value="">All status</option>
+          <option value="Active">Active</option>
+          <option value="Needs Follow-up">Needs Follow-up</option>
+          <option value="At Risk">At Risk</option>
+          <option value="Defaulted">Defaulted</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <button class="primary" id="addBtn">+ Add participant</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th data-k="name">Participant</th>
+            <th data-k="programme">Programme</th>
+            <th data-k="cohortId">Cohort</th>
+            <th data-k="cohortEnd">Cohort window (6 mo)</th>
+            <th data-k="progress">Progress</th>
+            <th data-k="weeksRemaining">Wks left</th>
+            <th data-k="pace">Pace needed</th>
+            <th data-k="risk">Risk</th>
+            <th data-k="status">Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="emptyState" style="display:none;">No participants match these filters.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>By programme</h2><div class="sub">Live rollup from the participant table above</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Programme</th><th>Enrolled</th><th>Avg progress</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
+        <tbody id="progRollup"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="footnote">Computed entirely in your browser from the SPLMS data model · edits save to your personal, private storage for this tracker · no data leaves this page.</p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="drawer" id="drawer"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BUNDLE = {"settings": {"gracePeriodDays": 30, "defaultStudyDays": 2, "defaultHours": 2, "esc1": 7, "esc2": 14, "esc3": 21, "esc4": 28, "riskGreen": 14, "riskYellow": 0}, "programmes": [{"code": "DA", "name": "Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "CS", "name": "Cybersecurity", "totalModules": 19, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "BA", "name": "Business Analysis", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HTDA", "name": "Health Tech Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FA", "name": "Financial Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HRA", "name": "HR Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FSDS", "name": "Full Stack Data Science", "totalModules": 11, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "PD", "name": "Product Design", "totalModules": 13, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DVOPS", "name": "DevOps Engineering", "totalModules": 21, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "APM", "name": "Agile Project Management", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DE", "name": "Data Engineering", "totalModules": 12, "capstoneWeeks": 3, "standardWeeks": 16}, {"code": "HTBA", "name": "Health Tech Business Analysis", "totalModules": 0, "capstoneWeeks": 2, "standardWeeks": 16}], "participants": [{"serial": "10ALY/C25-11-EU/001", "id": "DAC25-11-EU-01", "name": "Kwame Boakye", "email": "boakyekwame20@gmail.com", "phone": null, "programme": "DA", "cohortId": "C25-11 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-03-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/135", "id": "DAC26-02-NA-32", "name": "Stella Oluwabukola Kuewumi", "email": "stelzy110@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/176", "id": "DAC26-01-EU-74", "name": "Sylvalin Nwaogu", "email": "cyrilsva2016@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/090", "id": "APMC25-12-EU-11", "name": "Osuagwu Chioma", "email": "osuagwuchioma@gmail.com", "phone": null, "programme": "APM", "cohortId": null, "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/004", "id": "HTDAC26-04-EU-04", "name": "Ama Asantewaa Wilmot", "email": "asantewaa.wilmot@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-03", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-NA-2/014", "id": "HTDAC26-04-NA-65", "name": "Festus Essien", "email": "eyisonfestus@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-14", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/006", "id": "HTDAC26-04-EU-06", "name": "David Miracles Baasoteng Vuuro", "email": "davidmiracles1@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-19", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/010", "id": "CSC25-12-EU-10", "name": "Oruaro Ogoro", "email": "rirowilson8@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-25", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-EU/002", "id": "CSC26-02-EU-02", "name": "Aharanwa Emmanuel-Charles", "email": "aharanwatoo@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 8", "currentTopic": "CS010", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/004", "id": "CSC26-01-NA-04", "name": "Freedom Isikuru", "email": "sikuruf001@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS016", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/016", "id": "CSC26-01-NA-16", "name": "Olufemi Ogunlana", "email": "olufemiogunlana@yahoo.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-30", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CAP001", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/012", "id": "CSC26-01-EU-12", "name": "OGECHI JOAN ADINDU", "email": "joanadindu05@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/014", "id": "CSC25-12-EU-15", "name": "David Finch", "email": "Davidmfinch@live.com", "phone": null, "programme": "CS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/051", "id": "FAC25-12-NA-03", "name": "Olere Otele", "email": "olere07@yahoo.com", "phone": null, "programme": "FA", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 23", "currentTopic": "FA012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-09-EU/008", "id": "HRAC25-09-EU-01", "name": "Ifeoma Elemson", "email": "ifeoma.elemson@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C25-09 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 24", "currentTopic": "BREAK", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-NA/088", "id": "HRAC26-03-NA-02", "name": "Anthonia Ezeh", "email": "ezehanthonia@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C26-03 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 10", "currentTopic": "HRA008", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/139", "id": "FSDSC26-01-NA-08", "name": "Emmanuel Abiodun", "email": "ayomideabiodun26@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/160", "id": "FSDSC26-01-NA-29", "name": "Victoria Oyewola", "email": "vicoylah@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/147", "id": "FSDSC26-01-NA-16", "name": "Ifeanyi Chinonso Nkwocha", "email": "ifeanyiliveth@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/097", "id": "FSDSC25-12-NA-11", "name": "Olanrewaju Legastus Ayanyemi", "email": "ayanyemilanre@yahoo.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/107", "id": "FSDSC25-12-NA-21", "name": "Thando Malinga", "email": "thando.malinga@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/081", "id": "FSDSC26-02-NA-07", "name": "Kingsley Ihekwoaba Resource", "email": "chibukings@ymail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/156", "id": "FSDSC26-01-NA-25", "name": "Peace Udoeyo", "email": "udoeyopeace@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/064", "id": "FSDSC25-12-EU-01", "name": "Chinonso Gbule", "email": "dr.nonsogbule@outlook.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-EU/057", "id": "FSDSC26-03-EU-10", "name": "Racheal Aina", "email": "rachealaina14@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-03 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/105", "id": "FSDSC26-01-EU-01", "name": "Adeyemi Adeniji", "email": "adeyeminiji@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}]};
+
+const SETTINGS = BUNDLE.settings;
+const PROGRAMMES = {};
+BUNDLE.programmes.forEach(p => PROGRAMMES[p.code] = p);
+
+const STORE_PREFIX = 'splms-tracker-v2';
+
+// -----------------------------------------------------------------------
+// window.storage shim — outside Claude.ai (e.g. on GitHub Pages) the
+// window.storage API used by loadOverrides/saveOverride/etc. below does
+// not exist. This shim reproduces the same async get/set/delete/list
+// interface using the visitor's own browser localStorage, so the rest of
+// the app's code needs zero changes. IMPORTANT: this is per-browser,
+// per-device storage — edits made this way stay on the device that made
+// them and are never sent back to the Google Sheet. Treat them as local
+// scratch notes, not as edits to the source of truth.
+// -----------------------------------------------------------------------
+if (typeof window.storage === 'undefined') {
+  window.storage = {
+    async get(key, shared) {
+      const raw = localStorage.getItem('storage:' + key);
+      if (raw === null) throw new Error('Key not found: ' + key);
+      return { key, value: raw, shared: !!shared };
+    },
+    async set(key, value, shared) {
+      localStorage.setItem('storage:' + key, value);
+      return { key, value, shared: !!shared };
+    },
+    async delete(key, shared) {
+      localStorage.removeItem('storage:' + key);
+      return { key, deleted: true, shared: !!shared };
+    },
+    async list(prefix, shared) {
+      const p = 'storage:' + (prefix || '');
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith(p)).map((k) => k.slice(8));
+      return { keys, prefix, shared: !!shared };
+    },
+  };
+}
+
+// -----------------------------------------------------------------------
+// LIVE DATA SOURCE
+// -----------------------------------------------------------------------
+// Fill these in after publishing the Google Sheet to the web
+// (File > Share > Publish to web > select sheet > CSV). Leave blank to
+// keep this page running on the fixed snapshot baked into BUNDLE above.
+// See README.md "Connecting the live data source" for exact steps.
+const DATA_SOURCE = {
+  participantsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=923648041&single=true&output=csv', // ParticipantDB sheet, published as CSV
+  programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1912207092&single=true&output=csv',   // Programmes sheet, published as CSV
+  settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1407597732&single=true&output=csv',     // Settings sheet, published as CSV
+};
+
+/** Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines. */
+function parseCsv_(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else if (c === '"') { inQuotes = true; }
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && next === '\n') i++;
+      row.push(field); field = '';
+      if (row.some((v) => v !== '')) rows.push(row);
+      row = [];
+    } else { field += c; }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const headers = rows[0];
+  return rows.slice(1).map((r) => {
+    const obj = {};
+    headers.forEach((h, i) => (obj[h.trim()] = (r[i] || '').trim()));
+    return obj;
+  });
+}
+
+async function fetchCsv_(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+  return parseCsv_(await res.text());
+}
+
+function toNum_(v, fallback) {
+  const n = parseFloat(v);
+  return isNaN(n) ? fallback : n;
+}
+
+function findSetting_(rows, needle, fallback) {
+  const hit = rows.find((r) => (r.Parameter || '').toLowerCase().includes(needle));
+  return hit ? toNum_(hit.Value, fallback) : fallback;
+}
+
+/**
+ * If DATA_SOURCE URLs are configured, fetches fresh CSV from the
+ * published Google Sheet and overwrites BUNDLE.participants /
+ * BUNDLE.programmes / SETTINGS in place. On any failure (blank URL,
+ * network error, sheet unpublished) it silently keeps the fixed snapshot
+ * that shipped with this file — the page always renders something.
+ */
+async function refreshLiveData_() {
+  const badge = document.getElementById('dataSourceBadge');
+  const anyConfigured = DATA_SOURCE.participantsCsvUrl || DATA_SOURCE.programmesCsvUrl || DATA_SOURCE.settingsCsvUrl;
+  if (!anyConfigured) {
+    badge.textContent = 'Demo data — data source not configured (see README).';
+    badge.className = 'rule-pill demo';
+    return;
+  }
+  try {
+    if (DATA_SOURCE.programmesCsvUrl) {
+      const rows = await fetchCsv_(DATA_SOURCE.programmesCsvUrl);
+      BUNDLE.programmes = rows.filter((r) => r.Programme_Code).map((r) => ({
+        code: r.Programme_Code,
+        name: r.Programme_Name,
+        totalModules: toNum_(r.Total_Modules, 0),
+        capstoneWeeks: toNum_(r.Default_Capstone_Duration_Weeks, 2),
+        standardWeeks: toNum_(r.Standard_Programme_Duration_Weeks, 16),
+      }));
+    }
+    if (DATA_SOURCE.settingsCsvUrl) {
+      const rows = await fetchCsv_(DATA_SOURCE.settingsCsvUrl);
+      BUNDLE.settings = {
+        gracePeriodDays: findSetting_(rows, 'grace period', SETTINGS_DEFAULTS.gracePeriodDays),
+        defaultStudyDays: findSetting_(rows, 'preferred study days', SETTINGS_DEFAULTS.defaultStudyDays),
+        defaultHours: findSetting_(rows, 'hours available', SETTINGS_DEFAULTS.defaultHours),
+        esc1: findSetting_(rows, 'week 1 threshold', SETTINGS_DEFAULTS.esc1),
+        esc2: findSetting_(rows, 'week 2 threshold', SETTINGS_DEFAULTS.esc2),
+        esc3: findSetting_(rows, 'week 3 threshold', SETTINGS_DEFAULTS.esc3),
+        esc4: findSetting_(rows, 'week 4 threshold', SETTINGS_DEFAULTS.esc4),
+        riskGreen: findSetting_(rows, 'green buffer', SETTINGS_DEFAULTS.riskGreen),
+        riskYellow: findSetting_(rows, 'yellow buffer', SETTINGS_DEFAULTS.riskYellow),
+      };
+    }
+    if (DATA_SOURCE.participantsCsvUrl) {
+      const rows = await fetchCsv_(DATA_SOURCE.participantsCsvUrl);
+      BUNDLE.participants = rows.filter((r) => r.Participant_ID).map((r) => ({
+        serial: r.Serial_No,
+        id: r.Participant_ID,
+        name: r.Full_Name,
+        email: r.Email,
+        phone: r.Phone_Number || null,
+        programme: r.Programme_Code,
+        cohortId: r.Cohort_ID,
+        paymentStatus: r.Payment_Status,
+        requestDate: r.SelfPaced_Request_Date || null,
+        approvalDate: r.SelfPaced_Approval_Date || null,
+        mentor: r.Assigned_Mentor || null,
+        preferredDays: toNum_(r.Preferred_Study_Days_Per_Week, 2),
+        hoursPerDay: toNum_(r.Hours_Available_Per_Day, 2),
+        modulesCompleted: toNum_(r.Modules_Completed, 0),
+        currentModuleWeek: r.Current_Module_Week || null,
+        currentTopic: r.Current_Topic || null,
+        lastCheckin: r.Last_Checkin_Date || null,
+        lastTopicCompleted: r.Last_Topic_Completed || null,
+        comments: r.Comments || null,
+      }));
+    }
+    PROGRAMMES_LIVE_REBUILD_();
+    const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
+    badge.className = 'rule-pill live';
+  } catch (err) {
+    badge.textContent = 'Could not reach data source — showing last-known snapshot.';
+    badge.className = 'rule-pill error';
+    console.error('refreshLiveData_ failed:', err);
+  }
+}
+
+function PROGRAMMES_LIVE_REBUILD_() {
+  Object.keys(PROGRAMMES).forEach((k) => delete PROGRAMMES[k]);
+  BUNDLE.programmes.forEach((p) => (PROGRAMMES[p.code] = p));
+  Object.keys(SETTINGS).forEach((k) => delete SETTINGS[k]);
+  Object.assign(SETTINGS, BUNDLE.settings);
+}
+
+const SETTINGS_DEFAULTS = Object.assign({}, BUNDLE.settings);
+let participants = [];
+let sortKey = 'risk';
+let sortDir = 1;
+let activeId = null;
+
+// ---------- persistence ----------
+async function loadOverrides(id){
+  try{
+    const r = await window.storage.get(STORE_PREFIX+':edit:'+id, false);
+    return r ? JSON.parse(r.value) : {};
+  }catch(e){ return {}; }
+}
+async function saveOverride(id, data){
+  await window.storage.set(STORE_PREFIX+':edit:'+id, JSON.stringify(data), false);
+}
+async function loadExtraParticipants(){
+  try{
+    const r = await window.storage.get(STORE_PREFIX+':extra', false);
+    return r ? JSON.parse(r.value) : [];
+  }catch(e){ return []; }
+}
+async function saveExtraParticipants(list){
+  await window.storage.set(STORE_PREFIX+':extra', JSON.stringify(list), false);
+}
+async function loadRemoved(){
+  try{
+    const r = await window.storage.get(STORE_PREFIX+':removed', false);
+    return r ? JSON.parse(r.value) : [];
+  }catch(e){ return []; }
+}
+async function saveRemoved(list){
+  await window.storage.set(STORE_PREFIX+':removed', JSON.stringify(list), false);
+}
+
+// ---------- date helpers ----------
+const DAY = 86400000;
+function today(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+function addDays(d,n){ return new Date(d.getTime()+n*DAY); }
+function addMonths(d,n){ const r = new Date(d); r.setMonth(r.getMonth()+n); return r; }
+function fmt(d){ if(!d) return '—'; return d.toISOString().slice(0,10); }
+function fmtShort(d){ if(!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }
+function daysBetween(a,b){ return (b - a)/DAY; }
+
+// C{yy}-{mm}... pulled out of Cohort_ID, or out of Participant_ID with the
+// Programme_Code prefix stripped off — same rule as the ParticipantDB!L formula.
+function parseCohortStart(cohortId, participantId, programmeCode){
+  let code = (cohortId && cohortId.trim()) ? cohortId.trim() : null;
+  if(!code && participantId && programmeCode){
+    code = participantId.slice(programmeCode.length);
+  }
+  if(!code) return null;
+  const m = code.match(/^C(\d{2})-(\d{2})/i);
+  if(!m) return null;
+  const yy = parseInt(m[1],10), mm = parseInt(m[2],10);
+  if(mm < 1 || mm > 12) return null;
+  return new Date(2000+yy, mm-1, 1);
+}
+
+function computeEngine(p){
+  const prog = PROGRAMMES[p.programme] || {totalModules:0, capstoneWeeks:2};
+  const totalModules = prog.totalModules || 0;
+  const completed = Math.min(p.modulesCompleted||0, totalModules || p.modulesCompleted||0);
+  const remaining = Math.max(totalModules - completed, 0);
+  const progressPct = totalModules ? completed/totalModules : 0;
+
+  const cohortStart = parseCohortStart(p.cohortId, p.id, p.programme);
+  const cohortEnd = cohortStart ? addMonths(cohortStart,6) : null;
+  const graceEnd = cohortEnd ? addDays(cohortEnd, SETTINGS.gracePeriodDays) : null;
+  const t = today();
+  const weeksRemaining = graceEnd ? Math.max(daysBetween(t, graceEnd)/7, 0) : null;
+  const activitiesPerWeek = (remaining>0)
+    ? (weeksRemaining>0 ? remaining/weeksRemaining : remaining)
+    : 0;
+
+  const preferredDays = p.preferredDays || SETTINGS.defaultStudyDays || 2;
+  const predictedModuleCompletion = (remaining>0 && preferredDays>0)
+    ? addDays(t, remaining*(7/preferredDays))
+    : t;
+  const capstoneStart = predictedModuleCompletion;
+  const capstoneWeeks = prog.capstoneWeeks || 2;
+  const predictedFinal = addDays(capstoneStart, capstoneWeeks*7);
+  const bufferDays = graceEnd ? daysBetween(predictedFinal, graceEnd) : null;
+
+  let risk = null;
+  if(bufferDays !== null){
+    if(bufferDays >= SETTINGS.riskGreen) risk = 'Green';
+    else if(bufferDays >= SETTINGS.riskYellow) risk = 'Yellow';
+    else risk = 'Red';
+  }
+
+  const daysSinceActivity = p.lastCheckin ? daysBetween(new Date(p.lastCheckin), t) : null;
+  let escalation = 'On Track';
+  if(daysSinceActivity === null) escalation = null;
+  else if(daysSinceActivity < SETTINGS.esc1) escalation = 'On Track';
+  else if(daysSinceActivity < SETTINGS.esc2) escalation = 'Week 1 - Reminder';
+  else if(daysSinceActivity < SETTINGS.esc3) escalation = 'Week 2 - Follow-up Call';
+  else if(daysSinceActivity < SETTINGS.esc4) escalation = 'Week 3 - Escalation';
+  else escalation = 'Week 4 - Default Review';
+
+  let status;
+  if(progressPct >= 1) status = 'Completed';
+  else if(escalation === 'Week 4 - Default Review') status = 'Defaulted';
+  else if(escalation === 'Week 2 - Follow-up Call' || escalation === 'Week 3 - Escalation' || risk === 'Red') status = 'At Risk';
+  else if(escalation === 'Week 1 - Reminder') status = 'Needs Follow-up';
+  else status = 'Active';
+
+  let internshipEligible = 'No';
+  if(progressPct >= 1){
+    internshipEligible = (!graceEnd || predictedFinal <= graceEnd) ? 'Yes' : 'No - Missed Deadline';
+  }
+
+  // data-quality flag: does the Cohort_ID's month disagree with the month embedded in Participant_ID?
+  let flag = null;
+  if(p.cohortId && p.id && p.programme){
+    const fromId = parseCohortStart(null, p.id, p.programme);
+    if(fromId && cohortStart && fromId.getTime() !== cohortStart.getTime()){
+      flag = `Cohort_ID (${p.cohortId}) implies a different start month than Participant_ID (${p.id}) does.`;
+    }
+  }
+
+  return {
+    totalModules, completed, remaining, progressPct,
+    cohortStart, cohortEnd, graceEnd, weeksRemaining, activitiesPerWeek,
+    predictedModuleCompletion, capstoneStart, predictedFinal, bufferDays,
+    risk, daysSinceActivity, escalation, status, internshipEligible, flag,
+    capstoneWeeks, preferredDays
+  };
+}
+
+// ---------- rendering ----------
+function riskClass(r){ return r==='Green'?'green':r==='Yellow'?'amber':r==='Red'?'rose':'slate'; }
+function statusClass(s){
+  if(s==='Completed') return 'green';
+  if(s==='At Risk' || s==='Defaulted') return 'rose';
+  if(s==='Needs Follow-up') return 'amber';
+  return 'slate';
+}
+
+function renderKPIs(computed){
+  const n = computed.length;
+  const count = f => computed.filter(f).length;
+  const active = count(c=>c.eng.status==='Active');
+  const followup = count(c=>c.eng.status==='Needs Follow-up');
+  const atrisk = count(c=>c.eng.status==='At Risk');
+  const defaulted = count(c=>c.eng.status==='Defaulted');
+  const completed = count(c=>c.eng.status==='Completed');
+  const avgProg = n ? (computed.reduce((s,c)=>s+c.eng.progressPct,0)/n*100) : 0;
+
+  const cards = [
+    ['Total participants', n, ''],
+    ['Active', active, 'teal'],
+    ['Needs follow-up', followup, 'amber'],
+    ['At risk', atrisk, 'rose'],
+    ['Defaulted', defaulted, 'rose'],
+    ['Completed', completed, 'green'],
+    ['Avg progress', avgProg.toFixed(0)+'%', 'teal'],
+  ];
+  document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls])=>`
+    <div class="kpi ${cls}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
+  `).join('');
+}
+
+function renderFlags(computed){
+  const flagged = computed.filter(c=>c.eng.flag);
+  const area = document.getElementById('flagArea');
+  if(!flagged.length){ area.innerHTML=''; return; }
+  area.innerHTML = `<div class="flag-banner"><b>Data quality — ${flagged.length} record${flagged.length>1?'s':''} to check:</b><br>` +
+    flagged.map(c=>`• <b>${c.p.id}</b> (${c.p.name}) — ${c.eng.flag}`).join('<br>') +
+    `</div>`;
+}
+
+function timelineSvg(eng){
+  if(!eng.cohortStart || !eng.graceEnd) return '<span class="muted">—</span>';
+  const total = eng.graceEnd - eng.cohortStart;
+  const t = today();
+  const pos = Math.min(Math.max((t - eng.cohortStart)/total, 0), 1);
+  const color = eng.risk==='Green' ? 'var(--green)' : eng.risk==='Yellow' ? 'var(--amber)' : 'var(--rose)';
+  return `<div class="timeline">
+    <div class="bar"></div>
+    <div class="fill" style="width:${(pos*100).toFixed(1)}%;background:${color};"></div>
+    <div class="today" style="left:${(pos*100).toFixed(1)}%;"></div>
+  </div>`;
+}
+
+function renderTable(computed){
+  const tbody = document.getElementById('tbody');
+  document.getElementById('tableSub').textContent = `${computed.length} shown`;
+  if(!computed.length){
+    tbody.innerHTML='';
+    document.getElementById('emptyState').style.display='block';
+    return;
+  }
+  document.getElementById('emptyState').style.display='none';
+  tbody.innerHTML = computed.map(({p,eng})=>`
+    <tr data-id="${p.id}">
+      <td>
+        <div class="name">${p.name}</div>
+        <div class="pid">${p.id}</div>
+      </td>
+      <td><span class="prog-code">${p.programme}</span></td>
+      <td class="pid">${p.cohortId || '<span class=muted>derived from ID</span>'}</td>
+      <td>
+        <div style="font-size:11.5px;">${fmtShort(eng.cohortStart)} → ${fmtShort(eng.cohortEnd)}</div>
+        ${timelineSvg(eng)}
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="progress-track"><div class="progress-fill" style="width:${(eng.progressPct*100).toFixed(0)}%;"></div></div>
+          <span class="muted" style="font-size:11px;">${eng.completed}/${eng.totalModules}</span>
+        </div>
+      </td>
+      <td class="pid">${eng.weeksRemaining===null?'—':eng.weeksRemaining.toFixed(1)}</td>
+      <td class="pid">${eng.activitiesPerWeek ? eng.activitiesPerWeek.toFixed(1)+'/wk' : '—'}</td>
+      <td><span class="badge ${riskClass(eng.risk)}">${eng.risk || '—'}</span></td>
+      <td><span class="badge ${statusClass(eng.status)}">${eng.status}</span></td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    tr.addEventListener('click', ()=> openDrawer(tr.dataset.id));
+  });
+}
+
+function renderRollup(computed){
+  const byProg = {};
+  computed.forEach(({p,eng})=>{
+    byProg[p.programme] = byProg[p.programme] || {n:0,prog:0,g:0,y:0,r:0};
+    const b = byProg[p.programme];
+    b.n++; b.prog += eng.progressPct;
+    if(eng.risk==='Green') b.g++; else if(eng.risk==='Yellow') b.y++; else if(eng.risk==='Red') b.r++;
+  });
+  const rows = Object.keys(byProg).sort().map(code=>{
+    const b = byProg[code];
+    const name = (PROGRAMMES[code]||{}).name || code;
+    return `<tr>
+      <td><span class="prog-code">${code}</span> <span class="muted">${name}</span></td>
+      <td>${b.n}</td>
+      <td>${(b.prog/b.n*100).toFixed(0)}%</td>
+      <td><span class="badge green">${b.g}</span></td>
+      <td><span class="badge amber">${b.y}</span></td>
+      <td><span class="badge rose">${b.r}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('progRollup').innerHTML = rows || '<tr><td colspan=6 class="muted">No data</td></tr>';
+}
+
+function populateProgFilter(){
+  const sel = document.getElementById('filterProg');
+  BUNDLE.programmes.forEach(pr=>{
+    const o = document.createElement('option');
+    o.value = pr.code; o.textContent = `${pr.code} — ${pr.name}`;
+    sel.appendChild(o);
+  });
+}
+
+function getFiltered(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const fp = document.getElementById('filterProg').value;
+  const fr = document.getElementById('filterRisk').value;
+  const fs = document.getElementById('filterStatus').value;
+  let computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  if(q){
+    computed = computed.filter(({p})=>
+      (p.name||'').toLowerCase().includes(q) ||
+      (p.id||'').toLowerCase().includes(q) ||
+      (p.email||'').toLowerCase().includes(q)
+    );
+  }
+  if(fp) computed = computed.filter(({p})=>p.programme===fp);
+  if(fr) computed = computed.filter(({eng})=>eng.risk===fr);
+  if(fs) computed = computed.filter(({eng})=>eng.status===fs);
+
+  computed.sort((a,b)=>{
+    let av, bv;
+    switch(sortKey){
+      case 'name': av=a.p.name||''; bv=b.p.name||''; break;
+      case 'programme': av=a.p.programme||''; bv=b.p.programme||''; break;
+      case 'cohortId': av=a.p.cohortId||''; bv=b.p.cohortId||''; break;
+      case 'cohortEnd': av=a.eng.cohortEnd||0; bv=b.eng.cohortEnd||0; break;
+      case 'progress': av=a.eng.progressPct; bv=b.eng.progressPct; break;
+      case 'weeksRemaining': av=a.eng.weeksRemaining??-1; bv=b.eng.weeksRemaining??-1; break;
+      case 'pace': av=a.eng.activitiesPerWeek||0; bv=b.eng.activitiesPerWeek||0; break;
+      case 'risk': { const order={Red:0,Yellow:1,Green:2,null:3}; av=order[a.eng.risk]; bv=order[b.eng.risk]; break; }
+      case 'status': av=a.eng.status; bv=b.eng.status; break;
+      default: av=0; bv=0;
+    }
+    if(av<bv) return -1*sortDir;
+    if(av>bv) return 1*sortDir;
+    return 0;
+  });
+  return computed;
+}
+
+function renderAll(){
+  const computed = getFiltered();
+  renderKPIs(participants.map(p=>({p,eng:computeEngine(p)}))); // KPIs always reflect ALL participants, unfiltered
+  renderFlags(participants.map(p=>({p,eng:computeEngine(p)})));
+  renderTable(computed);
+  renderRollup(participants.map(p=>({p,eng:computeEngine(p)})));
+}
+
+// ---------- drawer ----------
+async function openDrawer(id){
+  activeId = id;
+  const p = participants.find(x=>x.id===id);
+  if(!p) return;
+  const eng = computeEngine(p);
+  const progOptions = BUNDLE.programmes.map(pr=>`<option value="${pr.code}" ${pr.code===p.programme?'selected':''}>${pr.code} — ${pr.name}</option>`).join('');
+
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>${p.name}</h3>
+      <div class="muted pid">${p.id}</div>
+    </div>
+    <div class="drawer-body">
+
+      <div>
+        <div class="section-title">Live engine output</div>
+        <hr class="sep">
+        <div class="metric-grid" style="margin-top:10px;">
+          <div class="metric"><div class="k">Cohort window</div><div class="v" style="font-size:12px;">${fmtShort(eng.cohortStart)} – ${fmtShort(eng.cohortEnd)}</div></div>
+          <div class="metric"><div class="k">Grace period ends</div><div class="v" style="font-size:12px;">${fmtShort(eng.graceEnd)}</div></div>
+          <div class="metric"><div class="k">Weeks remaining</div><div class="v">${eng.weeksRemaining===null?'—':eng.weeksRemaining.toFixed(1)}</div></div>
+          <div class="metric"><div class="k">Pace required</div><div class="v">${eng.activitiesPerWeek.toFixed(1)}/wk</div></div>
+          <div class="metric"><div class="k">Predicted modules done</div><div class="v" style="font-size:12px;">${fmtShort(eng.predictedModuleCompletion)}</div></div>
+          <div class="metric"><div class="k">Predicted final (+capstone)</div><div class="v" style="font-size:12px;">${fmtShort(eng.predictedFinal)}</div></div>
+          <div class="metric"><div class="k">Buffer days</div><div class="v">${eng.bufferDays===null?'—':eng.bufferDays.toFixed(0)}</div></div>
+          <div class="metric"><div class="k">Risk status</div><div class="v"><span class="badge ${riskClass(eng.risk)}">${eng.risk||'—'}</span></div></div>
+          <div class="metric"><div class="k">Escalation stage</div><div class="v" style="font-size:11.5px;">${eng.escalation||'—'}</div></div>
+          <div class="metric"><div class="k">Participant status</div><div class="v"><span class="badge ${statusClass(eng.status)}">${eng.status}</span></div></div>
+          <div class="metric"><div class="k">Internship eligible</div><div class="v" style="font-size:12px;">${eng.internshipEligible}</div></div>
+          <div class="metric"><div class="k">Progress</div><div class="v">${(eng.progressPct*100).toFixed(0)}%</div></div>
+        </div>
+        ${eng.flag ? `<div class="flag-banner" style="margin:12px 0 0;">${eng.flag}</div>` : ''}
+      </div>
+
+      <div>
+        <div class="section-title">Editable inputs</div>
+        <hr class="sep">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
+          <div class="field-group">
+            <label>Full name</label>
+            <input type="text" id="f_name" value="${p.name||''}">
+          </div>
+          <div class="field-group">
+            <label>Email</label>
+            <input type="text" id="f_email" value="${p.email||''}">
+          </div>
+          <div class="field-group">
+            <label>Programme</label>
+            <select id="f_programme">${progOptions}</select>
+          </div>
+          <div class="field-group">
+            <label>Cohort ID (e.g. C26-05 EU)</label>
+            <input type="text" id="f_cohortId" value="${p.cohortId||''}" placeholder="C26-05 EU">
+          </div>
+          <div class="field-group">
+            <label>Payment status</label>
+            <select id="f_payment">
+              ${['Verified','Pending','Declined'].map(s=>`<option ${s===p.paymentStatus?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Modules completed (of ${eng.totalModules})</label>
+            <input type="number" id="f_completed" min="0" max="${eng.totalModules}" value="${p.modulesCompleted||0}">
+          </div>
+          <div class="field-group">
+            <label>Preferred study days / week</label>
+            <input type="number" id="f_days" min="1" max="7" value="${p.preferredDays||2}">
+          </div>
+          <div class="field-group">
+            <label>Last check-in date</label>
+            <input type="date" id="f_checkin" value="${p.lastCheckin||''}">
+          </div>
+          <div class="field-group">
+            <label>Comments</label>
+            <textarea id="f_comments">${p.comments||''}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="save-row">
+      <button class="primary" id="saveBtn" style="flex:1;">Save changes</button>
+      <button class="danger-ghost" id="removeBtn">Remove</button>
+      <button class="ghost" id="closeBtn">Close</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeBtn').onclick = closeDrawer;
+  document.getElementById('saveBtn').onclick = () => saveDrawer(p);
+  document.getElementById('removeBtn').onclick = () => removeParticipant(p.id);
+}
+
+function closeDrawer(){
+  document.getElementById('overlay').classList.remove('open');
+  activeId = null;
+}
+
+async function saveDrawer(p){
+  p.name = document.getElementById('f_name').value.trim() || p.name;
+  p.email = document.getElementById('f_email').value.trim();
+  p.programme = document.getElementById('f_programme').value;
+  p.cohortId = document.getElementById('f_cohortId').value.trim();
+  p.paymentStatus = document.getElementById('f_payment').value;
+  p.modulesCompleted = parseInt(document.getElementById('f_completed').value,10) || 0;
+  p.preferredDays = parseInt(document.getElementById('f_days').value,10) || 2;
+  p.lastCheckin = document.getElementById('f_checkin').value || null;
+  p.comments = document.getElementById('f_comments').value;
+
+  await saveOverride(p.id, {
+    name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
+    paymentStatus:p.paymentStatus, modulesCompleted:p.modulesCompleted,
+    preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
+  });
+  showToast('Saved — recalculated live.');
+  closeDrawer();
+  renderAll();
+}
+
+async function removeParticipant(id){
+  if(!confirm('Remove this participant from the tracker? This only affects your local view.')) return;
+  participants = participants.filter(p=>p.id!==id);
+  const removed = await loadRemoved();
+  removed.push(id);
+  await saveRemoved(removed);
+  closeDrawer();
+  renderAll();
+  showToast('Participant removed.');
+}
+
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// ---------- add participant ----------
+function openAddDrawer(){
+  const progOptions = BUNDLE.programmes.map(pr=>`<option value="${pr.code}">${pr.code} — ${pr.name}</option>`).join('');
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head"><h3>Add participant</h3><div class="muted">Cohort_End_Date computes automatically from the Cohort ID.</div></div>
+    <div class="drawer-body">
+      <div class="field-group"><label>Participant ID</label><input type="text" id="n_id" placeholder="e.g. DAC26-05-EU-42"></div>
+      <div class="field-group"><label>Full name</label><input type="text" id="n_name"></div>
+      <div class="field-group"><label>Email</label><input type="text" id="n_email"></div>
+      <div class="field-group"><label>Programme</label><select id="n_programme">${progOptions}</select></div>
+      <div class="field-group"><label>Cohort ID (e.g. C26-05 EU)</label><input type="text" id="n_cohortId" placeholder="C26-05 EU"></div>
+      <div class="field-group"><label>Payment status</label>
+        <select id="n_payment">${['Verified','Pending','Declined'].map(s=>`<option>${s}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="save-row">
+      <button class="primary" id="createBtn" style="flex:1;">Add to tracker</button>
+      <button class="ghost" id="closeBtn2">Cancel</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeBtn2').onclick = closeDrawer;
+  document.getElementById('createBtn').onclick = createParticipant;
+}
+
+async function createParticipant(){
+  const id = document.getElementById('n_id').value.trim();
+  const name = document.getElementById('n_name').value.trim();
+  if(!id || !name){ showToast('ID and name are required.'); return; }
+  if(participants.some(p=>p.id===id)){ showToast('That Participant ID already exists.'); return; }
+  const p = {
+    id, name,
+    email: document.getElementById('n_email').value.trim(),
+    programme: document.getElementById('n_programme').value,
+    cohortId: document.getElementById('n_cohortId').value.trim(),
+    paymentStatus: document.getElementById('n_payment').value,
+    preferredDays: 2, hoursPerDay: 2, modulesCompleted: 0,
+    lastCheckin: null, comments: ''
+  };
+  participants.push(p);
+  const extra = await loadExtraParticipants();
+  extra.push(p);
+  await saveExtraParticipants(extra);
+  closeDrawer();
+  renderAll();
+  showToast('Participant added.');
+}
+
+// ---------- boot ----------
+async function boot(){
+  await refreshLiveData_();
+  populateProgFilter();
+
+  const base = JSON.parse(JSON.stringify(BUNDLE.participants));
+  const removed = await loadRemoved();
+  const extra = await loadExtraParticipants();
+  let all = base.filter(p => !removed.includes(p.id)).concat(extra.filter(p=>!removed.includes(p.id)));
+
+  // apply any saved edits on top of base data
+  for(const p of all){
+    const ov = await loadOverrides(p.id);
+    Object.assign(p, ov);
+  }
+  participants = all;
+
+  document.querySelectorAll('thead th').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const k = th.dataset.k;
+      if(sortKey===k) sortDir *= -1; else { sortKey = k; sortDir = 1; }
+      renderAll();
+    });
+  });
+  ['search','filterProg','filterRisk','filterStatus'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderAll);
+  });
+  document.getElementById('addBtn').addEventListener('click', openAddDrawer);
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeDrawer(); });
+
+  renderAll();
+}
+boot();
+</script>
+</body>
+</html>
