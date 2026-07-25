@@ -195,9 +195,9 @@
       </div>
     </div>
     <div class="rule-pill" id="cohortRulePill">
-      <b>Cohort_End_Date rule:</b> every cohort runs a standard 6 months from its start month, read
-      straight from the cohort code — <code>C26-05</code> → started May 2026 → ends Nov 2026.
-      Everything below (grace period, weekly pace, risk, escalation) is computed live from that.
+      <b>Deadline rule:</b> each programme runs 6 months from its cohort start month, plus a grace
+      period from the Settings tab. Example — <code>C26-05</code> starts May 2026, programme ends
+      Nov 2026, final deadline Dec 2026. All progress, pace, and risk figures below use that final deadline.
     </div>
     <div class="rule-pill" id="dataSourceBadge">Checking data source…</div>
   </div>
@@ -238,6 +238,7 @@
           <option value="Defaulted">Defaulted</option>
           <option value="Completed">Completed</option>
         </select>
+        <select id="filterMentor"><option value="">All mentors</option></select>
         <button id="assignMentorsBtn">Assign mentors</button>
         <button class="primary" id="addBtn">+ Add participant</button>
       </div>
@@ -271,6 +272,18 @@
       <table>
         <thead><tr><th>Programme</th><th>Enrolled</th><th>Avg progress</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
         <tbody id="progRollup"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>By mentor</h2><div class="sub">Who's carrying which caseload — click a row to filter the table above to just that mentor</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg progress</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
+        <tbody id="mentorRollup"></tbody>
       </table>
     </div>
   </div>
@@ -668,11 +681,10 @@ function updateCohortRulePill(){
   const exCohortEnd = addMonths(exStart, 6);
   const exGraceEnd = addDays(exCohortEnd, SETTINGS.gracePeriodDays);
   el.innerHTML = `
-    <b>Cohort_End_Date rule:</b> every cohort runs a standard 6 months from its start month, read
-    straight from the cohort code — <code>C26-05</code> → started ${fmtShort(exStart)} → cohort ends ${fmtShort(exCohortEnd)}.
-    <b>Grace_Period_End_Date</b> then adds ${SETTINGS.gracePeriodDays} more days on top (from your Settings tab) —
-    so <code>C26-05</code> participants actually have until <b>${fmtShort(exGraceEnd)}</b> to finish, not ${fmtShort(exCohortEnd)}.
-    Weekly pace, risk, and escalation below are all computed against that later, grace-period deadline.
+    <b>Deadline rule:</b> each programme runs 6 months from its cohort start month, plus a
+    ${SETTINGS.gracePeriodDays}-day grace period (Settings tab). Example — <code>C26-05</code>
+    starts ${fmtShort(exStart)}, programme ends ${fmtShort(exCohortEnd)}, final deadline
+    <b>${fmtShort(exGraceEnd)}</b>. All progress, pace, and risk figures below use that final deadline.
   `;
 }
 
@@ -887,6 +899,43 @@ function renderRollup(computed){
   document.getElementById('progRollup').innerHTML = rows || '<tr><td colspan=6 class="muted">No data</td></tr>';
 }
 
+function renderMentorRollup(computed){
+  const byMentor = {};
+  computed.forEach(({p,eng})=>{
+    const key = p.mentor || '__unassigned__';
+    byMentor[key] = byMentor[key] || {n:0,prog:0,g:0,y:0,r:0};
+    const b = byMentor[key];
+    b.n++; b.prog += eng.progressPct;
+    if(eng.risk==='Green') b.g++; else if(eng.risk==='Yellow') b.y++; else if(eng.risk==='Red') b.r++;
+  });
+  const keys = Object.keys(byMentor).sort((a,b)=>{
+    if(a==='__unassigned__') return 1;
+    if(b==='__unassigned__') return -1;
+    return a.localeCompare(b);
+  });
+  const rows = keys.map(key=>{
+    const b = byMentor[key];
+    const label = key==='__unassigned__' ? 'Unassigned' : key;
+    return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;">
+      <td>${label}</td>
+      <td>${b.n}</td>
+      <td>${(b.prog/b.n*100).toFixed(0)}%</td>
+      <td><span class="badge green">${b.g}</span></td>
+      <td><span class="badge amber">${b.y}</span></td>
+      <td><span class="badge rose">${b.r}</span></td>
+    </tr>`;
+  }).join('');
+  const tbody = document.getElementById('mentorRollup');
+  tbody.innerHTML = rows || '<tr><td colspan=6 class="muted">No data</td></tr>';
+  tbody.querySelectorAll('.mentor-row').forEach(tr=>{
+    tr.addEventListener('click', ()=>{
+      document.getElementById('filterMentor').value = tr.dataset.mentor;
+      renderAll();
+      document.getElementById('filterMentor').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  });
+}
+
 function populateProgFilter(){
   const sel = document.getElementById('filterProg');
   BUNDLE.programmes.forEach(pr=>{
@@ -894,6 +943,15 @@ function populateProgFilter(){
     o.value = pr.code; o.textContent = `${pr.code} — ${pr.name}`;
     sel.appendChild(o);
   });
+  const msel = document.getElementById('filterMentor');
+  TEAM_MEMBERS.forEach(m=>{
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    msel.appendChild(o);
+  });
+  const unassignedOpt = document.createElement('option');
+  unassignedOpt.value = '__unassigned__'; unassignedOpt.textContent = 'Unassigned';
+  msel.appendChild(unassignedOpt);
 }
 
 function getFiltered(){
@@ -901,6 +959,7 @@ function getFiltered(){
   const fp = document.getElementById('filterProg').value;
   const fr = document.getElementById('filterRisk').value;
   const fs = document.getElementById('filterStatus').value;
+  const fm = document.getElementById('filterMentor').value;
   let computed = participants.map(p=>({p, eng: computeEngine(p)}));
   if(q){
     computed = computed.filter(({p})=>
@@ -912,6 +971,8 @@ function getFiltered(){
   if(fp) computed = computed.filter(({p})=>p.programme===fp);
   if(fr) computed = computed.filter(({eng})=>eng.risk===fr);
   if(fs) computed = computed.filter(({eng})=>eng.status===fs);
+  if(fm === '__unassigned__') computed = computed.filter(({p})=>!p.mentor);
+  else if(fm) computed = computed.filter(({p})=>p.mentor===fm);
 
   computed.sort((a,b)=>{
     let av, bv;
@@ -940,6 +1001,7 @@ function renderAll(){
   renderFlags(participants.map(p=>({p,eng:computeEngine(p)})));
   renderTable(computed);
   renderRollup(participants.map(p=>({p,eng:computeEngine(p)})));
+  renderMentorRollup(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinsTable();
 }
 
@@ -1438,7 +1500,7 @@ async function boot(){
       renderAll();
     });
   });
-  ['search','filterProg','filterRisk','filterStatus'].forEach(id=>{
+  ['search','filterProg','filterRisk','filterStatus','filterMentor'].forEach(id=>{
     document.getElementById(id).addEventListener('input', renderAll);
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
