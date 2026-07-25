@@ -515,15 +515,16 @@ async function refreshLiveData_() {
       }));
     }
     if (DATA_SOURCE.checkinsCsvUrl) {
-      // Google Form response sheets use the literal question text as the
-      // column header (no junk rows above it), so we don't need to hunt
-      // for a required header row — row 1 is always it. Candidate lists
-      // cover both your WeeklyFeedback tab's actual column names
+      // Like ParticipantDB, your Weekly Check-ins tab has a title row and
+      // description row above the real header row — so we scan for the
+      // row containing 'Participant_ID', same as the other tabs, instead
+      // of assuming row 1 is the header. Candidate lists below cover both
+      // your WeeklyFeedback tab's actual column names
       // (Topics_Studied_This_Week, Current_Module, Met_Study_Commitment,
       // Study_Days_Completed, Challenges, Plan_Next_Week) and the raw
       // question wording Google Forms falls back to, plus a couple of
       // legacy/optional numeric fields some forms also ask.
-      const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, null);
+      const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID');
       BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID'])).map((r) => ({
         participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
         timestamp: pick_(r, ['Timestamp']) || null,
