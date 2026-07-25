@@ -194,7 +194,7 @@
         <p>Self-Paced Learning · live cohort &amp; risk engine</p>
       </div>
     </div>
-    <div class="rule-pill">
+    <div class="rule-pill" id="cohortRulePill">
       <b>Cohort_End_Date rule:</b> every cohort runs a standard 6 months from its start month, read
       straight from the cohort code — <code>C26-05</code> → started May 2026 → ends Nov 2026.
       Everything below (grace period, weekly pace, risk, escalation) is computed live from that.
@@ -659,6 +659,21 @@ function parseCohortStart(cohortId, participantId, programmeCode){
   const yy = parseInt(m[1],10), mm = parseInt(m[2],10);
   if(mm < 1 || mm > 12) return null;
   return new Date(2000+yy, mm-1, 1);
+}
+
+function updateCohortRulePill(){
+  const el = document.getElementById('cohortRulePill');
+  if(!el) return;
+  const exStart = parseCohortStart('C26-05', null, null);
+  const exCohortEnd = addMonths(exStart, 6);
+  const exGraceEnd = addDays(exCohortEnd, SETTINGS.gracePeriodDays);
+  el.innerHTML = `
+    <b>Cohort_End_Date rule:</b> every cohort runs a standard 6 months from its start month, read
+    straight from the cohort code — <code>C26-05</code> → started ${fmtShort(exStart)} → cohort ends ${fmtShort(exCohortEnd)}.
+    <b>Grace_Period_End_Date</b> then adds ${SETTINGS.gracePeriodDays} more days on top (from your Settings tab) —
+    so <code>C26-05</code> participants actually have until <b>${fmtShort(exGraceEnd)}</b> to finish, not ${fmtShort(exCohortEnd)}.
+    Weekly pace, risk, and escalation below are all computed against that later, grace-period deadline.
+  `;
 }
 
 function computeEngine(p){
@@ -1401,6 +1416,7 @@ async function createParticipant(){
 // ---------- boot ----------
 async function boot(){
   await refreshLiveData_();
+  updateCohortRulePill();
   populateProgFilter();
 
   const base = JSON.parse(JSON.stringify(BUNDLE.participants));
