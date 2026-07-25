@@ -296,13 +296,19 @@ if (typeof window.storage === 'undefined') {
 // See README.md "Connecting the live data source" for exact steps.
 const DATA_SOURCE = {
   participantsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=923648041&single=true&output=csv',
-  programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1912207092&single=true&output=csv',  
-  settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1407597732&single=true&output=csv',   
+  programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1912207092&single=true&output=csv',
+  settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1407597732&single=true&output=csv',
 };
 
-/** Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines. */
-function parseCsv_(text) {
-  const rows = [];
+/**
+ * Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines.
+ * Your sheets have a title row and a description row above the real headers
+ * (row 4, not row 1), so this scans for the row that actually contains
+ * requiredHeader and treats THAT as the header row, ignoring everything
+ * above it. Falls back to row 1 if requiredHeader isn't found anywhere.
+ */
+function parseCsv_(text, requiredHeader) {
+  const rawRows = [];
   let row = [], field = '', inQuotes = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i], next = text[i + 1];
@@ -315,24 +321,31 @@ function parseCsv_(text) {
     else if (c === '\n' || c === '\r') {
       if (c === '\r' && next === '\n') i++;
       row.push(field); field = '';
-      if (row.some((v) => v !== '')) rows.push(row);
+      rawRows.push(row);
       row = [];
     } else { field += c; }
   }
-  if (field !== '' || row.length) { row.push(field); rows.push(row); }
-  if (!rows.length) return [];
-  const headers = rows[0];
-  return rows.slice(1).map((r) => {
-    const obj = {};
-    headers.forEach((h, i) => (obj[h.trim()] = (r[i] || '').trim()));
-    return obj;
-  });
+  if (field !== '' || row.length) { row.push(field); rawRows.push(row); }
+
+  let headerRowIndex = 0;
+  if (requiredHeader) {
+    const found = rawRows.findIndex((r) => r.some((cell) => cell.trim() === requiredHeader));
+    if (found !== -1) headerRowIndex = found;
+  }
+  const headers = rawRows[headerRowIndex] || [];
+  return rawRows.slice(headerRowIndex + 1)
+    .filter((r) => r.some((v) => v !== ''))
+    .map((r) => {
+      const obj = {};
+      headers.forEach((h, i) => (obj[h.trim()] = (r[i] || '').trim()));
+      return obj;
+    });
 }
 
-async function fetchCsv_(url) {
+async function fetchCsv_(url, requiredHeader) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error('Fetch failed: ' + res.status);
-  return parseCsv_(await res.text());
+  return parseCsv_(await res.text(), requiredHeader);
 }
 
 function toNum_(v, fallback) {
@@ -362,7 +375,7 @@ async function refreshLiveData_() {
   }
   try {
     if (DATA_SOURCE.programmesCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.programmesCsvUrl);
+      const rows = await fetchCsv_(DATA_SOURCE.programmesCsvUrl, 'Programme_Code');
       BUNDLE.programmes = rows.filter((r) => r.Programme_Code).map((r) => ({
         code: r.Programme_Code,
         name: r.Programme_Name,
@@ -372,7 +385,7 @@ async function refreshLiveData_() {
       }));
     }
     if (DATA_SOURCE.settingsCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.settingsCsvUrl);
+      const rows = await fetchCsv_(DATA_SOURCE.settingsCsvUrl, 'Parameter');
       BUNDLE.settings = {
         gracePeriodDays: findSetting_(rows, 'grace period', SETTINGS_DEFAULTS.gracePeriodDays),
         defaultStudyDays: findSetting_(rows, 'preferred study days', SETTINGS_DEFAULTS.defaultStudyDays),
@@ -386,7 +399,7 @@ async function refreshLiveData_() {
       };
     }
     if (DATA_SOURCE.participantsCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.participantsCsvUrl);
+      const rows = await fetchCsv_(DATA_SOURCE.participantsCsvUrl, 'Participant_ID');
       BUNDLE.participants = rows.filter((r) => r.Participant_ID).map((r) => ({
         serial: r.Serial_No,
         id: r.Participant_ID,
