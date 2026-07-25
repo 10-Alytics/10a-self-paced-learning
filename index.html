@@ -295,9 +295,9 @@ if (typeof window.storage === 'undefined') {
 // keep this page running on the fixed snapshot baked into BUNDLE above.
 // See README.md "Connecting the live data source" for exact steps.
 const DATA_SOURCE = {
-  participantsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=923648041&single=true&output=csv', // ParticipantDB sheet, published as CSV
-  programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1912207092&single=true&output=csv',   // Programmes sheet, published as CSV
-  settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1407597732&single=true&output=csv',     // Settings sheet, published as CSV
+  participantsCsvUrl: '', // https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=923648041&single=true&output=csv
+  programmesCsvUrl: '',   // https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1912207092&single=true&output=csv
+  settingsCsvUrl: '',     // https://docs.google.com/spreadsheets/d/e/2PACX-1vRiSpBWRGdwl80lF4hwHdVoMLTWo99I3RVWG4PQI2hYp35y4uGgUKroWYMM50dWsA/pub?gid=1407597732&single=true&output=csv
 };
 
 /** Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines. */
