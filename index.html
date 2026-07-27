@@ -181,9 +181,55 @@
   .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
   @media (max-width:1100px){ .kpis{grid-template-columns:repeat(4,1fr);} }
   @media (max-width:640px){ .kpis{grid-template-columns:repeat(2,1fr);margin:-24px 12px 0;} .main{padding:0 12px;} }
+  /* ---- login gate ---- */
+  #loginGate{
+    position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--navy) 0%, var(--navy-2) 100%);
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .login-card{
+    background:var(--paper);border-radius:14px;padding:32px 28px;max-width:380px;width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,.35);
+  }
+  .login-card h2{margin:0 0 4px;font-size:18px;color:var(--ink);}
+  .login-card p.lede{margin:0 0 20px;font-size:13px;color:var(--ink-soft);}
+  .login-card label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px;}
+  .login-card input{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:var(--sans);
+  }
+  .login-card button{
+    margin-top:20px;width:100%;padding:11px;border:none;border-radius:8px;background:var(--teal);color:#fff;
+    font-size:14px;font-weight:600;cursor:pointer;
+  }
+  .login-card button:hover{opacity:.92;}
+  .login-error{color:var(--rose);font-size:12.5px;margin-top:10px;min-height:16px;}
+  .login-foot{margin-top:16px;font-size:11px;color:#94A3B8;line-height:1.5;}
+  .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;}
 </style>
 </head>
 <body>
+
+<div id="loginGate">
+  <div class="login-card">
+    <h2>10Alytics · SPL Tracker</h2>
+    <p class="lede">Sign in with your 10Alytics email to continue.</p>
+    <form id="loginForm">
+      <label for="loginEmail">10Alytics email</label>
+      <input type="email" id="loginEmail" placeholder="you@10alytics.org" autocomplete="username" required>
+      <label for="loginPassword">Access password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+    <div class="login-foot">
+      Access is limited to @10alytics.org email addresses with the shared team password.
+      This is a lightweight gate, not full identity verification — anyone at 10Alytics
+      with the password can sign in as any @10alytics.org address. Mentor-assignment
+      changes are still restricted to the admin account regardless of who is signed in.
+    </div>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
 
 <div class="app-header">
   <div class="header-row">
@@ -330,6 +376,8 @@
 
 <div class="toast" id="toast"></div>
 
+</div><!-- /appRoot -->
+
 <script>
 const BUNDLE = {"settings": {"gracePeriodDays": 30, "defaultStudyDays": 2, "defaultHours": 2, "esc1": 7, "esc2": 14, "esc3": 21, "esc4": 28, "riskGreen": 14, "riskYellow": 0}, "programmes": [{"code": "DA", "name": "Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "CS", "name": "Cybersecurity", "totalModules": 19, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "BA", "name": "Business Analysis", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HTDA", "name": "Health Tech Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FA", "name": "Financial Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HRA", "name": "HR Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FSDS", "name": "Full Stack Data Science", "totalModules": 11, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "PD", "name": "Product Design", "totalModules": 13, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DVOPS", "name": "DevOps Engineering", "totalModules": 21, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "APM", "name": "Agile Project Management", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DE", "name": "Data Engineering", "totalModules": 12, "capstoneWeeks": 3, "standardWeeks": 16}, {"code": "HTBA", "name": "Health Tech Business Analysis", "totalModules": 0, "capstoneWeeks": 2, "standardWeeks": 16}], "participants": [{"serial": "10ALY/C25-11-EU/001", "id": "DAC25-11-EU-01", "name": "Kwame Boakye", "email": "boakyekwame20@gmail.com", "phone": null, "programme": "DA", "cohortId": "C25-11 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-03-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/135", "id": "DAC26-02-NA-32", "name": "Stella Oluwabukola Kuewumi", "email": "stelzy110@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/176", "id": "DAC26-01-EU-74", "name": "Sylvalin Nwaogu", "email": "cyrilsva2016@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/090", "id": "APMC25-12-EU-11", "name": "Osuagwu Chioma", "email": "osuagwuchioma@gmail.com", "phone": null, "programme": "APM", "cohortId": null, "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/004", "id": "HTDAC26-04-EU-04", "name": "Ama Asantewaa Wilmot", "email": "asantewaa.wilmot@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-03", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-NA-2/014", "id": "HTDAC26-04-NA-65", "name": "Festus Essien", "email": "eyisonfestus@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-14", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/006", "id": "HTDAC26-04-EU-06", "name": "David Miracles Baasoteng Vuuro", "email": "davidmiracles1@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-19", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/010", "id": "CSC25-12-EU-10", "name": "Oruaro Ogoro", "email": "rirowilson8@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-25", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-EU/002", "id": "CSC26-02-EU-02", "name": "Aharanwa Emmanuel-Charles", "email": "aharanwatoo@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 8", "currentTopic": "CS010", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/004", "id": "CSC26-01-NA-04", "name": "Freedom Isikuru", "email": "sikuruf001@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS016", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/016", "id": "CSC26-01-NA-16", "name": "Olufemi Ogunlana", "email": "olufemiogunlana@yahoo.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-30", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CAP001", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/012", "id": "CSC26-01-EU-12", "name": "OGECHI JOAN ADINDU", "email": "joanadindu05@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/014", "id": "CSC25-12-EU-15", "name": "David Finch", "email": "Davidmfinch@live.com", "phone": null, "programme": "CS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/051", "id": "FAC25-12-NA-03", "name": "Olere Otele", "email": "olere07@yahoo.com", "phone": null, "programme": "FA", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 23", "currentTopic": "FA012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-09-EU/008", "id": "HRAC25-09-EU-01", "name": "Ifeoma Elemson", "email": "ifeoma.elemson@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C25-09 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 24", "currentTopic": "BREAK", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-NA/088", "id": "HRAC26-03-NA-02", "name": "Anthonia Ezeh", "email": "ezehanthonia@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C26-03 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 10", "currentTopic": "HRA008", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/139", "id": "FSDSC26-01-NA-08", "name": "Emmanuel Abiodun", "email": "ayomideabiodun26@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/160", "id": "FSDSC26-01-NA-29", "name": "Victoria Oyewola", "email": "vicoylah@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/147", "id": "FSDSC26-01-NA-16", "name": "Ifeanyi Chinonso Nkwocha", "email": "ifeanyiliveth@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/097", "id": "FSDSC25-12-NA-11", "name": "Olanrewaju Legastus Ayanyemi", "email": "ayanyemilanre@yahoo.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/107", "id": "FSDSC25-12-NA-21", "name": "Thando Malinga", "email": "thando.malinga@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/081", "id": "FSDSC26-02-NA-07", "name": "Kingsley Ihekwoaba Resource", "email": "chibukings@ymail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/156", "id": "FSDSC26-01-NA-25", "name": "Peace Udoeyo", "email": "udoeyopeace@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/064", "id": "FSDSC25-12-EU-01", "name": "Chinonso Gbule", "email": "dr.nonsogbule@outlook.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-EU/057", "id": "FSDSC26-03-EU-10", "name": "Racheal Aina", "email": "rachealaina14@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-03 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/105", "id": "FSDSC26-01-EU-01", "name": "Adeyemi Adeniji", "email": "adeyeminiji@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}], "checkins": [
   {"participantId":"DAC26-02-NA-32","timestamp":"2026-07-13","weekEnding":"2026-07-13","modulesThisWeek":1,"hoursThisWeek":5,"daysKept":2,"confidence":4,"comments":"(demo) On track, module 3 quiz was tricky."},
@@ -402,6 +450,94 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // to match your real team, then use the "Assign mentors" button on the
 // Dashboard tab to distribute participants evenly and round-robin.
 const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
+
+// -----------------------------------------------------------------------
+// ACCESS CONTROL
+// -----------------------------------------------------------------------
+// Simple shared-password gate: anyone entering an @10alytics.org address
+// plus this password gets in. It is NOT true identity verification (there's
+// no backend confirming the person owns that mailbox) — it just blocks
+// random internet visitors. If you later want real verification, swap this
+// for Google Sign-In restricted to the Workspace domain.
+const REQUIRED_EMAIL_DOMAIN = '@10alytics.org';
+const SITE_PASSWORD = '10alyticsSPL';
+
+// Only this address can assign/reassign mentors. Everyone else sees
+// mentor assignments as read-only. Comparison is case-insensitive.
+const ADMIN_EMAIL = 'ubong@10alytics.org';
+
+// Google Apps Script Web App URL that writes Assigned_Mentor directly to
+// the ParticipantDB sheet, so changes show up for every device (not just
+// the browser that made them). Deploy Code.gs (see README) and paste the
+// resulting /exec URL here. Leave blank to fall back to the old
+// browser-only local draft behaviour.
+const MENTOR_API_URL = 'https://script.google.com/a/macros/10alytics.org/s/AKfycbwaZneiMWXWq_s0bophhSIy0zQ3dpecDkOsTdMD4alzjjjpjTIcSIOUDl4ytrbRSqO-9Q/exec'; const MENTOR_API_TOKEN_KEY = '10AlyticsSPL'; // sessionStorage key for the admin's write token
+
+// -----------------------------------------------------------------------
+// LESSON PLAN / CALENDAR ENGINE
+// -----------------------------------------------------------------------
+// How many distinct capstone projects each programme requires. Confirmed:
+// 4 capstone projects across every programme, sharing the programme's
+// Default_Capstone_Duration_Weeks between them.
+const CAPSTONE_COUNTS = {
+  DA:4, CS:4, BA:4, HTDA:4, FA:4, HRA:4, FSDS:4, PD:4, DVOPS:4, APM:4, DE:4, HTBA:4,
+};
+
+function currentUserEmail(){ return sessionStorage.getItem('splms-auth-email') || ''; }
+function isAdmin(){ return currentUserEmail().toLowerCase() === ADMIN_EMAIL.toLowerCase(); }
+
+function checkAuth(){
+  const email = sessionStorage.getItem('splms-auth-email');
+  const ok = sessionStorage.getItem('splms-auth-ok') === '1';
+  return !!(email && ok);
+}
+
+function showApp(){
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('appRoot').style.display = '';
+}
+
+function initLoginGate(){
+  if(checkAuth()){ showApp(); boot(); return; }
+  document.getElementById('loginForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+    const password = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginError');
+    if(!email.endsWith(REQUIRED_EMAIL_DOMAIN)){
+      errEl.textContent = `Please use your ${REQUIRED_EMAIL_DOMAIN} email address.`;
+      return;
+    }
+    if(password !== SITE_PASSWORD){
+      errEl.textContent = 'Incorrect password.';
+      return;
+    }
+    sessionStorage.setItem('splms-auth-email', email);
+    sessionStorage.setItem('splms-auth-ok', '1');
+    showApp();
+    boot();
+  });
+}
+
+// Posts a mentor change to the Apps Script backend so it's written straight
+// to the Google Sheet (source of truth for every visitor). Silently no-ops
+// if MENTOR_API_URL hasn't been configured yet — the local draft in
+// window.storage still applies so nothing breaks, it just won't sync
+// across devices until the backend is wired up.
+async function postMentorToSheet_(participantId, mentor){
+  if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
+  const token = sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
+  if(!token) return { ok:false, error:'No admin token set' };
+  try{
+    const res = await fetch(MENTOR_API_URL, {
+      method:'POST',
+      body: JSON.stringify({ action:'assignMentor', token, participantId, mentor })
+    });
+    return await res.json();
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
 
 /**
  * Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines.
@@ -757,6 +893,140 @@ function computeEngine(p){
     risk, daysSinceActivity, escalation, status, internshipEligible, flag,
     capstoneWeeks, preferredDays
   };
+}
+
+// ---------- lesson plan / calendar ----------
+// Builds a week-by-week plan from a chosen start date: modules first (paced
+// by the participant's preferred study days/week, 1 module per study day),
+// then the remaining programme weeks split evenly across that programme's
+// capstone projects (see CAPSTONE_COUNTS above).
+function buildLessonPlan(p, startDateStr){
+  const eng = computeEngine(p);
+  const prog = PROGRAMMES[p.programme] || {};
+  const remainingModules = eng.remaining;
+  const perWeek = Math.max(p.preferredDays || SETTINGS.defaultStudyDays || 2, 1);
+  const capstoneCount = CAPSTONE_COUNTS[p.programme] || 1;
+  const totalCapstoneWeeks = prog.capstoneWeeks || eng.capstoneWeeks || 2;
+  const perCapstoneWeeks = Math.max(Math.round(totalCapstoneWeeks / capstoneCount), 1);
+
+  const items = [];
+  let cursor = new Date(startDateStr + 'T00:00:00');
+  let modulesLeft = remainingModules;
+  let weekNum = 1;
+  while(modulesLeft > 0){
+    const thisWeek = Math.min(perWeek, modulesLeft);
+    items.push({
+      week: weekNum, phase: 'Modules',
+      label: `${thisWeek} module${thisWeek===1?'':'s'} (${eng.completed + (remainingModules-modulesLeft) + 1}–${eng.completed + (remainingModules-modulesLeft) + thisWeek} of ${eng.totalModules})`,
+      start: new Date(cursor),
+    });
+    modulesLeft -= thisWeek;
+    cursor = addDays(cursor, 7);
+    weekNum++;
+  }
+  for(let c=1; c<=capstoneCount; c++){
+    items.push({
+      week: weekNum, phase: 'Capstone',
+      label: capstoneCount===1 ? 'Capstone project' : `Capstone project ${c} of ${capstoneCount}`,
+      start: new Date(cursor), durationWeeks: perCapstoneWeeks,
+    });
+    cursor = addDays(cursor, perCapstoneWeeks*7);
+    weekNum += perCapstoneWeeks;
+  }
+  return { items, endDate: new Date(cursor), totalWeeks: weekNum-1, perWeek, capstoneCount };
+}
+
+function planToIcs_(p, plan){
+  const dt = (d)=> d.toISOString().slice(0,10).replace(/-/g,'');
+  const now = dt(new Date());
+  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//10Alytics SPL//EN\r\n';
+  plan.items.forEach((it, i)=>{
+    const end = it.durationWeeks ? addDays(it.start, it.durationWeeks*7) : addDays(it.start, 7);
+    ics += 'BEGIN:VEVENT\r\n';
+    ics += `UID:${p.id}-plan-${i}@10alytics\r\n`;
+    ics += `DTSTAMP:${now}T000000Z\r\n`;
+    ics += `DTSTART;VALUE=DATE:${dt(it.start)}\r\n`;
+    ics += `DTEND;VALUE=DATE:${dt(end)}\r\n`;
+    ics += `SUMMARY:${p.programme} · Week ${it.week} — ${it.label}\r\n`;
+    ics += `DESCRIPTION:SPL study plan for ${p.name} (${p.id})\r\n`;
+    ics += 'END:VEVENT\r\n';
+  });
+  ics += 'END:VCALENDAR\r\n';
+  return ics;
+}
+
+function planToText_(p, plan){
+  const fmt = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  let out = `Lesson plan — ${p.name} (${p.id})\nProgramme: ${PROGRAMMES[p.programme]?.name || p.programme}\n`;
+  out += `Pace: ${plan.perWeek} study day${plan.perWeek===1?'':'s'}/week · Capstones: ${plan.capstoneCount}\n\n`;
+  plan.items.forEach(it=>{
+    out += `Week ${it.week} (${fmt(it.start)}): ${it.label}\n`;
+  });
+  out += `\nTarget completion: ${fmt(plan.endDate)}\n`;
+  return out;
+}
+
+function openLessonPlanDrawer(id){
+  const p = participants.find(x=>x.id===id);
+  if(!p) return;
+  const defaultStart = new Date().toISOString().slice(0,10);
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>Lesson plan & calendar</h3>
+      <div class="muted pid">${p.name} · ${p.id}</div>
+    </div>
+    <div class="drawer-body">
+      <div class="field-group">
+        <label>Start date</label>
+        <input type="date" id="planStart" value="${defaultStart}">
+      </div>
+      <div id="planOutput"></div>
+    </div>
+    <div class="save-row" style="flex-direction:column;gap:8px;">
+      <button class="primary" id="planGenBtn" style="width:100%;">Generate plan</button>
+      <button class="ghost" id="planBackBtn" style="width:100%;">Back to participant</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('planBackBtn').onclick = ()=> openDrawer(id);
+  const renderPlan = ()=>{
+    const startVal = document.getElementById('planStart').value || defaultStart;
+    const plan = buildLessonPlan(p, startVal);
+    const fmt = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+    document.getElementById('planOutput').innerHTML = `
+      <div class="field-group">
+        <label>${plan.totalWeeks} week plan · target completion ${fmt(plan.endDate)}</label>
+        <div style="max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;">
+          <table style="width:100%;font-size:12.5px;">
+            <thead><tr><th style="text-align:left;padding:6px 8px;">Week</th><th style="text-align:left;padding:6px 8px;">Starting</th><th style="text-align:left;padding:6px 8px;">Focus</th></tr></thead>
+            <tbody>
+              ${plan.items.map(it=>`<tr><td style="padding:6px 8px;">${it.week}</td><td style="padding:6px 8px;">${fmt(it.start)}</td><td style="padding:6px 8px;">${it.label}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button id="planDownloadIcsBtn" style="flex:1;">Download calendar (.ics)</button>
+        <button id="planCopyTextBtn" style="flex:1;">Copy as text</button>
+      </div>
+      <div class="admin-only-note">Plan assumes 4 capstone projects for ${p.programme}, splitting the programme's capstone weeks between them (minimum 1 week each).</div>
+    `;
+    document.getElementById('planDownloadIcsBtn').onclick = ()=>{
+      const blob = new Blob([planToIcs_(p, plan)], {type:'text/calendar'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${p.id}-lesson-plan.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    document.getElementById('planCopyTextBtn').onclick = ()=>{
+      const text = planToText_(p, plan);
+      try{ navigator.clipboard.writeText(text); }catch(e){}
+      showToast('Plan copied to clipboard.');
+    };
+  };
+  document.getElementById('planGenBtn').onclick = renderPlan;
+  renderPlan();
 }
 
 // ---------- weekly check-ins ----------
@@ -1241,10 +1511,11 @@ async function openDrawer(id){
           </div>
           <div class="field-group">
             <label>Assigned mentor</label>
-            <select id="f_mentor">
+            <select id="f_mentor" ${isAdmin() ? '' : 'disabled'}>
               <option value="">— Unassigned —</option>
               ${TEAM_MEMBERS.map(m=>`<option ${m===p.mentor?'selected':''}>${m}</option>`).join('')}
             </select>
+            ${isAdmin() ? '' : '<div class="admin-only-note">Only ubong@10alytics.org can change the assigned mentor. You\'re seeing the current assignment read-only.</div>'}
           </div>
           <div class="field-group">
             <label>Modules completed (of ${eng.totalModules})</label>
@@ -1265,8 +1536,9 @@ async function openDrawer(id){
         </div>
       </div>
     </div>
-    <div class="save-row">
+    <div class="save-row" style="flex-wrap:wrap;">
       <button class="primary" id="saveBtn" style="flex:1;">Save changes</button>
+      <button id="planBtn" style="flex:1;">Lesson plan & calendar</button>
       <button class="danger-ghost" id="removeBtn">Remove</button>
       <button class="ghost" id="closeBtn">Close</button>
     </div>
@@ -1274,6 +1546,7 @@ async function openDrawer(id){
   document.getElementById('overlay').classList.add('open');
   document.getElementById('closeBtn').onclick = closeDrawer;
   document.getElementById('saveBtn').onclick = () => saveDrawer(p);
+  document.getElementById('planBtn').onclick = () => openLessonPlanDrawer(p.id);
   document.getElementById('removeBtn').onclick = () => removeParticipant(p.id);
   document.getElementById('jumpToCheckins').onclick = (e) => {
     e.preventDefault();
@@ -1294,7 +1567,9 @@ async function saveDrawer(p){
   p.programme = document.getElementById('f_programme').value;
   p.cohortId = document.getElementById('f_cohortId').value.trim();
   p.paymentStatus = document.getElementById('f_payment').value;
-  p.mentor = document.getElementById('f_mentor').value || null;
+  const mentorFromForm = document.getElementById('f_mentor').value || null;
+  const mentorChanged = isAdmin() && mentorFromForm !== p.mentor;
+  if(isAdmin()) p.mentor = mentorFromForm; // non-admins can't change this even if the DOM were tampered with
   p.modulesCompleted = parseInt(document.getElementById('f_completed').value,10) || 0;
   p.preferredDays = parseInt(document.getElementById('f_days').value,10) || 2;
   p.lastCheckin = document.getElementById('f_checkin').value || null;
@@ -1305,6 +1580,7 @@ async function saveDrawer(p){
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
   });
+  if(mentorChanged) await postMentorToSheet_(p.id, p.mentor);
   showToast('Saved — recalculated live.');
   closeDrawer();
   renderAll();
@@ -1362,32 +1638,44 @@ async function runMentorAssignment(mode){
       paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
       preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
     });
+    await postMentorToSheet_(p.id, p.mentor);
   }
   return changes;
 }
 
 function openAssignMentorsDrawer(){
+  if(!isAdmin()){
+    showToast('Only ubong@10alytics.org can assign mentors.');
+    return;
+  }
   const counts = computeMentorCounts();
   const unassigned = participants.filter(p=>!p.mentor).length;
+  const backendReady = !!MENTOR_API_URL;
+  const hasToken = !!sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
   document.getElementById('drawer').innerHTML = `
     <div class="drawer-head">
       <h3>Assign mentors</h3>
       <div class="muted">Distributes participants evenly across your ${TEAM_MEMBERS.length} team members for weekly follow-up.</div>
     </div>
     <div class="drawer-body">
+      ${backendReady ? `
+        <div class="field-group">
+          <label>Admin write token ${hasToken ? '(saved for this session)' : '(paste once per browser session)'}</label>
+          <input type="password" id="adminTokenInput" placeholder="Paste the ADMIN_TOKEN from Code.gs" value="${hasToken ? sessionStorage.getItem(MENTOR_API_TOKEN_KEY) : ''}">
+        </div>
+        <div class="admin-only-note">Assignments below are written straight to the ParticipantDB sheet, so every device sees the update after the sheet's CSV publish refreshes (usually within a few minutes).</div>
+      ` : `
+        <div class="admin-only-note">
+          MENTOR_API_URL isn't configured yet, so assignments only save to this browser's local draft
+          and won't appear on other devices until you deploy Code.gs and set MENTOR_API_URL. See the README.
+        </div>
+      `}
       <div class="field-group">
-        <label>Current load (this browser's working draft — not yet saved to the master sheet)</label>
+        <label>Current load</label>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${TEAM_MEMBERS.map(m=>`<div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>${m}</span><span class="muted">${counts[m]||0} participants</span></div>`).join('')}
           <div style="display:flex;justify-content:space-between;font-size:12.5px;"><span>Unassigned</span><span class="muted">${unassigned} participants</span></div>
         </div>
-      </div>
-      <div class="muted" style="font-size:11.5px;">
-        This button only drafts an assignment in your browser — it does not write to Google Sheets.
-        Run it, then copy the list it gives you into the <b>Assigned_Mentor</b> column of ParticipantDB yourself.
-        Once that column is filled in on the real sheet, every visitor's Dashboard → <b>By mentor</b> panel
-        (below "By programme") and the "All mentors" filter above the table will show it correctly —
-        no further local step needed after that.
       </div>
       <div id="assignResults"></div>
     </div>
@@ -1400,15 +1688,20 @@ function openAssignMentorsDrawer(){
   `;
   document.getElementById('overlay').classList.add('open');
   document.getElementById('closeBtnAssign').onclick = closeDrawer;
+  if(backendReady){
+    document.getElementById('adminTokenInput').addEventListener('change', (e)=>{
+      sessionStorage.setItem(MENTOR_API_TOKEN_KEY, e.target.value.trim());
+    });
+  }
   document.getElementById('assignUnassignedBtn').onclick = async ()=>{
     if(unassigned===0){ showToast('No unassigned participants.'); return; }
     const changes = await runMentorAssignment('unassigned');
-    showAssignResults(changes);
+    showAssignResults(changes, backendReady);
   };
   document.getElementById('assignAllBtn').onclick = async ()=>{
     if(!confirm('This overwrites the mentor for ALL participants, including ones already assigned. Continue?')) return;
     const changes = await runMentorAssignment('all');
-    showAssignResults(changes);
+    showAssignResults(changes, backendReady);
   };
   document.getElementById('clearLocalMentorsBtn').onclick = clearLocalMentorAssignments;
 }
@@ -1430,14 +1723,14 @@ async function clearLocalMentorAssignments(){
   setTimeout(()=>location.reload(), 700);
 }
 
-function showAssignResults(changes){
+function showAssignResults(changes, backendReady){
   const header = 'Participant_ID\tFull_Name\tAssigned_Mentor';
   const rows = changes.map(p=>`${p.id}\t${p.name}\t${p.mentor}`).join('\n');
   const resultsEl = document.getElementById('assignResults');
   if(!resultsEl) return;
   resultsEl.innerHTML = `
     <div class="field-group">
-      <label>${changes.length} participant${changes.length===1?'':'s'} assigned — copy into ParticipantDB</label>
+      <label>${changes.length} participant${changes.length===1?'':'s'} assigned ${backendReady ? '— written to ParticipantDB' : '— copy into ParticipantDB'}</label>
       <textarea id="assignCsvOut" style="min-height:160px;font-family:var(--mono);font-size:11px;" readonly>${header}\n${rows}</textarea>
     </div>
     <button id="copyAssignBtn">Copy to clipboard</button>
@@ -1449,7 +1742,7 @@ function showAssignResults(changes){
     showToast('Copied — paste into ParticipantDB.');
   };
   renderAll();
-  showToast('Mentors assigned — recalculated live.');
+  showToast(backendReady ? 'Mentors assigned and synced to the sheet.' : 'Mentors assigned — recalculated live.');
 }
 
 // ---------- add participant ----------
@@ -1541,8 +1834,21 @@ async function boot(){
   });
 
   renderAll();
+
+  // ---- access control: hide/lock mentor-assignment controls for non-admins ----
+  const assignBtn = document.getElementById('assignMentorsBtn');
+  if(!isAdmin()){
+    assignBtn.disabled = true;
+    assignBtn.title = 'Only the SPL admin (ubong@10alytics.org) can assign mentors.';
+    assignBtn.style.opacity = '.5';
+    assignBtn.style.cursor = 'not-allowed';
+    assignBtn.onclick = (e)=>{
+      e.preventDefault();
+      showToast('Only ubong@10alytics.org can assign mentors. You can view assignments but not change them.');
+    };
+  }
 }
-boot();
+initLoginGate();
 </script>
 </body>
 </html>
