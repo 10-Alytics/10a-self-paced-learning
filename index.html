@@ -217,14 +217,18 @@
       <input type="email" id="loginEmail" placeholder="you@10alytics.org" autocomplete="username" required>
       <label for="loginPassword">Access password</label>
       <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
+      <label style="display:flex;align-items:center;gap:7px;margin:8px 0 0;font-weight:400;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--ink-soft);">
+        <input type="checkbox" id="showPasswordToggle" style="width:auto;margin:0;">
+        Show password
+      </label>
       <button type="submit">Sign in</button>
       <div class="login-error" id="loginError"></div>
     </form>
     <div class="login-foot">
-      Access is limited to approved 10Alytics team addresses with the shared team password.
-      This is a lightweight gate, not full identity verification — anyone with the password
-      and a listed address can sign in as that address. Mentor-assignment changes are still
-      restricted to the admin account regardless of who is signed in.
+      Access requires a 10Alytics email address (@10alytics.org / .io / .ca) and the shared
+      team password. This is a lightweight gate, not full identity verification — it does not
+      confirm you own that mailbox. Mentor-assignment changes are still restricted to the
+      admin account regardless of who is signed in.
     </div>
   </div>
 </div>
@@ -459,19 +463,15 @@ const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos
 // no backend confirming the person owns that mailbox) — it just blocks
 // random internet visitors. If you later want real verification, swap this
 // for Google Sign-In restricted to the Workspace domain.
-const REQUIRED_EMAIL_DOMAIN = '@10alytics.org', '@10alytics.io', '@10alytics.ca';
 const SITE_PASSWORD = 'SPL-10Alytics#2026';
 
-// Only these exact addresses can sign in — everyone on this list can log
-// in and use the tracker, but only ADMIN_EMAIL (below) can assign mentors.
-// Add/remove addresses here as your team changes. Keep it lowercase.
-const ALLOWED_EMAILS = [
-  'ubong@10alytics.org',
-  'aanuoluwatomiwa@10alytics.org',
-  'stephen@10alytics.org',
-  'dolapo@10alytics.org',
-  'ann@10alytics.org',
-];
+// Any address ending in one of these domains + the password above gets in.
+// NOTE: this does NOT confirm the person actually owns that mailbox — it
+// just checks the address is shaped like a real 10Alytics one. Anyone who
+// knows the shared password can type in any name @ one of these domains.
+// If that ever becomes a problem, swap back to an explicit ALLOWED_EMAILS
+// list of real staff addresses (ask and I'll wire it back up).
+const ALLOWED_EMAIL_DOMAINS = ['@10alytics.org', '@10alytics.io', '@10alytics.ca'];
 
 // Only this address can assign/reassign mentors. Everyone else sees
 // mentor assignments as read-only. Comparison is case-insensitive.
@@ -515,13 +515,16 @@ function showApp(){
 
 function initLoginGate(){
   if(checkAuth()){ showApp(); boot(); return; }
+  document.getElementById('showPasswordToggle').addEventListener('change', (e)=>{
+    document.getElementById('loginPassword').type = e.target.checked ? 'text' : 'password';
+  });
   document.getElementById('loginForm').addEventListener('submit', (e)=>{
     e.preventDefault();
     const email = document.getElementById('loginEmail').value.trim().toLowerCase();
     const password = document.getElementById('loginPassword').value;
     const errEl = document.getElementById('loginError');
-    if(!ALLOWED_EMAILS.includes(email)){
-      errEl.textContent = `That address isn't on the SPL team access list. Contact ubong@10alytics.org if this is a mistake.`;
+    if(!ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
+      errEl.textContent = `Please use a 10Alytics email address (${ALLOWED_EMAIL_DOMAINS.join(', ')}).`;
       return;
     }
     if(password !== SITE_PASSWORD){
