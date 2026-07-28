@@ -580,6 +580,43 @@ async function postMentorToSheet_(participantId, mentor){
   }
 }
 
+// Same idea as postMentorToSheet_, but for any other editable field on a
+// participant's profile (cohort ID, payment status, modules completed,
+// comments, etc.). `fields` is an object keyed by the REAL ParticipantDB
+// column name — see FIELD_TO_COLUMN_ below for the mapping used when
+// saving the drawer.
+async function updateParticipantInSheet_(participantId, fields){
+  if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
+  if(!Object.keys(fields).length) return { ok:true, skipped:true };
+  const token = ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — changes were NOT synced to the Sheet.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'updateParticipant', token, participantId, fields })
+    });
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+// Maps the drawer's internal field names to the real ParticipantDB column
+// headers Code.gs needs to write to. Add to this if you add new editable
+// fields to the drawer later.
+const FIELD_TO_COLUMN_ = {
+  cohortId: 'Cohort_ID',
+  paymentStatus: 'Payment_Status',
+  modulesCompleted: 'Modules_Completed',
+  preferredDays: 'Preferred_Study_Days_Per_Week',
+  lastCheckin: 'Last_Checkin_Date',
+  comments: 'Comments',
+  name: 'Full_Name',
+  email: 'Email',
+};
+
+
 /**
  * Minimal RFC4180 CSV parser — handles quoted fields containing commas/newlines.
  * Your sheets have a title row and a description row above the real headers
@@ -1603,6 +1640,12 @@ function closeDrawer(){
 }
 
 async function saveDrawer(p){
+  const before = {
+    name:p.name, email:p.email, cohortId:p.cohortId, paymentStatus:p.paymentStatus,
+    modulesCompleted:p.modulesCompleted, preferredDays:p.preferredDays,
+    lastCheckin:p.lastCheckin, comments:p.comments,
+  };
+
   p.name = document.getElementById('f_name').value.trim() || p.name;
   p.email = document.getElementById('f_email').value.trim();
   p.programme = document.getElementById('f_programme').value;
@@ -1621,14 +1664,29 @@ async function saveDrawer(p){
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
   });
+
+  // Build a { RealColumnName: newValue } object of only what actually
+  // changed, so admin edits sync to the Sheet for everyone — not just the
+  // mentor field. (Non-admins never reach this block with any changes
+  // synced, since MENTOR_API_URL calls are gated by isAdmin() downstream.)
+  const changedFields = {};
+  Object.keys(FIELD_TO_COLUMN_).forEach((key)=>{
+    if(before[key] !== undefined && before[key] !== p[key]){
+      changedFields[FIELD_TO_COLUMN_[key]] = p[key];
+    }
+  });
+  if(mentorChanged) changedFields['Assigned_Mentor'] = p.mentor;
+
   let syncResult = null;
-  if(mentorChanged) syncResult = await postMentorToSheet_(p.id, p.mentor);
+  if(Object.keys(changedFields).length){
+    syncResult = await updateParticipantInSheet_(p.id, changedFields);
+  }
   closeDrawer();
   renderAll();
   if(syncResult && !syncResult.ok){
-    showToast('Saved locally, but the mentor change did NOT sync to the Sheet: ' + (syncResult.error || 'unknown error'));
+    showToast('Saved locally, but changes did NOT sync to the Sheet: ' + (syncResult.error || 'unknown error'));
   } else if(syncResult && syncResult.ok){
-    showToast('Saved — mentor change sent to the Sheet.');
+    showToast('Saved — changes sent to the Sheet.');
   } else {
     showToast('Saved — recalculated live.');
   }
