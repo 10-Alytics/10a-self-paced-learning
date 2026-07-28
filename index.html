@@ -221,10 +221,10 @@
       <div class="login-error" id="loginError"></div>
     </form>
     <div class="login-foot">
-      Access is limited to @10alytics.org email addresses with the shared team password.
-      This is a lightweight gate, not full identity verification — anyone at 10Alytics
-      with the password can sign in as any @10alytics.org address. Mentor-assignment
-      changes are still restricted to the admin account regardless of who is signed in.
+      Access is limited to approved 10Alytics team addresses with the shared team password.
+      This is a lightweight gate, not full identity verification — anyone with the password
+      and a listed address can sign in as that address. Mentor-assignment changes are still
+      restricted to the admin account regardless of who is signed in.
     </div>
   </div>
 </div>
@@ -459,8 +459,19 @@ const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos
 // no backend confirming the person owns that mailbox) — it just blocks
 // random internet visitors. If you later want real verification, swap this
 // for Google Sign-In restricted to the Workspace domain.
-const REQUIRED_EMAIL_DOMAIN = '@10alytics.org';
-const SITE_PASSWORD = '10alyticsSPL';
+const REQUIRED_EMAIL_DOMAIN = '@10alytics.org', '@10alytics.io', '@10alytics.ca';
+const SITE_PASSWORD = 'SPL-10Alytics#2026';
+
+// Only these exact addresses can sign in — everyone on this list can log
+// in and use the tracker, but only ADMIN_EMAIL (below) can assign mentors.
+// Add/remove addresses here as your team changes. Keep it lowercase.
+const ALLOWED_EMAILS = [
+  'ubong@10alytics.org',
+  'aanuoluwatomiwa@10alytics.org',
+  'stephen@10alytics.org',
+  'dolapo@10alytics.org',
+  'ann@10alytics.org',
+];
 
 // Only this address can assign/reassign mentors. Everyone else sees
 // mentor assignments as read-only. Comparison is case-insensitive.
@@ -471,7 +482,12 @@ const ADMIN_EMAIL = 'ubong@10alytics.org';
 // the browser that made them). Deploy Code.gs (see README) and paste the
 // resulting /exec URL here. Leave blank to fall back to the old
 // browser-only local draft behaviour.
-const MENTOR_API_URL = 'https://script.google.com/a/macros/10alytics.org/s/AKfycbwaZneiMWXWq_s0bophhSIy0zQ3dpecDkOsTdMD4alzjjjpjTIcSIOUDl4ytrbRSqO-9Q/exec'; const MENTOR_API_TOKEN_KEY = '10AlyticsSPL'; // sessionStorage key for the admin's write token
+const MENTOR_API_URL = 'https://script.google.com/a/macros/10alytics.org/s/AKfycbwaZneiMWXWq_s0bophhSIy0zQ3dpecDkOsTdMD4alzjjjpjTIcSIOUDl4ytrbRSqO-9Q/exec';
+// This is just the NAME of the browser-storage slot the admin token gets
+// kept in for the session — it is NOT the token itself. The real secret
+// (whatever you set ADMIN_TOKEN to in Code.gs) gets typed into the
+// "Admin write token" box on the site itself, once per browser session.
+const MENTOR_API_TOKEN_KEY = 'splms-admin-token';
 
 // -----------------------------------------------------------------------
 // LESSON PLAN / CALENDAR ENGINE
@@ -504,8 +520,8 @@ function initLoginGate(){
     const email = document.getElementById('loginEmail').value.trim().toLowerCase();
     const password = document.getElementById('loginPassword').value;
     const errEl = document.getElementById('loginError');
-    if(!email.endsWith(REQUIRED_EMAIL_DOMAIN)){
-      errEl.textContent = `Please use your ${REQUIRED_EMAIL_DOMAIN} email address.`;
+    if(!ALLOWED_EMAILS.includes(email)){
+      errEl.textContent = `That address isn't on the SPL team access list. Contact ubong@10alytics.org if this is a mistake.`;
       return;
     }
     if(password !== SITE_PASSWORD){
@@ -519,21 +535,43 @@ function initLoginGate(){
   });
 }
 
+// Returns the saved admin token, or asks for it right now (once per
+// browser session) if it hasn't been entered yet. Fixes the gap where
+// changing a mentor from a participant's own profile — instead of the
+// "Assign mentors" panel — had no token to send yet.
+function ensureAdminToken_(){
+  let token = sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
+  if(token) return token;
+  token = (prompt('Enter the admin write token (from Code.gs\'s ADMIN_TOKEN) to sync this mentor change to the Google Sheet:') || '').trim();
+  if(token) sessionStorage.setItem(MENTOR_API_TOKEN_KEY, token);
+  return token || null;
+}
+
 // Posts a mentor change to the Apps Script backend so it's written straight
 // to the Google Sheet (source of truth for every visitor). Silently no-ops
 // if MENTOR_API_URL hasn't been configured yet — the local draft in
 // window.storage still applies so nothing breaks, it just won't sync
 // across devices until the backend is wired up.
+//
+// NOTE on mode:'no-cors' below: Google Apps Script Web Apps commonly block
+// the browser from reading the response even when the write itself
+// succeeds (a CORS limitation on Google's side, not something we can fix
+// from here). Using no-cors avoids that fetch throwing a false "failed"
+// error, but it also means we genuinely cannot confirm success from the
+// browser — always spot-check the Sheet directly after important changes.
 async function postMentorToSheet_(participantId, mentor){
   if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
-  const token = sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
-  if(!token) return { ok:false, error:'No admin token set' };
+  const token = ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — change was NOT synced to the Sheet.' };
   try{
-    const res = await fetch(MENTOR_API_URL, {
+    await fetch(MENTOR_API_URL, {
       method:'POST',
+      mode:'no-cors',
       body: JSON.stringify({ action:'assignMentor', token, participantId, mentor })
     });
-    return await res.json();
+    // no-cors responses are opaque — we can't read ok/error from them, so
+    // treat "the request didn't throw" as "sent successfully".
+    return { ok:true, sent:true };
   }catch(e){
     return { ok:false, error: e.message };
   }
@@ -1580,10 +1618,17 @@ async function saveDrawer(p){
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
   });
-  if(mentorChanged) await postMentorToSheet_(p.id, p.mentor);
-  showToast('Saved — recalculated live.');
+  let syncResult = null;
+  if(mentorChanged) syncResult = await postMentorToSheet_(p.id, p.mentor);
   closeDrawer();
   renderAll();
+  if(syncResult && !syncResult.ok){
+    showToast('Saved locally, but the mentor change did NOT sync to the Sheet: ' + (syncResult.error || 'unknown error'));
+  } else if(syncResult && syncResult.ok){
+    showToast('Saved — mentor change sent to the Sheet.');
+  } else {
+    showToast('Saved — recalculated live.');
+  }
 }
 
 async function removeParticipant(id){
