@@ -255,10 +255,6 @@
       <input type="email" id="loginEmail" placeholder="you@10alytics.org or your registered email" autocomplete="username" required>
       <label for="loginPassword">Access password</label>
       <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
-      <label style="display:flex;align-items:center;gap:7px;margin:8px 0 0;font-weight:400;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--ink-soft);">
-        <input type="checkbox" id="showPasswordToggle" style="width:auto;margin:0;">
-        Show password
-      </label>
       <button type="submit">Sign in</button>
       <div class="login-error" id="loginError"></div>
     </form>
@@ -589,47 +585,53 @@ function initLoginGate(){
     else { showApp(); boot(); }
     return;
   }
-  document.getElementById('showPasswordToggle').addEventListener('change', (e)=>{
-    document.getElementById('loginPassword').type = e.target.checked ? 'text' : 'password';
-  });
-  document.getElementById('loginForm').addEventListener('submit', (e)=>{
-    e.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-    const password = document.getElementById('loginPassword').value;
-    const errEl = document.getElementById('loginError');
+  try{
+    document.getElementById('loginForm').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+      const password = document.getElementById('loginPassword').value;
+      const errEl = document.getElementById('loginError');
 
-    // Path 1: staff (mentors/admin) — 10Alytics domain + shared staff password.
-    if(ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
-      if(password !== SITE_PASSWORD){
+      // Path 1: staff (mentors/admin) — 10Alytics domain + shared staff password.
+      if(ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
+        if(password !== SITE_PASSWORD){
+          errEl.textContent = 'Incorrect password.';
+          return;
+        }
+        sessionStorage.setItem('splms-auth-email', email);
+        sessionStorage.setItem('splms-auth-role', 'staff');
+        sessionStorage.setItem('splms-auth-ok', '1');
+        showApp();
+        boot();
+        return;
+      }
+
+      // Path 2: participant — must be a real registered email + the shared
+      // participant password.
+      const p = findParticipantByEmail_(email);
+      if(!p){
+        errEl.textContent = `We couldn't find that email. Use the address you registered with, or a staff 10Alytics email.`;
+        return;
+      }
+      if(password !== PARTICIPANT_PASSWORD){
         errEl.textContent = 'Incorrect password.';
         return;
       }
       sessionStorage.setItem('splms-auth-email', email);
-      sessionStorage.setItem('splms-auth-role', 'staff');
+      sessionStorage.setItem('splms-auth-role', 'participant');
+      sessionStorage.setItem('splms-auth-participant-id', p.id);
       sessionStorage.setItem('splms-auth-ok', '1');
-      showApp();
-      boot();
-      return;
-    }
-
-    // Path 2: participant — must be a real registered email + the shared
-    // participant password.
-    const p = findParticipantByEmail_(email);
-    if(!p){
-      errEl.textContent = `We couldn't find that email. Use the address you registered with, or a staff 10Alytics email.`;
-      return;
-    }
-    if(password !== PARTICIPANT_PASSWORD){
-      errEl.textContent = 'Incorrect password.';
-      return;
-    }
-    sessionStorage.setItem('splms-auth-email', email);
-    sessionStorage.setItem('splms-auth-role', 'participant');
-    sessionStorage.setItem('splms-auth-participant-id', p.id);
-    sessionStorage.setItem('splms-auth-ok', '1');
-    showParticipantPortal();
-    bootParticipantPortal();
-  });
+      showParticipantPortal();
+      bootParticipantPortal();
+    });
+  }catch(err){
+    // If anything here throws (e.g. a missing DOM element on some cached or
+    // partially-loaded page), surface it loudly instead of silently
+    // breaking sign-in for everyone.
+    console.error('Login setup failed:', err);
+    const errEl = document.getElementById('loginError');
+    if(errEl) errEl.textContent = 'Something went wrong loading the sign-in form. Please hard-refresh this page (Ctrl/Cmd+Shift+R) and try again.';
+  }
 }
 
 
