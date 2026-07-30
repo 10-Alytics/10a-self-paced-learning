@@ -1196,7 +1196,7 @@ function downloadPlanAsPdf_(p, plan){
       <tbody>${rows}</tbody>
     </table>
     <div class="footer">10Alytics Self-Paced Learning · Generated ${fmt(new Date())} · Plan assumes 4 capstone projects, splitting the programme's capstone weeks between them.</div>
-    <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+    <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
   </body></html>`;
   const w = window.open('', '_blank');
   if(!w){ showToast('Please allow pop-ups to download the PDF.'); return; }
