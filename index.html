@@ -204,6 +204,44 @@
   .login-error{color:var(--rose);font-size:12.5px;margin-top:10px;min-height:16px;}
   .login-foot{margin-top:16px;font-size:11px;color:#94A3B8;line-height:1.5;}
   .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;}
+
+  /* ---- participant portal ---- */
+  #participantRoot{
+    max-width:760px;margin:0 auto;padding:32px 20px 60px;font-family:var(--sans);
+  }
+  .pp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
+  .pp-header h1{font-size:22px;margin:0 0 2px;color:var(--ink);}
+  .pp-header p{margin:0;color:var(--ink-soft);font-size:13.5px;}
+  .pp-logout{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);}
+  .pp-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px;}
+  .pp-progress-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
+  .pp-ring{position:relative;width:112px;height:112px;flex-shrink:0;}
+  .pp-ring svg{transform:rotate(-90deg);width:112px;height:112px;}
+  .pp-ring circle{fill:none;stroke-width:10;}
+  .pp-ring .bg{stroke:var(--canvas);}
+  .pp-ring .fg{stroke:var(--teal);stroke-linecap:round;transition:stroke-dashoffset 1s ease;}
+  .pp-ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .pp-ring-label b{font-size:22px;color:var(--ink);}
+  .pp-ring-label span{font-size:10.5px;color:var(--ink-soft);}
+  .pp-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .pp-badge{font-size:11.5px;padding:5px 10px;border-radius:999px;background:var(--canvas);border:1px solid var(--line);color:var(--ink-soft);}
+  .pp-badge.earned{background:#FFF4EC;border-color:#F3C9A8;color:var(--teal);font-weight:600;}
+  .pp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;flex:1;}
+  .pp-stat b{display:block;font-size:19px;color:var(--ink);}
+  .pp-stat span{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+  .pp-module-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  .pp-module-row:last-child{border-bottom:none;}
+  .pp-module-check{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;}
+  .pp-module-check.done{background:var(--teal);color:#fff;}
+  .pp-module-check.pending{border:1.5px solid var(--line);color:transparent;}
+  .pp-cta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+  .pp-cta{flex:1;min-width:160px;padding:12px;border-radius:10px;border:none;font-weight:600;font-size:13px;cursor:pointer;text-align:center;text-decoration:none;display:block;}
+  .pp-cta.primary{background:var(--teal);color:#fff;}
+  .pp-cta.orange{background:var(--teal);color:#fff;}
+  .pp-cta.ghost{background:var(--canvas);color:var(--ink);border:1px solid var(--line);}
+  .pp-confetti{position:fixed;inset:0;pointer-events:none;z-index:9998;overflow:hidden;}
+  .pp-confetti span{position:absolute;top:-20px;width:8px;height:14px;opacity:.9;animation:pp-fall linear forwards;}
+  @keyframes pp-fall{ to{ transform:translateY(105vh) rotate(540deg); opacity:0; } }
 </style>
 </head>
 <body>
@@ -211,10 +249,10 @@
 <div id="loginGate">
   <div class="login-card">
     <h2>10Alytics · SPL Tracker</h2>
-    <p class="lede">Sign in with your 10Alytics email to continue.</p>
+    <p class="lede">Sign in with your email to continue — team members and registered participants both use this screen.</p>
     <form id="loginForm">
-      <label for="loginEmail">10Alytics email</label>
-      <input type="email" id="loginEmail" placeholder="you@10alytics.org" autocomplete="username" required>
+      <label for="loginEmail">Email address</label>
+      <input type="email" id="loginEmail" placeholder="you@10alytics.org or your registered email" autocomplete="username" required>
       <label for="loginPassword">Access password</label>
       <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
       <label style="display:flex;align-items:center;gap:7px;margin:8px 0 0;font-weight:400;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--ink-soft);">
@@ -225,10 +263,10 @@
       <div class="login-error" id="loginError"></div>
     </form>
     <div class="login-foot">
-      Access requires a 10Alytics email address (@10alytics.org / .io / .ca) and the shared
-      team password. This is a lightweight gate, not full identity verification — it does not
-      confirm you own that mailbox. Mentor-assignment changes are still restricted to the
-      admin account regardless of who is signed in.
+      Team members: use your 10Alytics email (@10alytics.org / .io / .ca) with the team password.
+      Participants: use the email you registered with, with your learner password. Either way,
+      this is a lightweight gate, not full identity verification. Mentor-assignment changes are
+      still restricted to the admin account regardless of who is signed in.
     </div>
   </div>
 </div>
@@ -382,6 +420,9 @@
 
 </div><!-- /appRoot -->
 
+<div id="participantRoot" style="display:none;"></div>
+
+
 <script>
 const BUNDLE = {"settings": {"gracePeriodDays": 30, "defaultStudyDays": 2, "defaultHours": 2, "esc1": 7, "esc2": 14, "esc3": 21, "esc4": 28, "riskGreen": 14, "riskYellow": 0}, "programmes": [{"code": "DA", "name": "Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "CS", "name": "Cybersecurity", "totalModules": 19, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "BA", "name": "Business Analysis", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HTDA", "name": "Health Tech Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FA", "name": "Financial Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HRA", "name": "HR Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FSDS", "name": "Full Stack Data Science", "totalModules": 11, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "PD", "name": "Product Design", "totalModules": 13, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DVOPS", "name": "DevOps Engineering", "totalModules": 21, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "APM", "name": "Agile Project Management", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DE", "name": "Data Engineering", "totalModules": 12, "capstoneWeeks": 3, "standardWeeks": 16}, {"code": "HTBA", "name": "Health Tech Business Analysis", "totalModules": 0, "capstoneWeeks": 2, "standardWeeks": 16}], "participants": [{"serial": "10ALY/C25-11-EU/001", "id": "DAC25-11-EU-01", "name": "Kwame Boakye", "email": "boakyekwame20@gmail.com", "phone": null, "programme": "DA", "cohortId": "C25-11 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-03-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/135", "id": "DAC26-02-NA-32", "name": "Stella Oluwabukola Kuewumi", "email": "stelzy110@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/176", "id": "DAC26-01-EU-74", "name": "Sylvalin Nwaogu", "email": "cyrilsva2016@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/090", "id": "APMC25-12-EU-11", "name": "Osuagwu Chioma", "email": "osuagwuchioma@gmail.com", "phone": null, "programme": "APM", "cohortId": null, "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/004", "id": "HTDAC26-04-EU-04", "name": "Ama Asantewaa Wilmot", "email": "asantewaa.wilmot@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-03", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-NA-2/014", "id": "HTDAC26-04-NA-65", "name": "Festus Essien", "email": "eyisonfestus@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-14", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/006", "id": "HTDAC26-04-EU-06", "name": "David Miracles Baasoteng Vuuro", "email": "davidmiracles1@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-19", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/010", "id": "CSC25-12-EU-10", "name": "Oruaro Ogoro", "email": "rirowilson8@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-25", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-EU/002", "id": "CSC26-02-EU-02", "name": "Aharanwa Emmanuel-Charles", "email": "aharanwatoo@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 8", "currentTopic": "CS010", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/004", "id": "CSC26-01-NA-04", "name": "Freedom Isikuru", "email": "sikuruf001@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS016", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/016", "id": "CSC26-01-NA-16", "name": "Olufemi Ogunlana", "email": "olufemiogunlana@yahoo.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-30", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CAP001", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/012", "id": "CSC26-01-EU-12", "name": "OGECHI JOAN ADINDU", "email": "joanadindu05@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/014", "id": "CSC25-12-EU-15", "name": "David Finch", "email": "Davidmfinch@live.com", "phone": null, "programme": "CS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/051", "id": "FAC25-12-NA-03", "name": "Olere Otele", "email": "olere07@yahoo.com", "phone": null, "programme": "FA", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 23", "currentTopic": "FA012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-09-EU/008", "id": "HRAC25-09-EU-01", "name": "Ifeoma Elemson", "email": "ifeoma.elemson@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C25-09 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 24", "currentTopic": "BREAK", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-NA/088", "id": "HRAC26-03-NA-02", "name": "Anthonia Ezeh", "email": "ezehanthonia@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C26-03 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 10", "currentTopic": "HRA008", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/139", "id": "FSDSC26-01-NA-08", "name": "Emmanuel Abiodun", "email": "ayomideabiodun26@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/160", "id": "FSDSC26-01-NA-29", "name": "Victoria Oyewola", "email": "vicoylah@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/147", "id": "FSDSC26-01-NA-16", "name": "Ifeanyi Chinonso Nkwocha", "email": "ifeanyiliveth@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/097", "id": "FSDSC25-12-NA-11", "name": "Olanrewaju Legastus Ayanyemi", "email": "ayanyemilanre@yahoo.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/107", "id": "FSDSC25-12-NA-21", "name": "Thando Malinga", "email": "thando.malinga@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/081", "id": "FSDSC26-02-NA-07", "name": "Kingsley Ihekwoaba Resource", "email": "chibukings@ymail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/156", "id": "FSDSC26-01-NA-25", "name": "Peace Udoeyo", "email": "udoeyopeace@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/064", "id": "FSDSC25-12-EU-01", "name": "Chinonso Gbule", "email": "dr.nonsogbule@outlook.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-EU/057", "id": "FSDSC26-03-EU-10", "name": "Racheal Aina", "email": "rachealaina14@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-03 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/105", "id": "FSDSC26-01-EU-01", "name": "Adeyemi Adeniji", "email": "adeyeminiji@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}], "checkins": [
   {"participantId":"DAC26-02-NA-32","timestamp":"2026-07-13","weekEnding":"2026-07-13","modulesThisWeek":1,"hoursThisWeek":5,"daysKept":2,"confidence":4,"comments":"(demo) On track, module 3 quiz was tricky."},
@@ -392,6 +433,7 @@ const BUNDLE = {"settings": {"gracePeriodDays": 30, "defaultStudyDays": 2, "defa
 const SETTINGS = BUNDLE.settings;
 const PROGRAMMES = {};
 BUNDLE.programmes.forEach(p => PROGRAMMES[p.code] = p);
+BUNDLE.modules = BUNDLE.modules || []; // populated live if DATA_SOURCE.modulesCsvUrl is set
 
 const STORE_PREFIX = 'splms-tracker-v2';
 
@@ -443,6 +485,12 @@ const DATA_SOURCE = {
   // for the response sheet behind your check-in Google Form. Leave blank to
   // keep the Weekly Check-ins tab in its empty/demo state.
   checkinsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQwMUOZxwNJnBWA4Wmz-lOZL2LZ6rYWwvTSJBVNbf8tedA2N9MSDU-p2_CQ5DoRf1L9mNAVeTrCuGBc/pub?gid=166577054&single=true&output=csv',
+  // Modules tab — one row per session/module per programme, used to show
+  // participants a real, named module list on their portal page (instead
+  // of just a module count). "Publish to web > CSV" the Modules tab and
+  // paste its link here. Leave blank and the portal falls back to a plain
+  // numbered list ("Module 1", "Module 2"...) instead of real topic names.
+  modulesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQwMUOZxwNJnBWA4Wmz-lOZL2LZ6rYWwvTSJBVNbf8tedA2N9MSDU-p2_CQ5DoRf1L9mNAVeTrCuGBc/pub?gid=1583069411&single=true&output=csv',
 };
 
 // Link to the actual Google Form participants fill in. Shown as a button on
@@ -477,6 +525,13 @@ const ALLOWED_EMAIL_DOMAINS = ['@10alytics.org', '@10alytics.io', '@10alytics.ca
 // mentor assignments as read-only. Comparison is case-insensitive.
 const ADMIN_EMAIL = 'ubong@10alytics.org';
 
+// Participant portal login: one shared password for every registered
+// participant, same simple model as staff. A participant gets in with
+// (a) the email address that's actually on their ParticipantDB row and
+// (b) this password. Like the staff gate, this doesn't verify mailbox
+// ownership — it just checks the email is a real registered participant.
+const PARTICIPANT_PASSWORD = 'SPL-Learner-2026';
+
 // Google Apps Script Web App URL that writes Assigned_Mentor directly to
 // the ParticipantDB sheet, so changes show up for every device (not just
 // the browser that made them). Deploy Code.gs (see README) and paste the
@@ -501,6 +556,7 @@ const CAPSTONE_COUNTS = {
 
 function currentUserEmail(){ return sessionStorage.getItem('splms-auth-email') || ''; }
 function isAdmin(){ return currentUserEmail().toLowerCase() === ADMIN_EMAIL.toLowerCase(); }
+function currentRole(){ return sessionStorage.getItem('splms-auth-role') || ''; }
 
 function checkAuth(){
   const email = sessionStorage.getItem('splms-auth-email');
@@ -513,8 +569,26 @@ function showApp(){
   document.getElementById('appRoot').style.display = '';
 }
 
+function showParticipantPortal(){
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('participantRoot').style.display = '';
+}
+
+// Finds a participant by email against the baked-in participant list.
+// Case-insensitive, exact match only (no domain guessing) — this is what
+// makes participant login mean something: only real registered emails get
+// in, not "anything that looks right" like the staff gate allows.
+function findParticipantByEmail_(email){
+  const target = email.trim().toLowerCase();
+  return BUNDLE.participants.find(p => (p.email||'').trim().toLowerCase() === target) || null;
+}
+
 function initLoginGate(){
-  if(checkAuth()){ showApp(); boot(); return; }
+  if(checkAuth()){
+    if(currentRole() === 'participant') { showParticipantPortal(); bootParticipantPortal(); }
+    else { showApp(); boot(); }
+    return;
+  }
   document.getElementById('showPasswordToggle').addEventListener('change', (e)=>{
     document.getElementById('loginPassword').type = e.target.checked ? 'text' : 'password';
   });
@@ -523,20 +597,41 @@ function initLoginGate(){
     const email = document.getElementById('loginEmail').value.trim().toLowerCase();
     const password = document.getElementById('loginPassword').value;
     const errEl = document.getElementById('loginError');
-    if(!ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
-      errEl.textContent = `Please use a 10Alytics email address (${ALLOWED_EMAIL_DOMAINS.join(', ')}).`;
+
+    // Path 1: staff (mentors/admin) — 10Alytics domain + shared staff password.
+    if(ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
+      if(password !== SITE_PASSWORD){
+        errEl.textContent = 'Incorrect password.';
+        return;
+      }
+      sessionStorage.setItem('splms-auth-email', email);
+      sessionStorage.setItem('splms-auth-role', 'staff');
+      sessionStorage.setItem('splms-auth-ok', '1');
+      showApp();
+      boot();
       return;
     }
-    if(password !== SITE_PASSWORD){
+
+    // Path 2: participant — must be a real registered email + the shared
+    // participant password.
+    const p = findParticipantByEmail_(email);
+    if(!p){
+      errEl.textContent = `We couldn't find that email. Use the address you registered with, or a staff 10Alytics email.`;
+      return;
+    }
+    if(password !== PARTICIPANT_PASSWORD){
       errEl.textContent = 'Incorrect password.';
       return;
     }
     sessionStorage.setItem('splms-auth-email', email);
+    sessionStorage.setItem('splms-auth-role', 'participant');
+    sessionStorage.setItem('splms-auth-participant-id', p.id);
     sessionStorage.setItem('splms-auth-ok', '1');
-    showApp();
-    boot();
+    showParticipantPortal();
+    bootParticipantPortal();
   });
 }
+
 
 // Returns the saved admin token, or asks for it right now (once per
 // browser session) if it hasn't been entered yet. Fixes the gap where
@@ -789,6 +884,18 @@ async function refreshLiveData_() {
       }));
       CHECKIN_STATUS.matchedCount = BUNDLE.checkins.length;
       CHECKIN_STATUS.error = null;
+    }
+    if (DATA_SOURCE.modulesCsvUrl) {
+      const rows = await fetchCsv_(DATA_SOURCE.modulesCsvUrl, 'Programme_Code');
+      BUNDLE.modules = rows
+        .filter((r)=> pick_(r, ['Programme_Code','Programme code']) && toNum_(pick_(r, ['Week_Number','Week number']), null) !== null)
+        .map((r)=>({
+          programme: (pick_(r, ['Programme_Code','Programme code']) || '').trim(),
+          weekNumber: toNum_(pick_(r, ['Week_Number','Week number']), null),
+          sessionId: pick_(r, ['Session_ID','Session ID']) || '',
+          topic: pick_(r, ['Topic']) || '',
+          outlineLabel: pick_(r, ['Course_Outline_Label','Course outline label']) || '',
+        })).sort((a,b)=> a.weekNumber - b.weekNumber);
     }
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -1044,6 +1151,57 @@ function planToText_(p, plan){
   return out;
 }
 
+// Opens a clean, print-formatted version of the plan in a new tab and
+// triggers the browser's print dialog — the person picks "Save as PDF" as
+// the destination. No external library needed. This is the version meant
+// to be attached to the onboarding email.
+function downloadPlanAsPdf_(p, plan){
+  const fmt = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const progName = PROGRAMMES[p.programme]?.name || p.programme;
+  const rows = plan.items.map(it=>`
+    <tr>
+      <td>${it.week}</td>
+      <td>${fmt(it.start)}</td>
+      <td>${it.phase === 'Capstone' ? '🎓 ' : '📘 '}${it.label}</td>
+    </tr>`).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${p.name} — Lesson Plan</title>
+  <style>
+    @page{ margin:28px; }
+    body{ font-family:'Segoe UI', Arial, sans-serif; color:#0F172A; margin:0; padding:32px; }
+    h1{ font-size:20px; margin:0 0 2px; color:#D9631F; }
+    h2{ font-size:13px; font-weight:400; color:#475569; margin:0 0 18px; }
+    .meta{ display:flex; gap:24px; margin-bottom:20px; font-size:12.5px; }
+    .meta div{ background:#F4F6F9; border-radius:8px; padding:8px 14px; }
+    .meta b{ display:block; font-size:11px; color:#64748B; font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:2px; }
+    table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+    th{ text-align:left; background:#0F172A; color:#fff; padding:8px 10px; }
+    td{ padding:8px 10px; border-bottom:1px solid #E2E8F0; }
+    tr:nth-child(even){ background:#F8FAFC; }
+    .footer{ margin-top:22px; font-size:11px; color:#94A3B8; }
+    @media print{ .no-print{ display:none; } }
+  </style></head>
+  <body>
+    <h1>Your Self-Paced Learning Plan</h1>
+    <h2>${p.name} · ${progName}</h2>
+    <div class="meta">
+      <div><b>Participant ID</b>${p.id}</div>
+      <div><b>Pace</b>${plan.perWeek} study day${plan.perWeek===1?'':'s'}/week</div>
+      <div><b>Total weeks</b>${plan.totalWeeks}</div>
+      <div><b>Target completion</b>${fmt(plan.endDate)}</div>
+    </div>
+    <table>
+      <thead><tr><th>Week</th><th>Starting</th><th>Focus</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="footer">10Alytics Self-Paced Learning · Generated ${fmt(new Date())} · Plan assumes 4 capstone projects, splitting the programme's capstone weeks between them.</div>
+    <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if(!w){ showToast('Please allow pop-ups to download the PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
 function openLessonPlanDrawer(id){
   const p = participants.find(x=>x.id===id);
   if(!p) return;
@@ -1084,19 +1242,12 @@ function openLessonPlanDrawer(id){
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;">
-        <button id="planDownloadIcsBtn" style="flex:1;">Download calendar (.ics)</button>
+        <button id="planDownloadPdfBtn" class="primary" style="flex:1;">Download as PDF</button>
         <button id="planCopyTextBtn" style="flex:1;">Copy as text</button>
       </div>
-      <div class="admin-only-note">Plan assumes 4 capstone projects for ${p.programme}, splitting the programme's capstone weeks between them (minimum 1 week each).</div>
+      <div class="admin-only-note">Plan assumes 4 capstone projects for ${p.programme}, splitting the programme's capstone weeks between them (minimum 1 week each). The PDF button opens a print-ready page — choose "Save as PDF" as the destination, then attach it to the onboarding email.</div>
     `;
-    document.getElementById('planDownloadIcsBtn').onclick = ()=>{
-      const blob = new Blob([planToIcs_(p, plan)], {type:'text/calendar'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${p.id}-lesson-plan.ics`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
+    document.getElementById('planDownloadPdfBtn').onclick = ()=> downloadPlanAsPdf_(p, plan);
     document.getElementById('planCopyTextBtn').onclick = ()=>{
       const text = planToText_(p, plan);
       try{ navigator.clipboard.writeText(text); }catch(e){}
@@ -1106,6 +1257,142 @@ function openLessonPlanDrawer(id){
   document.getElementById('planGenBtn').onclick = renderPlan;
   renderPlan();
 }
+
+
+// ---------- participant portal ----------
+
+async function bootParticipantPortal(){
+  // Refresh live data first so a participant sees any recent update an
+  // admin made (mentor, modules completed, etc.) — same source of truth
+  // the staff dashboard uses, just filtered down to one person.
+  try{ await refreshLiveData_(); }catch(e){ /* fall back to baked-in snapshot */ }
+  const id = sessionStorage.getItem('splms-auth-participant-id');
+  let p = BUNDLE.participants.find(x=>x.id===id);
+  if(!p){
+    document.getElementById('participantRoot').innerHTML = `<div class="pp-card" style="max-width:480px;margin:60px auto;text-align:center;">
+      <p>We couldn't find your record after refreshing. Please contact your mentor or ubong@10alytics.org.</p>
+      <button class="pp-cta ghost" onclick="logoutParticipant()">Sign out</button>
+    </div>`;
+    return;
+  }
+  // apply any staff-made local overrides too, same as the staff dashboard
+  const ov = await loadOverrides(p.id);
+  p = Object.assign({}, p, ov);
+  renderParticipantPortal(p);
+}
+
+function logoutParticipant(){
+  sessionStorage.clear();
+  location.reload();
+}
+
+const MILESTONES = [
+  { pct:25, emoji:'🌱', label:'Quarter way' },
+  { pct:50, emoji:'🔥', label:'Halfway there' },
+  { pct:75, emoji:'🚀', label:'Almost there' },
+  { pct:100, emoji:'🏆', label:'Modules complete' },
+];
+
+function fireConfetti_(){
+  const colors = ['#D9631F','#15803D','#B45309','#0F172A','#DCFCE7'];
+  const el = document.createElement('div');
+  el.className = 'pp-confetti';
+  for(let i=0;i<40;i++){
+    const s = document.createElement('span');
+    s.style.left = Math.random()*100 + 'vw';
+    s.style.background = colors[i % colors.length];
+    s.style.animationDuration = (2 + Math.random()*1.5) + 's';
+    s.style.animationDelay = (Math.random()*0.4) + 's';
+    el.appendChild(s);
+  }
+  document.body.appendChild(el);
+  setTimeout(()=> el.remove(), 4000);
+}
+
+function renderParticipantPortal(p){
+  const eng = computeEngine(p);
+  const prog = PROGRAMMES[p.programme] || {};
+  const total = eng.totalModules || prog.totalModules || 0;
+  const pct = total > 0 ? Math.round((eng.completed/total)*100) : 0;
+  const firstName = (p.name||'').split(' ')[0] || 'there';
+  const r = 46, circumference = 2*Math.PI*r;
+  const dashOffset = circumference * (1 - pct/100);
+
+  // Countdown target: use the lesson plan's own projection, starting today.
+  const plan = buildLessonPlan(p, new Date().toISOString().slice(0,10));
+  const daysLeft = Math.max(Math.ceil((plan.endDate - new Date())/DAY), 0);
+  const fmtDate = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+
+  // Module list: real topics if DATA_SOURCE.modulesCsvUrl is configured,
+  // otherwise a plain numbered fallback.
+  const myModules = BUNDLE.modules.filter(m=>m.programme===p.programme);
+  const moduleRows = (myModules.length ? myModules : Array.from({length: total}, (_,i)=>({weekNumber:i, topic:`Module ${i+1}`})))
+    .map((m,i)=>{
+      const done = i < eng.completed;
+      return `<div class="pp-module-row">
+        <div class="pp-module-check ${done?'done':'pending'}">${done?'✓':''}</div>
+        <div style="flex:1;">${m.topic || ('Module '+(i+1))}</div>
+        ${done ? '<span class="muted" style="font-size:11px;">Done</span>' : ''}
+      </div>`;
+    }).join('');
+
+  const earnedBadges = MILESTONES.filter(m => pct >= m.pct);
+  const nextBadge = MILESTONES.find(m => pct < m.pct);
+
+  document.getElementById('participantRoot').innerHTML = `
+    <div class="pp-header">
+      <div>
+        <h1>Hey ${firstName} 👋</h1>
+        <p>${prog.name || p.programme} · ${p.cohortId || 'your cohort'}</p>
+      </div>
+      <button class="pp-logout" onclick="logoutParticipant()">Sign out</button>
+    </div>
+
+    <div class="pp-card">
+      <div class="pp-progress-row">
+        <div class="pp-ring">
+          <svg viewBox="0 0 112 112">
+            <circle class="bg" cx="56" cy="56" r="${r}"></circle>
+            <circle class="fg" cx="56" cy="56" r="${r}" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}"></circle>
+          </svg>
+          <div class="pp-ring-label"><b>${pct}%</b><span>complete</span></div>
+        </div>
+        <div class="pp-stats">
+          <div class="pp-stat"><b>${eng.completed}/${total}</b><span>Modules done</span></div>
+          <div class="pp-stat"><b>${daysLeft}</b><span>Days to target</span></div>
+          <div class="pp-stat"><b>${p.mentor || 'Unassigned'}</b><span>Your mentor</span></div>
+        </div>
+      </div>
+      <div class="pp-badges">
+        ${MILESTONES.map(m=>`<span class="pp-badge ${pct>=m.pct?'earned':''}">${m.emoji} ${m.label}</span>`).join('')}
+      </div>
+      ${nextBadge ? `<div class="muted" style="font-size:12px;margin-top:10px;">${nextBadge.pct - pct}% to go until "${nextBadge.label}" ${nextBadge.emoji}</div>` : `<div class="muted" style="font-size:12px;margin-top:10px;">🎉 All modules complete — go crush that capstone!</div>`}
+    </div>
+
+    <div class="pp-card">
+      <b style="font-size:14px;">Your target completion</b>
+      <p class="muted" style="font-size:12.5px;margin:6px 0 0;">${fmtDate(plan.endDate)} · ${plan.totalWeeks} weeks total, based on your current pace.</p>
+      <div class="pp-cta-row">
+        <button class="pp-cta primary" id="ppDownloadPdfBtn">📄 Download my plan (PDF)</button>
+        ${CHECKIN_FORM_URL ? `<a class="pp-cta orange" href="${CHECKIN_FORM_URL}" target="_blank">✅ Confirm this week's progress</a>` : ''}
+      </div>
+    </div>
+
+    <div class="pp-card">
+      <b style="font-size:14px;">Your course modules</b>
+      <div style="margin-top:10px;max-height:320px;overflow-y:auto;">
+        ${moduleRows || '<p class="muted">No module list configured yet — check with your mentor.</p>'}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('ppDownloadPdfBtn').onclick = ()=> downloadPlanAsPdf_(p, plan);
+
+  // Small celebratory moment if they've hit a milestone — doesn't nag every
+  // visit, just when there's something to celebrate.
+  if(pct > 0 && MILESTONES.some(m=>m.pct===pct)) fireConfetti_();
+}
+
 
 // ---------- weekly check-ins ----------
 // Accepts either a participant object (preferred, enables name-fallback
