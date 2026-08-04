@@ -213,43 +213,7 @@
   .login-foot{margin-top:16px;font-size:11px;color:#94A3B8;line-height:1.5;}
   .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;}
 
-  /* ---- participant portal ---- */
-  #participantRoot{
-    max-width:760px;margin:0 auto;padding:32px 20px 60px;font-family:var(--sans);
-  }
-  .pp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
-  .pp-header h1{font-size:22px;margin:0 0 2px;color:var(--ink);}
-  .pp-header p{margin:0;color:var(--ink-soft);font-size:13.5px;}
-  .pp-logout{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);}
-  .pp-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px;}
-  .pp-progress-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap;}
-  .pp-ring{position:relative;width:112px;height:112px;flex-shrink:0;}
-  .pp-ring svg{transform:rotate(-90deg);width:112px;height:112px;}
-  .pp-ring circle{fill:none;stroke-width:10;}
-  .pp-ring .bg{stroke:var(--canvas);}
-  .pp-ring .fg{stroke:var(--teal);stroke-linecap:round;transition:stroke-dashoffset 1s ease;}
-  .pp-ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-  .pp-ring-label b{font-size:22px;color:var(--ink);}
-  .pp-ring-label span{font-size:10.5px;color:var(--ink-soft);}
-  .pp-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
-  .pp-badge{font-size:11.5px;padding:5px 10px;border-radius:999px;background:var(--canvas);border:1px solid var(--line);color:var(--ink-soft);}
-  .pp-badge.earned{background:#FFF4EC;border-color:#F3C9A8;color:var(--teal);font-weight:600;}
-  .pp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;flex:1;}
-  .pp-stat b{display:block;font-size:19px;color:var(--ink);}
-  .pp-stat span{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
-  .pp-module-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
-  .pp-module-row:last-child{border-bottom:none;}
-  .pp-module-check{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;}
-  .pp-module-check.done{background:var(--teal);color:#fff;}
-  .pp-module-check.pending{border:1.5px solid var(--line);color:transparent;}
-  .pp-cta-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
-  .pp-cta{flex:1;min-width:160px;padding:12px;border-radius:10px;border:none;font-weight:600;font-size:13px;cursor:pointer;text-align:center;text-decoration:none;display:block;}
-  .pp-cta.primary{background:var(--teal);color:#fff;}
-  .pp-cta.orange{background:var(--teal);color:#fff;}
-  .pp-cta.ghost{background:var(--canvas);color:var(--ink);border:1px solid var(--line);}
-  .pp-confetti{position:fixed;inset:0;pointer-events:none;z-index:9998;overflow:hidden;}
-  .pp-confetti span{position:absolute;top:-20px;width:8px;height:14px;opacity:.9;animation:pp-fall linear forwards;}
-  @keyframes pp-fall{ to{ transform:translateY(105vh) rotate(540deg); opacity:0; } }
+  .app-logout{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);}
 </style>
 </head>
 <body>
@@ -289,7 +253,7 @@
         <p>Self-Paced Learning · live cohort &amp; risk engine</p>
       </div>
     </div>
-    <button class="pp-logout" style="margin-left:auto;" onclick="logoutParticipant()">Sign out</button>
+    <button class="app-logout" style="margin-left:auto;" onclick="staffSignOut()">Sign out</button>
     <div class="rule-pill" id="cohortRulePill">
       <b>Deadline rule:</b> each programme runs 6 months from its cohort start month, plus a grace
       period from the Settings tab. Example — <code>C26-05</code> starts May 2026, programme ends
@@ -482,8 +446,6 @@
 
 </div><!-- /appRoot -->
 
-<div id="participantRoot" style="display:none;"></div>
-
 
 <script>
 const BUNDLE = {"settings": {"gracePeriodDays": 30, "defaultStudyDays": 2, "defaultHours": 2, "esc1": 7, "esc2": 14, "esc3": 21, "esc4": 28, "riskGreen": 14, "riskYellow": 0}, "programmes": [{"code": "DA", "name": "Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "CS", "name": "Cybersecurity", "totalModules": 19, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "BA", "name": "Business Analysis", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HTDA", "name": "Health Tech Data Analytics", "totalModules": 11, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FA", "name": "Financial Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "HRA", "name": "HR Analytics", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "FSDS", "name": "Full Stack Data Science", "totalModules": 11, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "PD", "name": "Product Design", "totalModules": 13, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DVOPS", "name": "DevOps Engineering", "totalModules": 21, "capstoneWeeks": 3, "standardWeeks": 20}, {"code": "APM", "name": "Agile Project Management", "totalModules": 12, "capstoneWeeks": 2, "standardWeeks": 16}, {"code": "DE", "name": "Data Engineering", "totalModules": 12, "capstoneWeeks": 3, "standardWeeks": 16}, {"code": "HTBA", "name": "Health Tech Business Analysis", "totalModules": 0, "capstoneWeeks": 2, "standardWeeks": 16}], "participants": [{"serial": "10ALY/C25-11-EU/001", "id": "DAC25-11-EU-01", "name": "Kwame Boakye", "email": "boakyekwame20@gmail.com", "phone": null, "programme": "DA", "cohortId": "C25-11 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-03-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/135", "id": "DAC26-02-NA-32", "name": "Stella Oluwabukola Kuewumi", "email": "stelzy110@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/176", "id": "DAC26-01-EU-74", "name": "Sylvalin Nwaogu", "email": "cyrilsva2016@gmail.com", "phone": null, "programme": "DA", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/090", "id": "APMC25-12-EU-11", "name": "Osuagwu Chioma", "email": "osuagwuchioma@gmail.com", "phone": null, "programme": "APM", "cohortId": null, "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/004", "id": "HTDAC26-04-EU-04", "name": "Ama Asantewaa Wilmot", "email": "asantewaa.wilmot@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-03", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-NA-2/014", "id": "HTDAC26-04-NA-65", "name": "Festus Essien", "email": "eyisonfestus@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-14", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-04-EU-1/006", "id": "HTDAC26-04-EU-06", "name": "David Miracles Baasoteng Vuuro", "email": "davidmiracles1@gmail.com", "phone": null, "programme": "HTDA", "cohortId": "C26-04 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-07-19", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/010", "id": "CSC25-12-EU-10", "name": "Oruaro Ogoro", "email": "rirowilson8@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-25", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-EU/002", "id": "CSC26-02-EU-02", "name": "Aharanwa Emmanuel-Charles", "email": "aharanwatoo@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-02 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 8", "currentTopic": "CS010", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/004", "id": "CSC26-01-NA-04", "name": "Freedom Isikuru", "email": "sikuruf001@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CS016", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/016", "id": "CSC26-01-NA-16", "name": "Olufemi Ogunlana", "email": "olufemiogunlana@yahoo.com", "phone": null, "programme": "CS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-30", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": "CAP001", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/012", "id": "CSC26-01-EU-12", "name": "OGECHI JOAN ADINDU", "email": "joanadindu05@gmail.com", "phone": null, "programme": "CS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-04-05", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/014", "id": "CSC25-12-EU-15", "name": "David Finch", "email": "Davidmfinch@live.com", "phone": null, "programme": "CS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": "2026-05-02", "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/051", "id": "FAC25-12-NA-03", "name": "Olere Otele", "email": "olere07@yahoo.com", "phone": null, "programme": "FA", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 23", "currentTopic": "FA012", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-09-EU/008", "id": "HRAC25-09-EU-01", "name": "Ifeoma Elemson", "email": "ifeoma.elemson@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C25-09 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 24", "currentTopic": "BREAK", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-NA/088", "id": "HRAC26-03-NA-02", "name": "Anthonia Ezeh", "email": "ezehanthonia@gmail.com", "phone": null, "programme": "HRA", "cohortId": "C26-03 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": "Week 10", "currentTopic": "HRA008", "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/139", "id": "FSDSC26-01-NA-08", "name": "Emmanuel Abiodun", "email": "ayomideabiodun26@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/160", "id": "FSDSC26-01-NA-29", "name": "Victoria Oyewola", "email": "vicoylah@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/147", "id": "FSDSC26-01-NA-16", "name": "Ifeanyi Chinonso Nkwocha", "email": "ifeanyiliveth@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/139", "id": "FSDSC26-01-NA-08", "name": "Emmanuel Abiodun", "email": "ayomideabiodun26@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/097", "id": "FSDSC25-12-NA-11", "name": "Olanrewaju Legastus Ayanyemi", "email": "ayanyemilanre@yahoo.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-NA/107", "id": "FSDSC25-12-NA-21", "name": "Thando Malinga", "email": "thando.malinga@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-02-NA/081", "id": "FSDSC26-02-NA-07", "name": "Kingsley Ihekwoaba Resource", "email": "chibukings@ymail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-02 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/156", "id": "FSDSC26-01-NA-25", "name": "Peace Udoeyo", "email": "udoeyopeace@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C25-12-EU/064", "id": "FSDSC25-12-EU-01", "name": "Chinonso Gbule", "email": "dr.nonsogbule@outlook.com", "phone": null, "programme": "FSDS", "cohortId": "C25-12 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-NA/160", "id": "FSDSC26-01-NA-29", "name": "Victoria Oyewola", "email": "vicoylah@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 NA", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-03-EU/057", "id": "FSDSC26-03-EU-10", "name": "Racheal Aina", "email": "rachealaina14@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-03 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}, {"serial": "10ALY/C26-01-EU/105", "id": "FSDSC26-01-EU-01", "name": "Adeyemi Adeniji", "email": "adeyeminiji@gmail.com", "phone": null, "programme": "FSDS", "cohortId": "C26-01 EU", "paymentStatus": "Verified", "requestDate": null, "approvalDate": null, "mentor": null, "preferredDays": 2, "hoursPerDay": 2, "modulesCompleted": 0, "currentModuleWeek": null, "currentTopic": null, "lastCheckin": null, "lastTopicCompleted": null, "comments": null}], "checkins": [{"participantId": "HRAC26-03-NA-02", "timestamp": "2026-06-23", "weekEnding": "2026-06-23", "modulesThisWeek": null, "hoursThisWeek": null, "daysKept": 2, "confidence": null, "comments": "", "topicsThisWeek": "I just switched to self paced ", "currentModule": "Finished Excel coursework ", "metCommitment": "Yes", "challenges": "Always travelling for work", "planNextWeek": "Will be on tour"}, {"participantId": "FAC25-12-NA-03", "timestamp": "2026-06-28", "weekEnding": "2026-06-28", "modulesThisWeek": null, "hoursThisWeek": null, "daysKept": 1, "confidence": null, "comments": "", "topicsThisWeek": "Financial Analytics", "currentModule": "Financial Analytics", "metCommitment": "No", "challenges": "Illness", "planNextWeek": "NA"}, {"participantId": "FSDSC26-01-EU-01", "timestamp": "2026-07-07", "weekEnding": "2026-07-07", "modulesThisWeek": null, "hoursThisWeek": null, "daysKept": 5, "confidence": null, "comments": "", "topicsThisWeek": "NONE", "currentModule": "MACHINE LEARNING", "metCommitment": "No", "challenges": "Time", "planNextWeek": "To cover more"}, {"participantId": "HTDAC26-04-NA-65", "timestamp": "2026-07-14", "weekEnding": "2026-07-14", "modulesThisWeek": null, "hoursThisWeek": null, "daysKept": 1, "confidence": null, "comments": "", "topicsThisWeek": "None", "currentModule": "Problem Solving Class", "metCommitment": "No", "challenges": "Time inconvenience", "planNextWeek": "Find a convenient time within my schedule "}], "modules": [{"programme": "APM", "weekNumber": 0, "sessionId": "APM001", "topic": "Onboarding", "outlineLabel": "OnboardingAPM"}, {"programme": "APM", "weekNumber": 1, "sessionId": "APM002", "topic": "Project Management Fundamentals (LIVE CLASS 1)", "outlineLabel": "Project Management Fundamentals (LIVE CLASS 1)APM"}, {"programme": "APM", "weekNumber": 2, "sessionId": "APM003", "topic": "Project Management Fundamentals (LIVE CLASS 2)", "outlineLabel": "Project Management Fundamentals (LIVE CLASS 2)APM"}, {"programme": "APM", "weekNumber": 3, "sessionId": "APM004", "topic": "Project Management and Communication Skills (LIVE CLASS 3)", "outlineLabel": "Project Management and Communication Skills (LIVE CLASS 3)APM"}, {"programme": "APM", "weekNumber": 4, "sessionId": "APM005", "topic": "Project Management Planning, Costs, Expectation, \nChange and Risks 1 (LIVE CLASS 4)", "outlineLabel": "Project Management Planning, Costs, Expectation, \nChange and Risks 1 (LIVE CLASS 4)APM"}, {"programme": "APM", "weekNumber": 5, "sessionId": "APM006", "topic": "Project Management Planning, Costs, Expectation, \nChange and Risks (LIVE CLASS 5)", "outlineLabel": "Project Management Planning, Costs, Expectation, \nChange and Risks (LIVE CLASS 5)APM"}, {"programme": "APM", "weekNumber": 6, "sessionId": "APM007", "topic": "The Project Execution, Monitoring \nand Closure Phase (LIVE CLASS 6)", "outlineLabel": "The Project Execution, Monitoring \nand Closure Phase (LIVE CLASS 6)APM"}, {"programme": "APM", "weekNumber": 7, "sessionId": "APM008", "topic": "Advanced Scrum and Agile Practices (LIVE CLASS 7)", "outlineLabel": "Advanced Scrum and Agile Practices (LIVE CLASS 7)APM"}, {"programme": "APM", "weekNumber": 8, "sessionId": "APM009", "topic": "Agile Project Management Tools and Agile Metrics and Reporting (LIVE CLASS 8)", "outlineLabel": "Agile Project Management Tools and Agile Metrics and Reporting (LIVE CLASS 8)APM"}, {"programme": "APM", "weekNumber": 9, "sessionId": "APM010", "topic": "Project on Agile Leadership and Team Dynamics (LIVE CLASS 9) Final Capstone Project", "outlineLabel": "Project on Agile Leadership and Team Dynamics (LIVE CLASS 9) Final Capstone ProjectAPM"}, {"programme": "APM", "weekNumber": 10, "sessionId": "APM011", "topic": "REAL-WORLD AGILE PROJECT MANAGEMENT (LIVE CLASS 10)", "outlineLabel": "REAL-WORLD AGILE PROJECT MANAGEMENT (LIVE CLASS 10)APM"}, {"programme": "APM", "weekNumber": 11, "sessionId": "DRP001", "topic": "DROP IN SESSION", "outlineLabel": "DROP IN SESSIONAPM"}, {"programme": "BA", "weekNumber": 0, "sessionId": "BA001", "topic": "ONBOARDING", "outlineLabel": "ONBOARDING BA"}, {"programme": "BA", "weekNumber": 1, "sessionId": "BA002", "topic": "MS EXCEL LIVE CLASS 1", "outlineLabel": "MS EXCEL LIVE CLASS 1BA"}, {"programme": "BA", "weekNumber": 2, "sessionId": "BA003", "topic": "MS EXCEL LIVE CLASS 2", "outlineLabel": "MS EXCEL LIVE CLASS 2BA"}, {"programme": "BA", "weekNumber": 3, "sessionId": "BA004", "topic": "POWER BI LIVE CLASS", "outlineLabel": "POWER BI LIVE CLASSBA"}, {"programme": "BA", "weekNumber": 4, "sessionId": "BA005", "topic": "SQL LIVE CLASS", "outlineLabel": "SQL LIVE CLASSBA"}, {"programme": "BA", "weekNumber": 5, "sessionId": "BA006", "topic": "PROJECT INITIATION PLANNING & STAKEHOLDER ANALYSIS", "outlineLabel": "PROJECT INITIATION PLANNING & STAKEHOLDER ANALYSIS BA"}, {"programme": "BA", "weekNumber": 6, "sessionId": "BA007", "topic": "BUSINESS CASE & SDLC", "outlineLabel": "BUSINESS CASE & SDLCBA"}, {"programme": "BA", "weekNumber": 7, "sessionId": "BA008", "topic": "REQUIREMENT FUNDAMENTALS, ELICITATION ANALYSIS", "outlineLabel": "REQUIREMENT FUNDAMENTALS, ELICITATION ANALYSIS BA"}, {"programme": "BA", "weekNumber": 8, "sessionId": "BA009", "topic": "GAP ANALYSIS", "outlineLabel": "GAP ANALYSIS BA"}, {"programme": "BA", "weekNumber": 9, "sessionId": "BA010", "topic": "PROCESS MAPPING", "outlineLabel": "PROCESS MAPPING BA"}, {"programme": "BA", "weekNumber": 10, "sessionId": "BA011", "topic": "AGILE SCRUM FRAMEWORK - JIRA", "outlineLabel": "AGILE SCRUM FRAMEWORK - JIRABA"}, {"programme": "CS", "weekNumber": 0, "sessionId": "CS001", "topic": "Onboarding", "outlineLabel": "OnboardingCS"}, {"programme": "CS", "weekNumber": 1, "sessionId": "CS002", "topic": "Introduction to CS", "outlineLabel": "Introduction to CSCS"}, {"programme": "CS", "weekNumber": 2, "sessionId": "CS003", "topic": "LINUX fundamentals", "outlineLabel": "LINUX fundamentalsCS"}, {"programme": "CS", "weekNumber": 3, "sessionId": "CS004", "topic": "Intro to Networking", "outlineLabel": "Intro to NetworkingCS"}, {"programme": "CS", "weekNumber": 4, "sessionId": "CS005", "topic": "SOC Analysis - Live Class I", "outlineLabel": "SOC Analysis - Live Class I CS"}, {"programme": "CS", "weekNumber": 5, "sessionId": "CS006", "topic": "SOC Analysis - Live Class II", "outlineLabel": "SOC Analysis - Live Class IICS"}, {"programme": "CS", "weekNumber": 6, "sessionId": "CS007", "topic": "SOC Analysis - Live Class III", "outlineLabel": "SOC Analysis - Live Class IIICS"}, {"programme": "CS", "weekNumber": 7, "sessionId": "CS008", "topic": "SOC Analysis Presentation", "outlineLabel": "SOC Analysis Presentation CS"}, {"programme": "CS", "weekNumber": 8, "sessionId": "CS009", "topic": "Threat Intelligence - Live Class I", "outlineLabel": "Threat Intelligence - Live Class I CS"}, {"programme": "CS", "weekNumber": 9, "sessionId": "CS010", "topic": "Threat Intelligence - Live Class II", "outlineLabel": "Threat Intelligence - Live Class II CS"}, {"programme": "CS", "weekNumber": 10, "sessionId": "CS011", "topic": "Threat Intelligence Presentation", "outlineLabel": "Threat Intelligence Presentation CS"}, {"programme": "CS", "weekNumber": 11, "sessionId": "CS012", "topic": "Penetration Testing -Live Class I", "outlineLabel": "Penetration Testing -Live Class I CS"}, {"programme": "CS", "weekNumber": 12, "sessionId": "CS013", "topic": "Penetration Testing - Live Class II", "outlineLabel": "Penetration Testing - Live Class II CS"}, {"programme": "CS", "weekNumber": 13, "sessionId": "CS014", "topic": "Penetration Testing - Live Class III", "outlineLabel": "Penetration Testing - Live Class III CS"}, {"programme": "CS", "weekNumber": 14, "sessionId": "CS015", "topic": "Pen Testing Presentation", "outlineLabel": "Pen Testing Presentation CS"}, {"programme": "CS", "weekNumber": 15, "sessionId": "CS016", "topic": "GRC - Live Class I", "outlineLabel": "GRC - Live Class I CS"}, {"programme": "CS", "weekNumber": 16, "sessionId": "CS017", "topic": "GRC - Live Class II", "outlineLabel": "GRC - Live Class IICS"}, {"programme": "CS", "weekNumber": 17, "sessionId": "CS018", "topic": "GRC Presentation", "outlineLabel": "GRC PresentationCS"}, {"programme": "DA", "weekNumber": 0, "sessionId": "DA001", "topic": "ONBOARDING", "outlineLabel": "ONBOARDINGDA"}, {"programme": "DA", "weekNumber": 1, "sessionId": "DA002", "topic": "PROBLEM SOLVING CLASS", "outlineLabel": "PROBLEM SOLVING CLASSDA"}, {"programme": "DA", "weekNumber": 2, "sessionId": "DA003", "topic": "MS-EXCEL LIVE CLASS", "outlineLabel": "MS-EXCEL LIVE CLASSDA"}, {"programme": "DA", "weekNumber": 3, "sessionId": "DA004", "topic": "MS-EXCEL LIVE CLASS 2", "outlineLabel": "MS-EXCEL LIVE CLASS 2DA"}, {"programme": "DA", "weekNumber": 4, "sessionId": "DA005", "topic": "POWER BI LIVE CLASS", "outlineLabel": "POWER BI LIVE CLASSDA"}, {"programme": "DA", "weekNumber": 5, "sessionId": "DA006", "topic": "POWER BI LIVE CLASS 2", "outlineLabel": "POWER BI LIVE CLASS 2DA"}, {"programme": "DA", "weekNumber": 6, "sessionId": "DA007", "topic": "SQL LIVE CLASS 1", "outlineLabel": "SQL LIVE CLASS 1DA"}, {"programme": "DA", "weekNumber": 7, "sessionId": "DA008", "topic": "SQL LIVE CLASS 2", "outlineLabel": "SQL LIVE CLASS 2DA"}, {"programme": "DA", "weekNumber": 8, "sessionId": "DA009", "topic": "TABLEAU LIVE CLASS 1", "outlineLabel": "TABLEAU LIVE CLASS 1DA"}, {"programme": "DA", "weekNumber": 9, "sessionId": "DA010", "topic": "TABLEAU LIVE CLASS 2", "outlineLabel": "TABLEAU LIVE CLASS 2DA"}, {"programme": "DA", "weekNumber": 10, "sessionId": "DA011", "topic": "MICROSOFT FABRICS", "outlineLabel": "MICROSOFT FABRICSDA"}, {"programme": "DE", "weekNumber": 0, "sessionId": "DE012", "topic": "Onboarding", "outlineLabel": "OnboardingDE"}, {"programme": "DE", "weekNumber": 1, "sessionId": "DE001", "topic": "LIVE CLASS: Introduction to Data Engineering", "outlineLabel": "LIVE CLASS: Introduction to Data EngineeringDE"}, {"programme": "DE", "weekNumber": 2, "sessionId": "DE002", "topic": "LIVE CLASS : Python Data Types & Structures", "outlineLabel": "LIVE CLASS : Python Data Types & Structures DE"}, {"programme": "DE", "weekNumber": 3, "sessionId": "DE003", "topic": "LIVE CLASS:  Python Comparison Operators & Loops", "outlineLabel": "LIVE CLASS:  Python Comparison Operators & LoopsDE"}, {"programme": "DE", "weekNumber": 4, "sessionId": "DE004", "topic": "LIVE CLASS PROJECT ON SQL", "outlineLabel": "LIVE CLASS PROJECT ON SQLDE"}, {"programme": "DE", "weekNumber": 5, "sessionId": "DE005", "topic": "LIVE CLASS: Github", "outlineLabel": "LIVE CLASS: Github DE"}, {"programme": "DE", "weekNumber": 6, "sessionId": "DE006", "topic": "LIVE CLASS PROJECT ON PANDAS AND DATABASES", "outlineLabel": "LIVE CLASS PROJECT ON PANDAS AND DATABASESDE"}, {"programme": "DE", "weekNumber": 7, "sessionId": "DE007", "topic": "LIVE CLASS: APIs", "outlineLabel": "LIVE CLASS: APIsDE"}, {"programme": "DE", "weekNumber": 8, "sessionId": "DE008", "topic": "LIVE CLASS: Webscraping Dynamics", "outlineLabel": "LIVE CLASS: Webscraping DynamicsDE"}, {"programme": "DE", "weekNumber": 9, "sessionId": "DE009", "topic": "LIVE CLASS PROJECT ON PYSPARK", "outlineLabel": "LIVE CLASS PROJECT ON PYSPARK DE"}, {"programme": "DE", "weekNumber": 10, "sessionId": "DE010", "topic": "LIVE CLASS: Onpremise DE Project", "outlineLabel": "LIVE CLASS: Onpremise DE ProjectDE"}, {"programme": "DE", "weekNumber": 11, "sessionId": "DE011", "topic": "LIVE CLASS: CLOUD ENGINEERING", "outlineLabel": "LIVE CLASS: CLOUD ENGINEERINGDE"}, {"programme": "DVOPS", "weekNumber": 0, "sessionId": "DVOPS001", "topic": "Onboarding", "outlineLabel": "OnboardingDVOPS"}, {"programme": "DVOPS", "weekNumber": 1, "sessionId": "DVOPS002", "topic": "DevOps Concepts", "outlineLabel": "DevOps ConceptsDVOPS"}, {"programme": "DVOPS", "weekNumber": 2, "sessionId": "DVOPS003", "topic": "Networking Essentials for DevOps", "outlineLabel": "Networking Essentials for DevOpsDVOPS"}, {"programme": "DVOPS", "weekNumber": 3, "sessionId": "DVOPS004", "topic": "Cloud Foundations (AWS Focus)", "outlineLabel": "Cloud Foundations (AWS Focus)DVOPS"}, {"programme": "DVOPS", "weekNumber": 4, "sessionId": "DVOPS005", "topic": "Linux Essentials", "outlineLabel": "Linux EssentialsDVOPS"}, {"programme": "DVOPS", "weekNumber": 5, "sessionId": "DVOPS006", "topic": "Git & GitHub Workflows", "outlineLabel": "Git & GitHub WorkflowsDVOPS"}, {"programme": "DVOPS", "weekNumber": 6, "sessionId": "DVOPS007", "topic": "Bash Scripting for DevOps", "outlineLabel": "Bash Scripting for DevOpsDVOPS"}, {"programme": "DVOPS", "weekNumber": 7, "sessionId": "DVOPS008", "topic": "Python for DevOps Automation", "outlineLabel": "Python for DevOps AutomationDVOPS"}, {"programme": "DVOPS", "weekNumber": 8, "sessionId": "DVOPS009", "topic": "CI/CD Foundations (GitHub Actions)", "outlineLabel": "CI/CD Foundations (GitHub Actions)DVOPS"}, {"programme": "DVOPS", "weekNumber": 9, "sessionId": "DVOPS010", "topic": "Jenkins Essentials", "outlineLabel": "Jenkins EssentialsDVOPS"}, {"programme": "DVOPS", "weekNumber": 10, "sessionId": "DVOPS011", "topic": "Docker Fundamentals", "outlineLabel": "Docker FundamentalsDVOPS"}, {"programme": "DVOPS", "weekNumber": 11, "sessionId": "DVOPS012", "topic": "Docker Compose & Registries", "outlineLabel": "Docker Compose & RegistriesDVOPS"}, {"programme": "DVOPS", "weekNumber": 12, "sessionId": "DVOPS013", "topic": "Kubernetes Basics", "outlineLabel": "Kubernetes BasicsDVOPS"}, {"programme": "DVOPS", "weekNumber": 13, "sessionId": "DVOPS014", "topic": "Advanced Kubernetes", "outlineLabel": "Advanced KubernetesDVOPS"}, {"programme": "DVOPS", "weekNumber": 14, "sessionId": "DVOPS015", "topic": "Helm Charts", "outlineLabel": "Helm ChartsDVOPS"}, {"programme": "DVOPS", "weekNumber": 15, "sessionId": "DVOPS016", "topic": "Terraform Fundamentals", "outlineLabel": "Terraform FundamentalsDVOPS"}, {"programme": "DVOPS", "weekNumber": 16, "sessionId": "DVOPS017", "topic": "Monitoring & Logging", "outlineLabel": "Monitoring & LoggingDVOPS"}, {"programme": "DVOPS", "weekNumber": 17, "sessionId": "DVOPS018", "topic": "Advanced Terraform", "outlineLabel": "Advanced TerraformDVOPS"}, {"programme": "DVOPS", "weekNumber": 18, "sessionId": "DVOPS019", "topic": "DevSecOps Essentials", "outlineLabel": "DevSecOps EssentialsDVOPS"}, {"programme": "DVOPS", "weekNumber": 19, "sessionId": "DVOPS020", "topic": "Advanced CI/CD & GitOps", "outlineLabel": "Advanced CI/CD & GitOpsDVOPS"}, {"programme": "DVOPS", "weekNumber": 20, "sessionId": "DVOPS021", "topic": "End-to-End DevOps Project", "outlineLabel": "End-to-End DevOps ProjectDVOPS"}, {"programme": "FA", "weekNumber": 0, "sessionId": "FA001", "topic": "ONBOARDING", "outlineLabel": "ONBOARDINGFA"}, {"programme": "FA", "weekNumber": 1, "sessionId": "FA002", "topic": "PROBLEM SOLVING", "outlineLabel": "PROBLEM SOLVINGFA"}, {"programme": "FA", "weekNumber": 2, "sessionId": "FA003", "topic": "MS EXCEL LIVE CLASS 1", "outlineLabel": "MS EXCEL LIVE CLASS 1FA"}, {"programme": "FA", "weekNumber": 3, "sessionId": "FA004", "topic": "MS EXCEL LIVE CLASS 2", "outlineLabel": "MS EXCEL LIVE CLASS 2FA"}, {"programme": "FA", "weekNumber": 4, "sessionId": "FA005", "topic": "POWERBI LIVE CLASS 1", "outlineLabel": "POWERBI LIVE CLASS 1FA"}, {"programme": "FA", "weekNumber": 5, "sessionId": "FA006", "topic": "POWERBI LIVE CLASS 2", "outlineLabel": "POWERBI LIVE CLASS 2FA"}, {"programme": "FA", "weekNumber": 6, "sessionId": "FA007", "topic": "SQL LIVE CLASS 1", "outlineLabel": "SQL LIVE CLASS 1FA"}, {"programme": "FA", "weekNumber": 7, "sessionId": "FA008", "topic": "SQL LIVE CLASS 2", "outlineLabel": "SQL LIVE CLASS 2FA"}, {"programme": "FA", "weekNumber": 8, "sessionId": "FA009", "topic": "FINANCIAL ANALYTICS LIVE CLASS 1", "outlineLabel": "FINANCIAL ANALYTICS LIVE CLASS 1FA"}, {"programme": "FA", "weekNumber": 9, "sessionId": "FA010", "topic": "FINANCIAL ANALYTICS LIVE CLASS 2", "outlineLabel": "FINANCIAL ANALYTICS LIVE CLASS 2FA"}, {"programme": "FA", "weekNumber": 10, "sessionId": "FA011", "topic": "FINANCIAL ANALYTICS LIVE CLASS 3", "outlineLabel": "FINANCIAL ANALYTICS LIVE CLASS 3FA"}, {"programme": "FA", "weekNumber": 11, "sessionId": "FA012", "topic": "FINANCIAL ANALYTICS LIVE CLASS 4", "outlineLabel": "FINANCIAL ANALYTICS LIVE CLASS 4FA"}, {"programme": "FSDS", "weekNumber": 0, "sessionId": "FSDS001", "topic": "ONBOARDING", "outlineLabel": "ONBOARDINGFSDS"}, {"programme": "FSDS", "weekNumber": 1, "sessionId": "FSDS002", "topic": "DATA CLEANING IN EXCEL", "outlineLabel": "DATA CLEANING IN EXCELFSDS"}, {"programme": "FSDS", "weekNumber": 2, "sessionId": "FSDS003", "topic": "DASHBOARDING", "outlineLabel": "DASHBOARDINGFSDS"}, {"programme": "FSDS", "weekNumber": 3, "sessionId": "FSDS004", "topic": "STATS AND FORECASTING", "outlineLabel": "STATS AND FORECASTINGFSDS"}, {"programme": "FSDS", "weekNumber": 4, "sessionId": "FSDS005", "topic": "TABLEAU", "outlineLabel": "TABLEAUFSDS"}, {"programme": "FSDS", "weekNumber": 5, "sessionId": "FSDS006", "topic": "SQL", "outlineLabel": "SQLFSDS"}, {"programme": "FSDS", "weekNumber": 6, "sessionId": "FSDS007", "topic": "PYTHON", "outlineLabel": "PYTHONFSDS"}, {"programme": "FSDS", "weekNumber": 7, "sessionId": "FSDS008", "topic": "NUMPY AND PANDAS", "outlineLabel": "NUMPY AND PANDASFSDS"}, {"programme": "FSDS", "weekNumber": 8, "sessionId": "FSDS009", "topic": "MACHINE LEARNING 1 (SUPERVISED)", "outlineLabel": "MACHINE LEARNING 1 (SUPERVISED)FSDS"}, {"programme": "FSDS", "weekNumber": 9, "sessionId": "FSDS010", "topic": "MACHINE LEARNING 2 (UNSUPERVISED)", "outlineLabel": "MACHINE LEARNING 2 (UNSUPERVISED)FSDS"}, {"programme": "FSDS", "weekNumber": 10, "sessionId": "FSDS011", "topic": "COMPUTER VISION", "outlineLabel": "COMPUTER VISIONFSDS"}, {"programme": "HRA", "weekNumber": 0, "sessionId": "HRA001", "topic": "ONBOARDING", "outlineLabel": "ONBOARDINGHRA"}, {"programme": "HRA", "weekNumber": 1, "sessionId": "HRA002", "topic": "PROBLEM SOLVING", "outlineLabel": "PROBLEM SOLVINGHRA"}, {"programme": "HRA", "weekNumber": 2, "sessionId": "HRA003", "topic": "MS EXCEL LIVE CLASS 1", "outlineLabel": "MS EXCEL LIVE CLASS 1HRA"}, {"programme": "HRA", "weekNumber": 3, "sessionId": "HRA004", "topic": "MS EXCEL LIVE CLASS 2", "outlineLabel": "MS EXCEL LIVE CLASS 2HRA"}, {"programme": "HRA", "weekNumber": 4, "sessionId": "HRA005", "topic": "POWERBI LIVE CLASS 1", "outlineLabel": "POWERBI LIVE CLASS 1HRA"}, {"programme": "HRA", "weekNumber": 5, "sessionId": "HRA006", "topic": "POWERBI LIVE CLASS 2", "outlineLabel": "POWERBI LIVE CLASS 2HRA"}, {"programme": "HRA", "weekNumber": 6, "sessionId": "HRA007", "topic": "SQL LIVE CLASS 1", "outlineLabel": "SQL LIVE CLASS 1HRA"}, {"programme": "HRA", "weekNumber": 7, "sessionId": "HRA008", "topic": "SQL LIVE CLASS 2", "outlineLabel": "SQL LIVE CLASS 2HRA"}, {"programme": "HRA", "weekNumber": 8, "sessionId": "HRA009", "topic": "HR ANALYTICS LIVE CLASS 1", "outlineLabel": "HR ANALYTICS LIVE CLASS 1HRA"}, {"programme": "HRA", "weekNumber": 9, "sessionId": "HRA010", "topic": "HR ANALYTICS LIVE CLASS 2", "outlineLabel": "HR ANALYTICS LIVE CLASS 2HRA"}, {"programme": "HRA", "weekNumber": 10, "sessionId": "HRA011", "topic": "HR ANALYTICS LIVE CLASS 3", "outlineLabel": "HR ANALYTICS LIVE CLASS 3HRA"}, {"programme": "HRA", "weekNumber": 11, "sessionId": "HRA012", "topic": "HR ANALYTICS LIVE CLASS 4", "outlineLabel": "HR ANALYTICS LIVE CLASS 4HRA"}, {"programme": "HTDA", "weekNumber": 0, "sessionId": "HTDA001", "topic": "ONBOARDING", "outlineLabel": "ONBOARDINGHTDA"}, {"programme": "HTDA", "weekNumber": 1, "sessionId": "HTDA002", "topic": "PROBLEM SOLVING CLASS", "outlineLabel": "PROBLEM SOLVING CLASSHTDA"}, {"programme": "HTDA", "weekNumber": 2, "sessionId": "HTDA003", "topic": "MS-EXCEL LIVE CLASS", "outlineLabel": "MS-EXCEL LIVE CLASSHTDA"}, {"programme": "HTDA", "weekNumber": 3, "sessionId": "HTDA004", "topic": "MS-EXCEL LIVE CLASS 2", "outlineLabel": "MS-EXCEL LIVE CLASS 2HTDA"}, {"programme": "HTDA", "weekNumber": 4, "sessionId": "HTDA005", "topic": "POWER BI LIVE CLASS", "outlineLabel": "POWER BI LIVE CLASSHTDA"}, {"programme": "HTDA", "weekNumber": 5, "sessionId": "HTDA006", "topic": "POWER BI LIVE CLASS 2", "outlineLabel": "POWER BI LIVE CLASS 2HTDA"}, {"programme": "HTDA", "weekNumber": 6, "sessionId": "HTDA007", "topic": "SQL LIVE CLASS 1", "outlineLabel": "SQL LIVE CLASS 1HTDA"}, {"programme": "HTDA", "weekNumber": 7, "sessionId": "HTDA008", "topic": "SQL LIVE CLASS 2", "outlineLabel": "SQL LIVE CLASS 2HTDA"}, {"programme": "HTDA", "weekNumber": 8, "sessionId": "HTDA009", "topic": "TABLEAU LIVE CLASS 1", "outlineLabel": "TABLEAU LIVE CLASS 1HTDA"}, {"programme": "HTDA", "weekNumber": 9, "sessionId": "HTDA010", "topic": "TABLEAU LIVE CLASS 2", "outlineLabel": "TABLEAU LIVE CLASS 2HTDA"}, {"programme": "HTDA", "weekNumber": 10, "sessionId": "HTDA011", "topic": "MICROSOFT FABRICS", "outlineLabel": "MICROSOFT FABRICSHTDA"}, {"programme": "PD", "weekNumber": 0, "sessionId": "PD001", "topic": "Onboarding", "outlineLabel": "OnboardingPD"}, {"programme": "PD", "weekNumber": 1, "sessionId": "PD002", "topic": "Introduction to Product Design", "outlineLabel": "Introduction to Product DesignPD"}, {"programme": "PD", "weekNumber": 2, "sessionId": "PD003", "topic": "Design Thinking & Problem Framing", "outlineLabel": "Design Thinking & Problem FramingPD"}, {"programme": "PD", "weekNumber": 3, "sessionId": "PD004", "topic": "UX Research Fundamentals", "outlineLabel": "UX Research FundamentalsPD"}, {"programme": "PD", "weekNumber": 4, "sessionId": "PD005", "topic": "Competitive & Heuristic Analysis", "outlineLabel": "Competitive & Heuristic AnalysisPD"}, {"programme": "PD", "weekNumber": 5, "sessionId": "PD006", "topic": "IA & User Flows", "outlineLabel": "IA & User FlowsPD"}, {"programme": "PD", "weekNumber": 6, "sessionId": "PD007", "topic": "Wireframing (Low-Fidelity)", "outlineLabel": "Wireframing (Low-Fidelity)PD"}, {"programme": "PD", "weekNumber": 7, "sessionId": "PD008", "topic": "Visual Design & UI Principles", "outlineLabel": "Visual Design & UI PrinciplesPD"}, {"programme": "PD", "weekNumber": 8, "sessionId": "PD009", "topic": "Design Systems & Components", "outlineLabel": "Design Systems & ComponentsPD"}, {"programme": "PD", "weekNumber": 9, "sessionId": "PD010", "topic": "Prototyping & Microinteractions", "outlineLabel": "Prototyping & MicrointeractionsPD"}, {"programme": "PD", "weekNumber": 10, "sessionId": "PD011", "topic": "Usability Testing & Iteration", "outlineLabel": "Usability Testing & IterationPD"}, {"programme": "PD", "weekNumber": 11, "sessionId": "PD012", "topic": "AI in Product Design", "outlineLabel": "AI in Product DesignPD"}, {"programme": "PD", "weekNumber": 12, "sessionId": "PD013", "topic": "Product Strategy & Collaboration", "outlineLabel": "Product Strategy & CollaborationPD"}]};
@@ -561,15 +523,6 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // Dashboard tab to distribute participants evenly and round-robin.
 const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
 
-// Used to fill in the onboarding pack's [SPL_Tracker_Link] and
-// [Participant_Portal_Password] placeholders. Set SPL_TRACKER_LINK to
-// wherever you host this page (e.g. your GitHub Pages URL) and
-// PARTICIPANT_PORTAL_PASSWORD to whatever shared password you're giving
-// participants. Leave either blank to have the onboarding pack show a
-// "[fill this in]" placeholder instead, so it's obvious it needs setting.
-const SPL_TRACKER_LINK = '';
-const PARTICIPANT_PORTAL_PASSWORD = '';
-
 // -----------------------------------------------------------------------
 // ACCESS CONTROL
 // -----------------------------------------------------------------------
@@ -629,9 +582,9 @@ function showApp(){
   document.getElementById('appRoot').style.display = '';
 }
 
-function showParticipantPortal(){
-  document.getElementById('loginGate').style.display = 'none';
-  document.getElementById('participantRoot').style.display = '';
+function staffSignOut(){
+  sessionStorage.clear();
+  location.reload();
 }
 
 function initLoginGate(){
@@ -1155,46 +1108,6 @@ function computeEngine(p){
 }
 
 // ---------- lesson plan / calendar ----------
-// Builds a week-by-week plan from a chosen start date: modules first (paced
-// by the participant's preferred study days/week, 1 module per study day),
-// then the remaining programme weeks split evenly across that programme's
-// capstone projects (see CAPSTONE_COUNTS above).
-function buildLessonPlan(p, startDateStr){
-  const eng = computeEngine(p);
-  const prog = PROGRAMMES[p.programme] || {};
-  const remainingModules = eng.remaining;
-  const perWeek = Math.max(p.preferredDays || SETTINGS.defaultStudyDays || 2, 1);
-  const capstoneCount = CAPSTONE_COUNTS[p.programme] || 1;
-  const totalCapstoneWeeks = prog.capstoneWeeks || eng.capstoneWeeks || 2;
-  const perCapstoneWeeks = Math.max(Math.round(totalCapstoneWeeks / capstoneCount), 1);
-
-  const items = [];
-  let cursor = new Date(startDateStr + 'T00:00:00');
-  let modulesLeft = remainingModules;
-  let weekNum = 1;
-  while(modulesLeft > 0){
-    const thisWeek = Math.min(perWeek, modulesLeft);
-    items.push({
-      week: weekNum, phase: 'Modules',
-      label: `${thisWeek} module${thisWeek===1?'':'s'} (${eng.completed + (remainingModules-modulesLeft) + 1}–${eng.completed + (remainingModules-modulesLeft) + thisWeek} of ${eng.totalModules})`,
-      start: new Date(cursor),
-    });
-    modulesLeft -= thisWeek;
-    cursor = addDays(cursor, 7);
-    weekNum++;
-  }
-  for(let c=1; c<=capstoneCount; c++){
-    items.push({
-      week: weekNum, phase: 'Capstone',
-      label: capstoneCount===1 ? 'Capstone project' : `Capstone project ${c} of ${capstoneCount}`,
-      start: new Date(cursor), durationWeeks: perCapstoneWeeks,
-    });
-    cursor = addDays(cursor, perCapstoneWeeks*7);
-    weekNum += perCapstoneWeeks;
-  }
-  return { items, endDate: new Date(cursor), totalWeeks: weekNum-1, perWeek, capstoneCount };
-}
-
 // Real, named modules for a programme (from the Modules tab), in week order.
 // Onboarding is a one-time admin/welcome session, not self-paced study
 // content — participants shouldn't see it scheduled as a "topic to study"
@@ -1561,20 +1474,19 @@ function buildOnboardingContent_(p){
   const progName = PROGRAMMES[p.programme]?.name || p.programme;
   const firstName = (p.name||'').trim().split(/\s+/)[0] || p.name;
   const fmt = (d)=> d ? d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '[to be confirmed]';
-  const portalLink = SPL_TRACKER_LINK || '[SPL tracker link — set SPL_TRACKER_LINK near the top of the script]';
-  const portalPassword = PARTICIPANT_PORTAL_PASSWORD || '[shared portal password — set PARTICIPANT_PORTAL_PASSWORD near the top of the script]';
   const mentor = p.mentor || '[unassigned — assign a mentor before sending]';
 
   const fields = {
     firstName, progName,
     id: p.id, cohort: p.cohortId || '—', totalModules: eng.totalModules || '—',
-    mentor, targetDate: fmt(eng.predictedFinal), portalLink, email: p.email || '',
-    portalPassword, days: p.preferredDays || SETTINGS.defaultStudyDays || 2, hours: p.hoursPerDay || SETTINGS.defaultHours || 2,
+    mentor, targetDate: fmt(eng.predictedFinal), email: p.email || '',
+    days: p.preferredDays || SETTINGS.defaultStudyDays || 2, hours: p.hoursPerDay || SETTINGS.defaultHours || 2,
+    checkinFormUrl: CHECKIN_FORM_URL || null,
   };
 
   const html = `
     <p>Hi ${fields.firstName},</p>
-    <p>Welcome to 10Alytics! 🎉 You're officially enrolled in the <b>${fields.progName}</b> Self-Paced Learning (SPL) track — and we couldn't be more excited to have you. This email is your complete starter kit: your programme details, your personal study plan, and your own login to track your progress every step of the way.</p>
+    <p>Welcome to 10Alytics! 🎉 You're officially enrolled in the <b>${fields.progName}</b> Self-Paced Learning (SPL) track — and we couldn't be more excited to have you. This email is your complete starter kit: your programme details and your personal study plan.</p>
     <h3>1. Your Programme at a Glance</h3>
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
       <tr><td><b>Programme</b></td><td>${fields.progName}</td></tr>
@@ -1586,45 +1498,31 @@ function buildOnboardingContent_(p){
     </table>
     <h3>2. Your Personal Study Plan (attached 📎)</h3>
     <p>Attached to this email is your very own week-by-week study plan, built around when you told us you want to start — showing exactly what to study each week, and when your capstone project(s) begin. Save it, print it, pin it above your desk — whatever helps you see the finish line.</p>
-    <h3>3. Log In to Your Own Progress Page 🚀</h3>
-    <p>This is the exciting part: you now have your own private login to track your journey in real time. Here's what you'll see:</p>
-    <ul>
-      <li>A live progress ring showing exactly how far along you are</li>
-      <li>Milestone badges as you hit 25%, 50%, 75%, and 100% 🌱🔥🚀🏆</li>
-      <li>A countdown to your target completion date</li>
-      <li>Your full module list, with completed ones checked off</li>
-      <li>A one-tap button to confirm your progress each week</li>
-    </ul>
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
-      <tr><td><b>Portal link</b></td><td>${fields.portalLink}</td></tr>
-      <tr><td><b>Login email</b></td><td>${fields.email}</td></tr>
-      <tr><td><b>Password</b></td><td>${fields.portalPassword} — shared by all participants, keep it handy</td></tr>
-    </table>
-    <h3>4. How Self-Paced Learning Works</h3>
+    <h3>3. How Self-Paced Learning Works</h3>
     <ul>
       <li>Work through your modules at your own pace, guided by the study plan attached to this email.</li>
       <li>We recommend at least ${fields.days} study days a week, ${fields.hours} hours a day, to stay on track.</li>
-      <li>Confirm your progress each week right from your portal, or use the check-in form linked there — it takes two minutes and helps us support you if you fall behind.</li>
-      <li>Expect a friendly reminder email each week nudging you back to your videos.</li>
+      ${fields.checkinFormUrl ? `<li>Confirm your progress each week using the check-in form: <a href="${fields.checkinFormUrl}">${fields.checkinFormUrl}</a> — it takes two minutes and helps us support you if you fall behind.</li>` : `<li>Confirm your progress each week using the weekly check-in form your mentor shares with you — it takes two minutes and helps us support you if you fall behind.</li>`}
+      <li>Expect a friendly reminder email each week nudging you back to your modules.</li>
     </ul>
-    <h3>5. Your Mentor Has Your Back</h3>
+    <h3>4. Your Mentor Has Your Back</h3>
     <p>${fields.mentor} is your go-to for questions, blockers, or if life gets in the way of your schedule. Reach out any time — we'd always rather help early than catch up late.</p>
-    <h3>6. Your First 7 Days ✅</h3>
+    <h3>5. Your First 7 Days ✅</h3>
     <ul>
-      <li>Reply to confirm you've received this email and can log in.</li>
+      <li>Reply to confirm you've received this email.</li>
       <li>Add your study plan to your calendar or print it out.</li>
-      <li>Log in to your portal and take a look around.</li>
       <li>Block out your first study session this week.</li>
-      <li>Complete your first module and watch that progress ring move! 🎉</li>
+      <li>Complete your first module and let your mentor know how it went! 🎉</li>
     </ul>
     <p>We're genuinely excited to see what you build. Welcome to the 10Alytics family — let's get started!</p>
-    <p>Warmly,<br>10Alytics Self-Paced Learning Team</p>
+    <p>Warmly,<br>${fields.mentor !== '[unassigned — assign a mentor before sending]' ? fields.mentor : '[Your name]'}<br>10Alytics Self-Paced Learning Team</p>
   `;
 
   const text = html
     .replace(/<h3>/g,'\n\n').replace(/<\/h3>/g,'\n')
     .replace(/<li>/g,'• ').replace(/<\/li>/g,'\n')
     .replace(/<\/tr>/g,'\n').replace(/<td><b>/g,'').replace(/<\/b><\/td><td>/g,': ').replace(/<\/td>/g,'')
+    .replace(/<a[^>]*>/g,'').replace(/<\/a>/g,'')
     .replace(/<[^>]+>/g,'')
     .replace(/&amp;/g,'&').replace(/\n{3,}/g,'\n\n').trim();
 
@@ -1756,141 +1654,6 @@ function openLessonPlanDrawer(id){
     document.getElementById(id).addEventListener('change', renderPlan);
   });
   renderPlan();
-}
-
-
-// ---------- participant portal ----------
-
-async function bootParticipantPortal(){
-  // Refresh live data first so a participant sees any recent update an
-  // admin made (mentor, modules completed, etc.) — same source of truth
-  // the staff dashboard uses, just filtered down to one person.
-  try{ await refreshLiveData_(); }catch(e){ /* fall back to baked-in snapshot */ }
-  const id = sessionStorage.getItem('splms-auth-participant-id');
-  let p = BUNDLE.participants.find(x=>x.id===id);
-  if(!p){
-    document.getElementById('participantRoot').innerHTML = `<div class="pp-card" style="max-width:480px;margin:60px auto;text-align:center;">
-      <p>We couldn't find your record after refreshing. Please contact your mentor or ubong@10alytics.org.</p>
-      <button class="pp-cta ghost" onclick="logoutParticipant()">Sign out</button>
-    </div>`;
-    return;
-  }
-  // apply any staff-made local overrides too, same as the staff dashboard
-  const ov = await loadOverrides(p.id);
-  p = Object.assign({}, p, ov);
-  renderParticipantPortal(p);
-}
-
-function logoutParticipant(){
-  sessionStorage.clear();
-  location.reload();
-}
-
-const MILESTONES = [
-  { pct:25, emoji:'🌱', label:'Quarter way' },
-  { pct:50, emoji:'🔥', label:'Halfway there' },
-  { pct:75, emoji:'🚀', label:'Almost there' },
-  { pct:100, emoji:'🏆', label:'Modules complete' },
-];
-
-function fireConfetti_(){
-  const colors = ['#D9631F','#15803D','#B45309','#0F172A','#DCFCE7'];
-  const el = document.createElement('div');
-  el.className = 'pp-confetti';
-  for(let i=0;i<40;i++){
-    const s = document.createElement('span');
-    s.style.left = Math.random()*100 + 'vw';
-    s.style.background = colors[i % colors.length];
-    s.style.animationDuration = (2 + Math.random()*1.5) + 's';
-    s.style.animationDelay = (Math.random()*0.4) + 's';
-    el.appendChild(s);
-  }
-  document.body.appendChild(el);
-  setTimeout(()=> el.remove(), 4000);
-}
-
-function renderParticipantPortal(p){
-  const eng = computeEngine(p);
-  const prog = PROGRAMMES[p.programme] || {};
-  const total = eng.totalModules || prog.totalModules || 0;
-  const pct = total > 0 ? Math.round((eng.completed/total)*100) : 0;
-  const firstName = (p.name||'').split(' ')[0] || 'there';
-  const r = 46, circumference = 2*Math.PI*r;
-  const dashOffset = circumference * (1 - pct/100);
-
-  // Countdown target: use the lesson plan's own projection, starting today.
-  const plan = buildLessonPlan(p, new Date().toISOString().slice(0,10));
-  const daysLeft = Math.max(Math.ceil((plan.endDate - new Date())/DAY), 0);
-  const fmtDate = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
-
-  // Module list: real topics if DATA_SOURCE.modulesCsvUrl is configured,
-  // otherwise a plain numbered fallback.
-  const myModules = BUNDLE.modules.filter(m=>m.programme===p.programme);
-  const moduleRows = (myModules.length ? myModules : Array.from({length: total}, (_,i)=>({weekNumber:i, topic:`Module ${i+1}`})))
-    .map((m,i)=>{
-      const done = i < eng.completed;
-      return `<div class="pp-module-row">
-        <div class="pp-module-check ${done?'done':'pending'}">${done?'✓':''}</div>
-        <div style="flex:1;">${m.topic || ('Module '+(i+1))}</div>
-        ${done ? '<span class="muted" style="font-size:11px;">Done</span>' : ''}
-      </div>`;
-    }).join('');
-
-  const earnedBadges = MILESTONES.filter(m => pct >= m.pct);
-  const nextBadge = MILESTONES.find(m => pct < m.pct);
-
-  document.getElementById('participantRoot').innerHTML = `
-    <div class="pp-header">
-      <div>
-        <h1>Hey ${firstName} 👋</h1>
-        <p>${prog.name || p.programme} · ${p.cohortId || 'your cohort'}</p>
-      </div>
-      <button class="pp-logout" onclick="logoutParticipant()">Sign out</button>
-    </div>
-
-    <div class="pp-card">
-      <div class="pp-progress-row">
-        <div class="pp-ring">
-          <svg viewBox="0 0 112 112">
-            <circle class="bg" cx="56" cy="56" r="${r}"></circle>
-            <circle class="fg" cx="56" cy="56" r="${r}" stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}"></circle>
-          </svg>
-          <div class="pp-ring-label"><b>${pct}%</b><span>complete</span></div>
-        </div>
-        <div class="pp-stats">
-          <div class="pp-stat"><b>${eng.completed}/${total}</b><span>Modules done</span></div>
-          <div class="pp-stat"><b>${daysLeft}</b><span>Days to target</span></div>
-          <div class="pp-stat"><b>${p.mentor || 'Unassigned'}</b><span>Your mentor</span></div>
-        </div>
-      </div>
-      <div class="pp-badges">
-        ${MILESTONES.map(m=>`<span class="pp-badge ${pct>=m.pct?'earned':''}">${m.emoji} ${m.label}</span>`).join('')}
-      </div>
-      ${nextBadge ? `<div class="muted" style="font-size:12px;margin-top:10px;">${nextBadge.pct - pct}% to go until "${nextBadge.label}" ${nextBadge.emoji}</div>` : `<div class="muted" style="font-size:12px;margin-top:10px;">🎉 All modules complete — go crush that capstone!</div>`}
-    </div>
-
-    <div class="pp-card">
-      <b style="font-size:14px;">Your target completion</b>
-      <p class="muted" style="font-size:12.5px;margin:6px 0 0;">${fmtDate(plan.endDate)} · ${plan.totalWeeks} weeks total, based on your current pace.</p>
-      <div class="pp-cta-row">
-        <button class="pp-cta primary" id="ppDownloadPdfBtn">📄 Download my plan (PDF)</button>
-        ${CHECKIN_FORM_URL ? `<a class="pp-cta orange" href="${CHECKIN_FORM_URL}" target="_blank">✅ Confirm this week's progress</a>` : ''}
-      </div>
-    </div>
-
-    <div class="pp-card">
-      <b style="font-size:14px;">Your course modules</b>
-      <div style="margin-top:10px;max-height:320px;overflow-y:auto;">
-        ${moduleRows || '<p class="muted">No module list configured yet — check with your mentor.</p>'}
-      </div>
-    </div>
-  `;
-
-  document.getElementById('ppDownloadPdfBtn').onclick = ()=> downloadPlanAsPdf_(p, plan);
-
-  // Small celebratory moment if they've hit a milestone — doesn't nag every
-  // visit, just when there's something to celebrate.
-  if(pct > 0 && MILESTONES.some(m=>m.pct===pct)) fireConfetti_();
 }
 
 
