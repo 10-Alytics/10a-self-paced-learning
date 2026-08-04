@@ -798,27 +798,39 @@ async function refreshLiveData_() {
     }
     if (DATA_SOURCE.participantsCsvUrl) {
       const rows = await fetchCsv_(DATA_SOURCE.participantsCsvUrl, 'Participant_ID');
-      BUNDLE.participants = rows.filter((r) => r.Participant_ID).map((r) => ({
-        serial: r.Serial_No,
-        id: r.Participant_ID,
-        name: r.Full_Name,
-        email: r.Email,
-        phone: r.Phone_Number || null,
-        programme: r.Programme_Code,
-        cohortId: r.Cohort_ID,
-        paymentStatus: r.Payment_Status,
-        requestDate: r.SelfPaced_Request_Date || null,
-        approvalDate: r.SelfPaced_Approval_Date || null,
-        mentor: r.Assigned_Mentor || null,
-        preferredDays: toNum_(r.Preferred_Study_Days_Per_Week, 2),
-        hoursPerDay: toNum_(r.Hours_Available_Per_Day, 2),
-        modulesCompleted: toNum_(r.Modules_Completed, 0),
-        currentModuleWeek: r.Current_Module_Week || null,
-        currentTopic: r.Current_Topic || null,
-        lastCheckin: r.Last_Checkin_Date || null,
-        lastTopicCompleted: r.Last_Topic_Completed || null,
-        comments: r.Comments || null,
-      }));
+      // Keep anyone with a name, even if Serial_No / Participant_ID haven't
+      // been filled in yet on the sheet — generate a stable temporary ID
+      // instead of silently dropping them. Real IDs (once added) always
+      // take over automatically on the next refresh. idGenerated marks
+      // these so the dashboard's data-quality banner can flag them.
+      BUNDLE.participants = rows.filter((r) => r.Full_Name).map((r) => {
+        const hasRealId = !!r.Participant_ID;
+        const fallbackId = 'TEMP-' + (r.Full_Name || '').trim().toUpperCase()
+          .replace(/[^A-Z0-9]+/g, '-').replace(/(^-+|-+$)/g, '').slice(0, 24)
+          + (r.Programme_Code ? '-' + r.Programme_Code.trim() : '');
+        return {
+          serial: r.Serial_No || null,
+          id: hasRealId ? r.Participant_ID : fallbackId,
+          idGenerated: !hasRealId,
+          name: r.Full_Name,
+          email: r.Email,
+          phone: r.Phone_Number || null,
+          programme: r.Programme_Code,
+          cohortId: r.Cohort_ID,
+          paymentStatus: r.Payment_Status,
+          requestDate: r.SelfPaced_Request_Date || null,
+          approvalDate: r.SelfPaced_Approval_Date || null,
+          mentor: r.Assigned_Mentor || null,
+          preferredDays: toNum_(r.Preferred_Study_Days_Per_Week, 2),
+          hoursPerDay: toNum_(r.Hours_Available_Per_Day, 2),
+          modulesCompleted: toNum_(r.Modules_Completed, 0),
+          currentModuleWeek: r.Current_Module_Week || null,
+          currentTopic: r.Current_Topic || null,
+          lastCheckin: r.Last_Checkin_Date || null,
+          lastTopicCompleted: r.Last_Topic_Completed || null,
+          comments: r.Comments || null,
+        };
+      });
     }
     if (DATA_SOURCE.checkinsCsvUrl) {
       // Like ParticipantDB, your Weekly Check-ins tab has a title row and
@@ -1033,7 +1045,9 @@ function computeEngine(p){
 
   // data-quality flag: does the Cohort_ID's month disagree with the month embedded in Participant_ID?
   let flag = null;
-  if(p.cohortId && p.id && p.programme){
+  if(p.idGenerated){
+    flag = `No Participant_ID in ParticipantDB yet — showing under a temporary ID. Add Serial_No/Participant_ID in the sheet to fix.`;
+  } else if(p.cohortId && p.id && p.programme){
     const fromId = parseCohortStart(null, p.id, p.programme);
     if(fromId && cohortStart && fromId.getTime() !== cohortStart.getTime()){
       flag = `Cohort_ID (${p.cohortId}) implies a different start month than Participant_ID (${p.id}) does.`;
