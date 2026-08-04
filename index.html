@@ -58,7 +58,7 @@
   /* ---- KPI cards, pulled up over header ---- */
   .kpis{
     position:relative;z-index:2;margin:-40px 24px 0;
-    display:grid;grid-template-columns:repeat(7,1fr);gap:10px;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;
   }
   .kpi{
     background:var(--paper);border-radius:12px;padding:14px 14px 12px;box-shadow:0 8px 24px -12px rgba(15,23,42,.25);
@@ -125,11 +125,13 @@
     font-size:12.5px;margin:0 24px 18px;line-height:1.5;
   }
   .flag-banner b{font-weight:700;}
-  .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:4px 2px 2px;}
-  .chart-box{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0;}
-  .chart-box h3{margin:0 0 10px;font-size:12.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;font-weight:700;}
+  .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:16px;}
+  .chart-box{background:var(--canvas);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0;}
+  .chart-box h3{margin:0 0 2px;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+  .chart-box .chart-sub{font-size:11px;color:var(--ink-soft);margin-bottom:10px;}
   .chart-box canvas{max-height:220px;}
   .chart-box-wide{grid-column:1 / -1;}
+  .chart-empty{font-size:12.5px;color:var(--ink-soft);padding:30px 0;text-align:center;}
 
   /* ---- tabs ---- */
   .tabbar{display:flex;gap:6px;margin-top:24px;position:relative;z-index:1;}
@@ -186,8 +188,7 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
   .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
-  @media (max-width:1100px){ .kpis{grid-template-columns:repeat(4,1fr);} }
-  @media (max-width:640px){ .kpis{grid-template-columns:repeat(2,1fr);margin:-24px 12px 0;} .main{padding:0 12px;} }
+  @media (max-width:640px){ .kpis{margin:-24px 12px 0;} .main{padding:0 12px;} }
   /* ---- login gate ---- */
   #loginGate{
     position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--navy) 0%, var(--navy-2) 100%);
@@ -313,9 +314,9 @@
     <div><h2>Overview</h2><div class="sub">Visual snapshot of the full participant list — unaffected by the filters below</div></div>
   </div>
   <div class="charts-grid">
-    <div class="chart-box"><h3>Risk status</h3><canvas id="chartRisk" height="200"></canvas></div>
-    <div class="chart-box"><h3>Participant status</h3><canvas id="chartStatus" height="200"></canvas></div>
-    <div class="chart-box chart-box-wide"><h3>Enrolled by programme</h3><canvas id="chartProg" height="200"></canvas></div>
+    <div class="chart-box"><h3>Risk status</h3><div class="chart-sub" id="chartRiskSub">—</div><canvas id="chartRisk" height="200"></canvas></div>
+    <div class="chart-box"><h3>Participant status</h3><div class="chart-sub" id="chartStatusSub">—</div><canvas id="chartStatus" height="200"></canvas></div>
+    <div class="chart-box chart-box-wide"><h3>Enrolled by programme</h3><div class="chart-sub" id="chartProgSub">—</div><canvas id="chartProg" height="200"></canvas></div>
   </div>
 </div>
 
@@ -1668,6 +1669,13 @@ function renderKPIs(computed){
   const completed = count(c=>c.eng.status==='Completed');
   const avgProg = n ? (computed.reduce((s,c)=>s+c.eng.progressPct,0)/n*100) : 0;
 
+  const mentorAssigned = count(c=>!!c.p.mentor);
+  const mentorUnassigned = n - mentorAssigned;
+  const mentorCoverage = n ? (mentorAssigned/n*100) : 0;
+  const checkedInEver = count(c=> checkinsFor(c.p).length > 0);
+  const checkinRate = n ? (checkedInEver/n*100) : 0;
+  const needsEscalation = count(c=> ['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(c.eng.escalation));
+
   const cards = [
     ['Total participants', n, ''],
     ['Active', active, 'teal'],
@@ -1676,6 +1684,10 @@ function renderKPIs(computed){
     ['Defaulted', defaulted, 'rose'],
     ['Completed', completed, 'green'],
     ['Avg progress', avgProg.toFixed(0)+'%', 'teal'],
+    ['Mentor coverage', mentorCoverage.toFixed(0)+'%', mentorCoverage>=90?'green':mentorCoverage>=60?'amber':'rose'],
+    ['Unassigned mentor', mentorUnassigned, mentorUnassigned>0?'amber':'green'],
+    ['Ever checked in', checkinRate.toFixed(0)+'%', checkinRate>=75?'green':checkinRate>=40?'amber':'rose'],
+    ['Needs escalation', needsEscalation, needsEscalation>0?'rose':'green'],
   ];
   document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls])=>`
     <div class="kpi ${cls}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
@@ -1981,19 +1993,26 @@ function destroyChart_(key){
   if(CHART_INSTANCES[key]){ CHART_INSTANCES[key].destroy(); delete CHART_INSTANCES[key]; }
 }
 function renderCharts(computed){
-  if(!window.Chart){ return; } // offline / CDN blocked — panel just stays empty, rest of the page still works
+  if(!window.Chart){
+    ['chartRiskSub','chartStatusSub','chartProgSub'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.textContent = 'Chart engine unavailable offline';
+    });
+    return;
+  } // offline / CDN blocked — panel stays quiet, rest of the page still works
   Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
   Chart.defaults.color = '#475569';
+  const n = computed.length;
 
   // Risk donut
   const riskCounts = {Green:0, Yellow:0, Red:0, 'Not set':0};
   computed.forEach(({eng})=>{ riskCounts[eng.risk || 'Not set']++; });
+  document.getElementById('chartRiskSub').textContent = `${riskCounts.Red} red · ${riskCounts.Yellow} yellow · ${riskCounts.Green} green of ${n}`;
   destroyChart_('risk');
   CHART_INSTANCES.risk = new Chart(document.getElementById('chartRisk'), {
     type: 'doughnut',
     data: {
       labels: Object.keys(riskCounts),
-      datasets: [{ data: Object.values(riskCounts), backgroundColor: ['#15803D','#B45309','#BE123C','#CBD5E1'], borderWidth: 0 }],
+      datasets: [{ data: Object.values(riskCounts), backgroundColor: ['#15803D','#B45309','#BE123C','#CBD5E1'], borderWidth: 2, borderColor: '#F4F6F9', hoverOffset: 6 }],
     },
     options: { plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:12, font:{size:11} } } }, cutout:'62%' },
   });
@@ -2003,14 +2022,15 @@ function renderCharts(computed){
   const statusColors = {Active:'#D9631F', 'Needs Follow-up':'#B45309', 'At Risk':'#BE123C', Defaulted:'#7F1D1D', Completed:'#15803D'};
   const statusCounts = {}; statusOrder.forEach(s=> statusCounts[s]=0);
   computed.forEach(({eng})=>{ statusCounts[eng.status] = (statusCounts[eng.status]||0) + 1; });
+  document.getElementById('chartStatusSub').textContent = `${statusCounts.Completed} completed · ${statusCounts['At Risk']+statusCounts.Defaulted} need attention`;
   destroyChart_('status');
   CHART_INSTANCES.status = new Chart(document.getElementById('chartStatus'), {
     type: 'bar',
     data: {
       labels: statusOrder,
-      datasets: [{ data: statusOrder.map(s=>statusCounts[s]), backgroundColor: statusOrder.map(s=>statusColors[s]), borderRadius: 4, maxBarThickness: 44 }],
+      datasets: [{ data: statusOrder.map(s=>statusCounts[s]), backgroundColor: statusOrder.map(s=>statusColors[s]), borderRadius: 5, maxBarThickness: 44 }],
     },
-    options: { plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } },
+    options: { plugins:{ legend:{ display:false }, tooltip:{ displayColors:false } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, x:{ grid:{ display:false } } } },
   });
 
   // Enrollment by programme (every known programme, even 0-enrolled ones like a new HTBA/GRC)
@@ -2018,18 +2038,87 @@ function renderCharts(computed){
   BUNDLE.programmes.forEach(pr=> byProg[pr.code] = 0);
   computed.forEach(({p})=>{ byProg[p.programme] = (byProg[p.programme]||0) + 1; });
   const progCodes = Object.keys(byProg).sort();
+  document.getElementById('chartProgSub').textContent = `${progCodes.length} programmes tracked`;
   destroyChart_('prog');
   CHART_INSTANCES.prog = new Chart(document.getElementById('chartProg'), {
     type: 'bar',
     data: {
       labels: progCodes,
-      datasets: [{ data: progCodes.map(c=>byProg[c]), backgroundColor: '#D9631F', borderRadius: 4, maxBarThickness: 36 }],
+      datasets: [{ data: progCodes.map(c=>byProg[c]), backgroundColor: '#D9631F', borderRadius: 5, maxBarThickness: 36 }],
     },
     options: {
-      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ title: (items)=> (PROGRAMMES[items[0].label]||{}).name || items[0].label } } },
-      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } },
+      plugins:{ legend:{ display:false }, tooltip:{ displayColors:false, callbacks:{ title: (items)=> (PROGRAMMES[items[0].label]||{}).name || items[0].label } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, x:{ grid:{ display:false } } },
     },
   });
+}
+
+// ---------- per-participant drawer charts ----------
+let DRAWER_CHART_INSTANCES = {};
+function destroyDrawerChart_(key){
+  if(DRAWER_CHART_INSTANCES[key]){ DRAWER_CHART_INSTANCES[key].destroy(); delete DRAWER_CHART_INSTANCES[key]; }
+}
+function renderDrawerCharts(p, eng){
+  if(!window.Chart) return; // offline / CDN blocked — rest of the drawer still works fine
+
+  // Module progress donut
+  const done = p.modulesCompleted || 0;
+  const total = eng.totalModules || 0;
+  const remaining = Math.max(total - done, 0);
+  destroyDrawerChart_('progress');
+  const progCanvas = document.getElementById('drawerProgressChart');
+  if(progCanvas){
+    DRAWER_CHART_INSTANCES.progress = new Chart(progCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Completed','Remaining'],
+        datasets: [{ data: total ? [done, remaining] : [0,1], backgroundColor: total ? ['#15803D','#E2E8F0'] : ['#E2E8F0','#E2E8F0'], borderWidth: 2, borderColor:'#F4F6F9' }],
+      },
+      options: {
+        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:10, font:{size:10.5} } },
+          tooltip:{ enabled: !!total } },
+        cutout:'68%',
+      },
+    });
+  }
+
+  // Recent check-in trend — commitment met (1) vs not (0) over the last few weeks
+  const entries = checkinsFor(p).slice(0, 8).reverse(); // last 8, oldest→newest for the chart
+  const sub = document.getElementById('drawerCheckinSub');
+  destroyDrawerChart_('checkin');
+  const ciCanvas = document.getElementById('drawerCheckinChart');
+  if(!entries.length){
+    if(sub) sub.textContent = 'No check-ins submitted yet';
+    if(ciCanvas){
+      const ctx = ciCanvas.getContext('2d');
+      ctx.clearRect(0,0,ciCanvas.width,ciCanvas.height);
+    }
+    return;
+  }
+  if(sub) sub.textContent = `Last ${entries.length} submission${entries.length>1?'s':''}`;
+  const labels = entries.map(en=>{
+    const d = new Date(en.weekEnding || en.timestamp);
+    return !isNaN(d) ? fmtShort(d) : '—';
+  });
+  const metVals = entries.map(en=> en.metCommitment ? (/yes/i.test(en.metCommitment) ? 1 : 0) : null);
+  if(ciCanvas){
+    DRAWER_CHART_INSTANCES.checkin = new Chart(ciCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Met commitment', data: metVals, spanGaps: true,
+          borderColor:'#D9631F', backgroundColor:'rgba(217,99,31,.12)', fill:true, tension:.3,
+          pointBackgroundColor: metVals.map(v=> v===1 ? '#15803D' : v===0 ? '#BE123C' : '#CBD5E1'),
+          pointRadius: 4,
+        }],
+      },
+      options: {
+        plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:(item)=> item.raw===1?'Met commitment':item.raw===0?'Missed commitment':'No data' } } },
+        scales:{ y:{ min:-0.2, max:1.2, ticks:{ stepSize:1, callback:(v)=> v===1?'Yes':v===0?'No':'' } }, x:{ grid:{ display:false } } },
+      },
+    });
+  }
 }
 
 function populateProgFilter(){
@@ -2313,6 +2402,15 @@ async function openDrawer(id){
       </div>
 
       <div>
+        <div class="section-title">At a glance</div>
+        <hr class="sep">
+        <div class="charts-grid" style="grid-template-columns:1fr 1fr;padding:10px 0 0;">
+          <div class="chart-box"><h3>Module progress</h3><div class="chart-sub">${p.modulesCompleted||0} of ${eng.totalModules} modules</div><canvas id="drawerProgressChart" height="150"></canvas></div>
+          <div class="chart-box"><h3>Recent check-ins</h3><div class="chart-sub" id="drawerCheckinSub">—</div><canvas id="drawerCheckinChart" height="150"></canvas></div>
+        </div>
+      </div>
+
+      <div>
         <div class="section-title">Editable inputs</div>
         <hr class="sep">
         <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
@@ -2373,6 +2471,7 @@ async function openDrawer(id){
     </div>
   `;
   document.getElementById('overlay').classList.add('open');
+  renderDrawerCharts(p, eng);
   document.getElementById('closeBtn').onclick = closeDrawer;
   document.getElementById('saveBtn').onclick = () => saveDrawer(p);
   document.getElementById('planBtn').onclick = () => openLessonPlanDrawer(p.id);
