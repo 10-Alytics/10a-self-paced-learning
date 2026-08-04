@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>SPLMS — Self-Paced Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root{
     --ink:#0F172A;
@@ -124,6 +125,11 @@
     font-size:12.5px;margin:0 24px 18px;line-height:1.5;
   }
   .flag-banner b{font-weight:700;}
+  .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:4px 2px 2px;}
+  .chart-box{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0;}
+  .chart-box h3{margin:0 0 10px;font-size:12.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;font-weight:700;}
+  .chart-box canvas{max-height:220px;}
+  .chart-box-wide{grid-column:1 / -1;}
 
   /* ---- tabs ---- */
   .tabbar{display:flex;gap:6px;margin-top:24px;position:relative;z-index:1;}
@@ -301,6 +307,17 @@
 <div class="kpis" id="kpis"></div>
 
 <div id="flagArea"></div>
+
+<div class="panel" id="chartsPanel">
+  <div class="panel-head">
+    <div><h2>Overview</h2><div class="sub">Visual snapshot of the full participant list — unaffected by the filters below</div></div>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-box"><h3>Risk status</h3><canvas id="chartRisk" height="200"></canvas></div>
+    <div class="chart-box"><h3>Participant status</h3><canvas id="chartStatus" height="200"></canvas></div>
+    <div class="chart-box chart-box-wide"><h3>Enrolled by programme</h3><canvas id="chartProg" height="200"></canvas></div>
+  </div>
+</div>
 
 <div class="main">
 
@@ -1669,9 +1686,10 @@ function renderFlags(computed){
   const flagged = computed.filter(c=>c.eng.flag);
   const area = document.getElementById('flagArea');
   if(!flagged.length){ area.innerHTML=''; return; }
-  area.innerHTML = `<div class="flag-banner"><b>Data quality — ${flagged.length} record${flagged.length>1?'s':''} to check:</b><br>` +
-    flagged.map(c=>`• <b>${c.p.id}</b> (${c.p.name}) — ${c.eng.flag}`).join('<br>') +
-    `</div>`;
+  area.innerHTML = `<div class="flag-banner">
+    <b>Data quality — ${flagged.length} record${flagged.length>1?'s':''} to check.</b>
+    See the "Data quality" panel below for the full list — click a row there to jump straight to that person.
+  </div>`;
 }
 
 function timelineSvg(eng){
@@ -1727,6 +1745,9 @@ function renderTable(computed){
 
 function renderRollup(computed){
   const byProg = {};
+  // Seed every known programme first (even ones with 0 enrolled, like a
+  // brand-new HTBA or GRC cohort) so they still show up in the table.
+  BUNDLE.programmes.forEach(pr=>{ byProg[pr.code] = {n:0,prog:0,g:0,y:0,r:0}; });
   computed.forEach(({p,eng})=>{
     byProg[p.programme] = byProg[p.programme] || {n:0,prog:0,g:0,y:0,r:0};
     const b = byProg[p.programme];
@@ -1739,7 +1760,7 @@ function renderRollup(computed){
     return `<tr>
       <td><span class="prog-code">${code}</span> <span class="muted">${name}</span></td>
       <td>${b.n}</td>
-      <td>${(b.prog/b.n*100).toFixed(0)}%</td>
+      <td>${b.n ? (b.prog/b.n*100).toFixed(0)+'%' : '<span class="muted">—</span>'}</td>
       <td><span class="badge green">${b.g}</span></td>
       <td><span class="badge amber">${b.y}</span></td>
       <td><span class="badge rose">${b.r}</span></td>
@@ -1790,6 +1811,7 @@ function renderCheckinCompliance(){
   const tbody = document.getElementById('checkinCompliance');
   if(!tbody) return;
   const byProg = {};
+  BUNDLE.programmes.forEach(pr=>{ byProg[pr.code] = {n:0, submitted:0, metYes:0, metTotal:0}; });
   participants.forEach(p=>{
     byProg[p.programme] = byProg[p.programme] || {n:0, submitted:0, metYes:0, metTotal:0};
     const b = byProg[p.programme];
@@ -1807,15 +1829,15 @@ function renderCheckinCompliance(){
   const rows = Object.keys(byProg).sort().map(code=>{
     const b = byProg[code];
     const name = (PROGRAMMES[code]||{}).name || code;
-    const subRate = b.n ? (b.submitted/b.n*100) : 0;
+    const subRate = b.n ? (b.submitted/b.n*100) : null;
     const metRate = b.metTotal ? (b.metYes/b.metTotal*100) : null;
-    const rateClass = subRate>=75 ? 'green' : subRate>=40 ? 'amber' : 'rose';
+    const rateClass = subRate===null ? '' : subRate>=75 ? 'green' : subRate>=40 ? 'amber' : 'rose';
     const metClass = metRate===null ? '' : metRate>=75 ? 'green' : metRate>=40 ? 'amber' : 'rose';
     return `<tr>
       <td><span class="prog-code">${code}</span> <span class="muted">${name}</span></td>
       <td>${b.n}</td>
       <td>${b.submitted}</td>
-      <td><span class="badge ${rateClass}">${subRate.toFixed(0)}%</span></td>
+      <td>${subRate===null ? '<span class="muted">—</span>' : `<span class="badge ${rateClass}">${subRate.toFixed(0)}%</span>`}</td>
       <td>${metRate===null ? '<span class="muted">—</span>' : `<span class="badge ${metClass}">${metRate.toFixed(0)}%</span> <span class="muted">(${b.metYes}/${b.metTotal})</span>`}</td>
     </tr>`;
   }).join('');
@@ -1953,6 +1975,63 @@ function exportAtRiskPdf(){
   showToast('At-risk PDF downloaded.');
 }
 
+// ---------- overview charts ----------
+let CHART_INSTANCES = {};
+function destroyChart_(key){
+  if(CHART_INSTANCES[key]){ CHART_INSTANCES[key].destroy(); delete CHART_INSTANCES[key]; }
+}
+function renderCharts(computed){
+  if(!window.Chart){ return; } // offline / CDN blocked — panel just stays empty, rest of the page still works
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  Chart.defaults.color = '#475569';
+
+  // Risk donut
+  const riskCounts = {Green:0, Yellow:0, Red:0, 'Not set':0};
+  computed.forEach(({eng})=>{ riskCounts[eng.risk || 'Not set']++; });
+  destroyChart_('risk');
+  CHART_INSTANCES.risk = new Chart(document.getElementById('chartRisk'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(riskCounts),
+      datasets: [{ data: Object.values(riskCounts), backgroundColor: ['#15803D','#B45309','#BE123C','#CBD5E1'], borderWidth: 0 }],
+    },
+    options: { plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:12, font:{size:11} } } }, cutout:'62%' },
+  });
+
+  // Status bar
+  const statusOrder = ['Active','Needs Follow-up','At Risk','Defaulted','Completed'];
+  const statusColors = {Active:'#D9631F', 'Needs Follow-up':'#B45309', 'At Risk':'#BE123C', Defaulted:'#7F1D1D', Completed:'#15803D'};
+  const statusCounts = {}; statusOrder.forEach(s=> statusCounts[s]=0);
+  computed.forEach(({eng})=>{ statusCounts[eng.status] = (statusCounts[eng.status]||0) + 1; });
+  destroyChart_('status');
+  CHART_INSTANCES.status = new Chart(document.getElementById('chartStatus'), {
+    type: 'bar',
+    data: {
+      labels: statusOrder,
+      datasets: [{ data: statusOrder.map(s=>statusCounts[s]), backgroundColor: statusOrder.map(s=>statusColors[s]), borderRadius: 4, maxBarThickness: 44 }],
+    },
+    options: { plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } },
+  });
+
+  // Enrollment by programme (every known programme, even 0-enrolled ones like a new HTBA/GRC)
+  const byProg = {};
+  BUNDLE.programmes.forEach(pr=> byProg[pr.code] = 0);
+  computed.forEach(({p})=>{ byProg[p.programme] = (byProg[p.programme]||0) + 1; });
+  const progCodes = Object.keys(byProg).sort();
+  destroyChart_('prog');
+  CHART_INSTANCES.prog = new Chart(document.getElementById('chartProg'), {
+    type: 'bar',
+    data: {
+      labels: progCodes,
+      datasets: [{ data: progCodes.map(c=>byProg[c]), backgroundColor: '#D9631F', borderRadius: 4, maxBarThickness: 36 }],
+    },
+    options: {
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ title: (items)=> (PROGRAMMES[items[0].label]||{}).name || items[0].label } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } },
+    },
+  });
+}
+
 function populateProgFilter(){
   const sel = document.getElementById('filterProg');
   BUNDLE.programmes.forEach(pr=>{
@@ -2021,6 +2100,7 @@ function renderAll(){
   renderMentorRollup(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinCompliance();
   renderDataQuality();
+  renderCharts(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinsTable();
 }
 
