@@ -329,6 +329,8 @@
         </select>
         <select id="filterMentor"><option value="">All mentors</option></select>
         <button id="assignMentorsBtn">Assign mentors</button>
+        <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
+        <button id="exportAtRiskPdfBtn" title="Export everyone currently At Risk or Defaulted as a PDF">Export at-risk (PDF)</button>
         <button class="primary" id="addBtn">+ Add participant</button>
       </div>
     </div>
@@ -374,6 +376,31 @@
         <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg progress</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
         <tbody id="mentorRollup"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Check-in compliance</h2><div class="sub">From the WeeklyFeedBack sheet — who's actually submitting, and meeting their own commitment</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Programme</th><th>Enrolled</th><th>Ever submitted</th><th>Submission rate</th><th>Met commitment (latest)</th></tr></thead>
+        <tbody id="checkinCompliance"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Data quality</h2><div class="sub">Everything worth double-checking in ParticipantDB, in one place</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Participant</th><th>Programme</th><th>Issue</th></tr></thead>
+        <tbody id="dataQualityRollup"></tbody>
+      </table>
+      <div class="checkin-empty" id="dataQualityEmpty" style="display:none;">No data-quality issues detected — ParticipantDB looks clean. ✓</div>
     </div>
   </div>
 
@@ -1758,6 +1785,174 @@ function renderMentorRollup(computed){
   });
 }
 
+// ---------- check-in compliance rollup ----------
+function renderCheckinCompliance(){
+  const tbody = document.getElementById('checkinCompliance');
+  if(!tbody) return;
+  const byProg = {};
+  participants.forEach(p=>{
+    byProg[p.programme] = byProg[p.programme] || {n:0, submitted:0, metYes:0, metTotal:0};
+    const b = byProg[p.programme];
+    b.n++;
+    const entries = checkinsFor(p);
+    if(entries.length){
+      b.submitted++;
+      const latest = entries[0];
+      if(latest.metCommitment){
+        b.metTotal++;
+        if(/yes/i.test(latest.metCommitment)) b.metYes++;
+      }
+    }
+  });
+  const rows = Object.keys(byProg).sort().map(code=>{
+    const b = byProg[code];
+    const name = (PROGRAMMES[code]||{}).name || code;
+    const subRate = b.n ? (b.submitted/b.n*100) : 0;
+    const metRate = b.metTotal ? (b.metYes/b.metTotal*100) : null;
+    const rateClass = subRate>=75 ? 'green' : subRate>=40 ? 'amber' : 'rose';
+    const metClass = metRate===null ? '' : metRate>=75 ? 'green' : metRate>=40 ? 'amber' : 'rose';
+    return `<tr>
+      <td><span class="prog-code">${code}</span> <span class="muted">${name}</span></td>
+      <td>${b.n}</td>
+      <td>${b.submitted}</td>
+      <td><span class="badge ${rateClass}">${subRate.toFixed(0)}%</span></td>
+      <td>${metRate===null ? '<span class="muted">—</span>' : `<span class="badge ${metClass}">${metRate.toFixed(0)}%</span> <span class="muted">(${b.metYes}/${b.metTotal})</span>`}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows || '<tr><td colspan=5 class="muted">No data</td></tr>';
+}
+
+// ---------- data quality rollup ----------
+// Surfaces every worth-checking issue in ParticipantDB in one table: rows
+// missing a real Participant_ID (showing under a temp ID), duplicate
+// Participant_IDs, missing emails, and Cohort_ID/Participant_ID month
+// mismatches. Independent of the dashboard filters — always shows everyone.
+function computeDataIssues(){
+  const idCounts = {};
+  participants.forEach(p=>{ if(!p.idGenerated){ idCounts[p.id] = (idCounts[p.id]||0) + 1; } });
+  const issues = [];
+  participants.forEach(p=>{
+    const eng = computeEngine(p);
+    if(p.idGenerated){
+      issues.push({p, text: 'Missing Serial_No / Participant_ID — showing under a temporary ID.'});
+    } else if(idCounts[p.id] > 1){
+      issues.push({p, text: `Duplicate Participant_ID — appears ${idCounts[p.id]} times in ParticipantDB.`});
+    }
+    if(!p.email){
+      issues.push({p, text: 'Missing email address.'});
+    }
+    if(!p.idGenerated && eng.flag){
+      issues.push({p, text: eng.flag});
+    }
+  });
+  return issues;
+}
+function renderDataQuality(){
+  const tbody = document.getElementById('dataQualityRollup');
+  const emptyEl = document.getElementById('dataQualityEmpty');
+  if(!tbody || !emptyEl) return;
+  const issues = computeDataIssues();
+  if(!issues.length){
+    tbody.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  tbody.innerHTML = issues.map(({p,text})=>`
+    <tr data-id="${p.id}" style="cursor:pointer;">
+      <td><div class="name">${p.name}</div><div class="pid">${p.id}</div></td>
+      <td><span class="prog-code">${p.programme||'—'}</span></td>
+      <td>${text}</td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    tr.addEventListener('click', ()=> openDrawer(tr.dataset.id));
+  });
+}
+
+// ---------- at-risk export ----------
+function atRiskList(){
+  return participants
+    .map(p=>({p, eng:computeEngine(p)}))
+    .filter(({eng})=> eng.status==='At Risk' || eng.status==='Defaulted')
+    .sort((a,b)=> (a.eng.bufferDays??0) - (b.eng.bufferDays??0));
+}
+function exportAtRiskCsv(){
+  const list = atRiskList();
+  if(!list.length){ showToast('No At Risk or Defaulted participants right now.'); return; }
+  const headers = ['Participant_ID','Full_Name','Email','Programme','Cohort_ID','Assigned_Mentor','Status','Risk','Days_Since_Last_Activity','Escalation_Stage'];
+  const rows = list.map(({p,eng})=>[
+    p.id, p.name, p.email||'', p.programme, p.cohortId||'', p.mentor||'Unassigned',
+    eng.status, eng.risk||'', eng.daysSinceActivity===null?'':Math.round(eng.daysSinceActivity), eng.escalation||'',
+  ]);
+  const esc = (v)=> {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  };
+  const csv = [headers, ...rows].map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `at-risk-${today().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`Exported ${list.length} at-risk participant(s) to CSV.`);
+}
+function exportAtRiskPdf(){
+  const list = atRiskList();
+  if(!list.length){ showToast('No At Risk or Defaulted participants right now.'); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    showToast("Couldn't load the PDF engine — try the CSV export instead.");
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const marginX = 40;
+  let y = 50;
+
+  doc.setTextColor(190,18,60); doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('At-Risk & Defaulted Participants', marginX, y); y += 18;
+  doc.setTextColor(71,85,105); doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  doc.text(`Generated ${today().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} · ${list.length} participant(s)`, marginX, y); y += 22;
+
+  const colX = [marginX, marginX+140, marginX+250, marginX+330, marginX+400];
+  const drawHeader = ()=>{
+    doc.setFillColor(190,18,60);
+    doc.rect(marginX, y-12, pageW-2*marginX, 20, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text('Name', colX[0]+4, y+2);
+    doc.text('Programme / Cohort', colX[1]+4, y+2);
+    doc.text('Mentor', colX[2]+4, y+2);
+    doc.text('Status', colX[3]+4, y+2);
+    doc.text('Days idle', colX[4]+4, y+2);
+    y += 18;
+    doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+  };
+  drawHeader();
+
+  doc.setFontSize(8.5);
+  list.forEach(({p,eng}, idx)=>{
+    const rowH = 16;
+    if(y + rowH > 800){ doc.addPage(); y = 50; drawHeader(); }
+    if(idx % 2 === 0){ doc.setFillColor(255,241,242); doc.rect(marginX, y-11, pageW-2*marginX, rowH, 'F'); }
+    doc.text(`${p.name} (${p.id})`, colX[0]+4, y, {maxWidth: colX[1]-colX[0]-8});
+    doc.text(`${p.programme} · ${p.cohortId||'—'}`, colX[1]+4, y, {maxWidth: colX[2]-colX[1]-8});
+    doc.text(p.mentor||'Unassigned', colX[2]+4, y, {maxWidth: colX[3]-colX[2]-8});
+    doc.text(eng.status, colX[3]+4, y, {maxWidth: colX[4]-colX[3]-8});
+    doc.text(eng.daysSinceActivity===null?'—':String(Math.round(eng.daysSinceActivity)), colX[4]+4, y);
+    y += rowH;
+  });
+
+  y += 16;
+  if(y > 800){ doc.addPage(); y = 50; }
+  doc.setFontSize(8); doc.setTextColor(148,163,184);
+  doc.text('10Alytics Self-Paced Learning · SPLMS Tracker', marginX, y);
+
+  doc.save(`at-risk-${today().toISOString().slice(0,10)}.pdf`);
+  showToast('At-risk PDF downloaded.');
+}
+
 function populateProgFilter(){
   const sel = document.getElementById('filterProg');
   BUNDLE.programmes.forEach(pr=>{
@@ -1824,6 +2019,8 @@ function renderAll(){
   renderTable(computed);
   renderRollup(participants.map(p=>({p,eng:computeEngine(p)})));
   renderMentorRollup(participants.map(p=>({p,eng:computeEngine(p)})));
+  renderCheckinCompliance();
+  renderDataQuality();
   renderCheckinsTable();
 }
 
@@ -2403,6 +2600,8 @@ async function boot(){
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
   document.getElementById('assignMentorsBtn').addEventListener('click', openAssignMentorsDrawer);
+  document.getElementById('exportAtRiskCsvBtn').addEventListener('click', exportAtRiskCsv);
+  document.getElementById('exportAtRiskPdfBtn').addEventListener('click', exportAtRiskPdf);
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeDrawer(); });
 
   document.getElementById('tabDashboard').addEventListener('click', ()=>switchTab('dashboard'));
