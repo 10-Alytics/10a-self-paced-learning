@@ -316,7 +316,9 @@
   <div class="charts-grid">
     <div class="chart-box"><h3>Risk status</h3><div class="chart-sub" id="chartRiskSub">—</div><canvas id="chartRisk" height="200"></canvas></div>
     <div class="chart-box"><h3>Participant status</h3><div class="chart-sub" id="chartStatusSub">—</div><canvas id="chartStatus" height="200"></canvas></div>
+    <div class="chart-box"><h3>Caseload by mentor</h3><div class="chart-sub" id="chartMentorSub">—</div><canvas id="chartMentor" height="200"></canvas></div>
     <div class="chart-box chart-box-wide"><h3>Enrolled by programme</h3><div class="chart-sub" id="chartProgSub">—</div><canvas id="chartProg" height="200"></canvas></div>
+    <div class="chart-box chart-box-wide"><h3>Weekly check-in trend</h3><div class="chart-sub" id="chartWeeklySub">—</div><canvas id="chartWeekly" height="180"></canvas></div>
   </div>
 </div>
 
@@ -422,7 +424,7 @@
     </div>
   </div>
 
-  <p class="footnote">Computed entirely in your browser from the SPLMS data model · edits save to your personal, private storage for this tracker · no data leaves this page.</p>
+  <p class="footnote" id="dashboardFootnote">Computed entirely in your browser from the SPLMS data model.</p>
 </div>
 
 </div><!-- /dashboardView -->
@@ -436,6 +438,7 @@
       </div>
       <div class="controls">
         <input type="text" id="checkinSearch" placeholder="Search name, ID, email…">
+        <select id="checkinWeekFilter"><option value="">All weeks</option></select>
         <button class="primary" id="openFormBtn">Open check-in form ↗</button>
       </div>
     </div>
@@ -455,7 +458,7 @@
       </div>
     </div>
   </div>
-  <p class="footnote">Participant self-reports come from the linked check-in form · staff notes and “apply to profile” actions save to your personal, private storage for this tracker.</p>
+  <p class="footnote" id="checkinsFootnote">Participant self-reports come from the linked check-in form.</p>
 </div>
 
 <div class="overlay" id="overlay">
@@ -2119,6 +2122,91 @@ function renderDrawerCharts(p, eng){
       },
     });
   }
+  // Caseload by mentor (including an "Unassigned" bucket)
+  const mentorCounts = {};
+  TEAM_MEMBERS.forEach(m=> mentorCounts[m] = 0);
+  let unassignedCount = 0;
+  computed.forEach(({p})=>{ p.mentor ? (mentorCounts[p.mentor] = (mentorCounts[p.mentor]||0)+1) : unassignedCount++; });
+  const mentorLabels = [...TEAM_MEMBERS, 'Unassigned'];
+  const mentorData = [...TEAM_MEMBERS.map(m=>mentorCounts[m]||0), unassignedCount];
+  document.getElementById('chartMentorSub').textContent = unassignedCount>0 ? `${unassignedCount} unassigned` : 'Everyone has a mentor';
+  destroyChart_('mentor');
+  CHART_INSTANCES.mentor = new Chart(document.getElementById('chartMentor'), {
+    type: 'bar',
+    data: {
+      labels: mentorLabels,
+      datasets: [{ data: mentorData, backgroundColor: mentorLabels.map(l=> l==='Unassigned' ? '#94A3B8' : '#0F766E'), borderRadius: 5, maxBarThickness: 40 }],
+    },
+    options: {
+      indexAxis: 'y',
+      plugins:{ legend:{ display:false }, tooltip:{ displayColors:false } },
+      scales:{ x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
+    },
+  });
+
+  // Weekly check-in trend — submissions per week (bars) + % met commitment (line, right axis)
+  const byWeek = {};
+  (BUNDLE.checkins||[]).forEach(en=>{
+    const key = en.weekEnding || (en.timestamp||'').slice(0,10);
+    if(!key) return;
+    byWeek[key] = byWeek[key] || {n:0, metYes:0, metTotal:0};
+    byWeek[key].n++;
+    if(en.metCommitment){ byWeek[key].metTotal++; if(/yes/i.test(en.metCommitment)) byWeek[key].metYes++; }
+  });
+  const weekKeys = Object.keys(byWeek).sort((a,b)=> new Date(a)-new Date(b));
+  const weekLabels = weekKeys.map(k=>{ const d = new Date(k); return !isNaN(d) ? fmtShort(d) : k; });
+  document.getElementById('chartWeeklySub').textContent = weekKeys.length ? `${weekKeys.length} week(s) of data` : 'No check-in submissions yet';
+  destroyChart_('weekly');
+  const weeklyCanvas = document.getElementById('chartWeekly');
+  if(weeklyCanvas){
+    CHART_INSTANCES.weekly = new Chart(weeklyCanvas, {
+      data: {
+        labels: weekLabels,
+        datasets: [
+          { type:'bar', label:'Submissions', data: weekKeys.map(k=>byWeek[k].n), backgroundColor:'#D9631F', borderRadius:4, maxBarThickness:36, yAxisID:'y' },
+          { type:'line', label:'% met commitment', data: weekKeys.map(k=> byWeek[k].metTotal ? Math.round(byWeek[k].metYes/byWeek[k].metTotal*100) : null), spanGaps:true, borderColor:'#15803D', backgroundColor:'#15803D', tension:.3, yAxisID:'y1', pointRadius:4 },
+        ],
+      },
+      options: {
+        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:12, font:{size:11} } } },
+        scales:{
+          y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' }, title:{ display:true, text:'Submissions', font:{size:10.5} } },
+          y1:{ beginAtZero:true, max:100, position:'right', grid:{ display:false }, ticks:{ callback:(v)=>v+'%' }, title:{ display:true, text:'% met commitment', font:{size:10.5} } },
+          x:{ grid:{ display:false } },
+        },
+      },
+    });
+  }
+}
+
+// Sets accurate footer copy about where edits actually go, instead of a
+// generic "nothing leaves this page" line that undersells the real Sheet
+// sync admins have via MENTOR_API_URL. Every staff member sees the same
+// participant/module/programme data (it's re-fetched from the Sheet on
+// every page load) — this note is only about where in-app EDITS land.
+function updateSyncFootnotes_(){
+  const backendReady = !!MENTOR_API_URL;
+  const admin = isAdmin();
+  const dEl = document.getElementById('dashboardFootnote');
+  const cEl = document.getElementById('checkinsFootnote');
+  if(dEl){
+    let msg = 'Computed entirely in your browser from the SPLMS data model — everyone sees the same live sheet data on every page load. ';
+    if(backendReady && admin){
+      msg += 'As the admin, your edits here (mentor, cohort, payment, modules, comments…) save straight to the ParticipantDB sheet, so every other staff member sees them after the sheet\'s next CSV refresh (usually a few minutes).';
+    } else if(backendReady){
+      msg += 'Your quick edits here stay as a local draft on this device; only the admin\'s changes write back to the shared sheet that everyone loads from.';
+    } else {
+      msg += 'Edits currently save only to this browser — connect the Code.gs backend (see README) so admin edits sync to everyone.';
+    }
+    dEl.textContent = msg;
+  }
+  if(cEl){
+    let msg = 'Participant self-reports come from the linked check-in form — everyone sees the same submissions. ';
+    msg += (backendReady && admin)
+      ? 'Staff notes and "apply to profile" actions here save as a personal draft on this device and don\'t change the shared sheet.'
+      : 'Staff notes and "apply to profile" actions here save as a personal draft on this device.';
+    cEl.textContent = msg;
+  }
 }
 
 function populateProgFilter(){
@@ -2196,12 +2284,38 @@ function renderAll(){
 function getCheckinFiltered(){
   const el = document.getElementById('checkinSearch');
   const q = el ? el.value.trim().toLowerCase() : '';
-  if(!q) return participants.slice();
-  return participants.filter(p=>
-    (p.name||'').toLowerCase().includes(q) ||
-    (p.id||'').toLowerCase().includes(q) ||
-    (p.email||'').toLowerCase().includes(q)
-  );
+  const weekEl = document.getElementById('checkinWeekFilter');
+  const week = weekEl ? weekEl.value : '';
+
+  let list = participants.slice();
+  if(q){
+    list = list.filter(p=>
+      (p.name||'').toLowerCase().includes(q) ||
+      (p.id||'').toLowerCase().includes(q) ||
+      (p.email||'').toLowerCase().includes(q)
+    );
+  }
+  if(week){
+    list = list.filter(p=> checkinsFor(p).some(en=> (en.weekEnding || (en.timestamp||'').slice(0,10)) === week));
+  }
+  return list;
+}
+
+// Populates the "All weeks" dropdown with every distinct week found in the
+// check-in data, newest first, so staff can filter the table to just one
+// week's submissions.
+function populateCheckinWeekFilter(){
+  const sel = document.getElementById('checkinWeekFilter');
+  if(!sel) return;
+  const current = sel.value;
+  const weeks = [...new Set((BUNDLE.checkins||[]).map(en=> en.weekEnding || (en.timestamp||'').slice(0,10)).filter(Boolean))]
+    .sort((a,b)=> new Date(b)-new Date(a));
+  sel.innerHTML = '<option value="">All weeks</option>' + weeks.map(w=>{
+    const d = new Date(w);
+    const label = !isNaN(d) ? `Week of ${fmtShort(d)}` : w;
+    return `<option value="${w}">${label}</option>`;
+  }).join('');
+  if(weeks.includes(current)) sel.value = current;
 }
 
 function renderCheckinsTable(){
@@ -2754,6 +2868,8 @@ async function boot(){
   await refreshLiveData_();
   updateCohortRulePill();
   populateProgFilter();
+  populateCheckinWeekFilter();
+  updateSyncFootnotes_();
 
   const base = JSON.parse(JSON.stringify(BUNDLE.participants));
   const removed = await loadRemoved();
@@ -2786,6 +2902,7 @@ async function boot(){
   document.getElementById('tabDashboard').addEventListener('click', ()=>switchTab('dashboard'));
   document.getElementById('tabCheckins').addEventListener('click', ()=>switchTab('checkins'));
   document.getElementById('checkinSearch').addEventListener('input', renderCheckinsTable);
+  document.getElementById('checkinWeekFilter').addEventListener('change', renderCheckinsTable);
   document.getElementById('openFormBtn').addEventListener('click', ()=>{
     if(CHECKIN_FORM_URL) window.open(CHECKIN_FORM_URL, '_blank');
     else showToast('Add your Google Form link to CHECKIN_FORM_URL in the script.');
