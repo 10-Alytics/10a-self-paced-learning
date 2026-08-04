@@ -424,6 +424,19 @@
     </div>
   </div>
 
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Onboarding pack status</h2><div class="sub">Who still needs their welcome pack — click Send to open their profile</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Participant</th><th>Programme</th><th>Mentor</th><th></th></tr></thead>
+        <tbody id="onboardingStatusRollup"></tbody>
+      </table>
+      <div class="checkin-empty" id="onboardingStatusEmpty" style="display:none;">Everyone's had their onboarding pack sent. ✓</div>
+    </div>
+  </div>
+
   <p class="footnote" id="dashboardFootnote">Computed entirely in your browser from the SPLMS data model.</p>
 </div>
 
@@ -547,6 +560,15 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // to match your real team, then use the "Assign mentors" button on the
 // Dashboard tab to distribute participants evenly and round-robin.
 const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
+
+// Used to fill in the onboarding pack's [SPL_Tracker_Link] and
+// [Participant_Portal_Password] placeholders. Set SPL_TRACKER_LINK to
+// wherever you host this page (e.g. your GitHub Pages URL) and
+// PARTICIPANT_PORTAL_PASSWORD to whatever shared password you're giving
+// participants. Leave either blank to have the onboarding pack show a
+// "[fill this in]" placeholder instead, so it's obvious it needs setting.
+const SPL_TRACKER_LINK = '';
+const PARTICIPANT_PORTAL_PASSWORD = '';
 
 // -----------------------------------------------------------------------
 // ACCESS CONTROL
@@ -980,6 +1002,27 @@ async function saveRemoved(list){
   await window.storage.set(STORE_PREFIX+':removed', JSON.stringify(list), false);
 }
 
+// Onboarding-pack-sent tracking. Deliberately SHARED (not per-browser) —
+// any staff member should be able to see at a glance who's already had
+// their onboarding pack sent, regardless of who sent it or which device
+// they're checking from. Stored as one map keyed by Participant_ID.
+let ONBOARDING_SENT = {};
+async function loadOnboardingSentMap(){
+  try{
+    const r = await window.storage.get(STORE_PREFIX+':onboardingSent', true);
+    return r ? JSON.parse(r.value) : {};
+  }catch(e){ return {}; }
+}
+async function saveOnboardingSentMap(map){
+  await window.storage.set(STORE_PREFIX+':onboardingSent', JSON.stringify(map), true);
+}
+async function setOnboardingSent(id, sent){
+  if(sent){ ONBOARDING_SENT[id] = { sent:true, date: today().toISOString().slice(0,10), by: currentUserEmail() || 'unknown' }; }
+  else { delete ONBOARDING_SENT[id]; }
+  await saveOnboardingSentMap(ONBOARDING_SENT);
+  renderAll();
+}
+
 // A check-in row has no natural ID from the sheet, so we key staff notes /
 // applied-flags off participant + week.
 function checkinKey(participantId, entry){
@@ -1153,8 +1196,14 @@ function buildLessonPlan(p, startDateStr){
 }
 
 // Real, named modules for a programme (from the Modules tab), in week order.
+// Onboarding is a one-time admin/welcome session, not self-paced study
+// content — participants shouldn't see it scheduled as a "topic to study"
+// in their week-by-week plan. Excluded here (plan-labelling only); it's
+// left untouched everywhere else (Modules tab totals, programme metadata).
 function getProgrammeModules_(programmeCode){
-  return (BUNDLE.modules||[]).filter(m=>m.programme===programmeCode).sort((a,b)=>a.weekNumber-b.weekNumber);
+  return (BUNDLE.modules||[])
+    .filter(m=>m.programme===programmeCode && !/onboard/i.test(m.topic||''))
+    .sort((a,b)=>a.weekNumber-b.weekNumber);
 }
 
 // Builds a tailored week-by-week plan using the participant's programme,
@@ -1177,7 +1226,7 @@ function buildTailoredPlan(p, opts){
   const capstoneWeeksTotal = perCapstoneWeeks * capstoneCount;
 
   const modulesList = getProgrammeModules_(p.programme);
-  const useNamedModules = eng.totalModules > 0 && modulesList.length >= eng.totalModules;
+  const useNamedModules = eng.remaining > 0 && modulesList.length >= eng.remaining;
 
   // If the person gave us a "months left" target, work out whether the
   // chosen pace actually gets there, and what pace WOULD get there.
@@ -1231,6 +1280,56 @@ function buildTailoredPlan(p, opts){
   };
 }
 
+// A short, deterministic (not random-each-time) set of study quotes and a
+// plain-English explainer for the "pace required" number, both surfaced on
+// every version of the lesson plan (drawer, PDF, print, plain text).
+const STUDY_QUOTES = [
+  "Small, steady steps beat big, occasional pushes — show up for one module at a time.",
+  "You don't need more hours in the day. You need a plan that fits the hours you actually have.",
+  "Progress isn't a straight line. A slow week doesn't erase the weeks before it.",
+  "The goal isn't to finish fast — it's to finish, and to actually understand what you built.",
+  "Consistency is a skill you're practicing right alongside the material.",
+  "Future-you is counting on the version of you that shows up this week.",
+  "Done, imperfect, and submitted beats perfect and never finished.",
+  "Every module you complete is proof you can do the next one too.",
+];
+function pickQuote_(seed){
+  let h = 0;
+  const s = String(seed||'');
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return STUDY_QUOTES[h % STUDY_QUOTES.length];
+}
+
+// Turns the raw "activities/week" number (modules-remaining ÷ weeks-left-
+// before-the-grace-deadline) into a plain-English sentence, since on its
+// own "11.0/wk" reads like jargon. It's a target pace, not a literal rule.
+function paceExplainer_(eng){
+  if(!eng.activitiesPerWeek || eng.remaining<=0){
+    return `You're on track with no fixed weekly target right now — just keep working through the plan below at a pace you can sustain.`;
+  }
+  const rounded = eng.activitiesPerWeek.toFixed(1);
+  const deadlineTxt = eng.graceEnd ? eng.graceEnd.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : 'your programme deadline';
+  return `"${rounded}/wk" means completing about ${Math.ceil(eng.activitiesPerWeek)} module${Math.ceil(eng.activitiesPerWeek)===1?'':'s'} a week keeps you on course to finish before ${deadlineTxt} (your grace-period deadline). It's a target to aim for, not a rigid rule — talk to your mentor if it feels like too much at once, plans can be adjusted.`;
+}
+
+// Groups plan.items into ordered sections by phase (e.g. all "Modules" rows
+// together, then "Capstone" rows) so every plan output can show real
+// section headers instead of one flat list.
+function groupPlanItems_(items){
+  const groups = [];
+  items.forEach(it=>{
+    const last = groups[groups.length-1];
+    if(last && last.phase === it.phase){ last.items.push(it); }
+    else { groups.push({ phase: it.phase, items: [it] }); }
+  });
+  return groups;
+}
+const PHASE_SECTION_TITLE = { Modules: '📘 Core modules', Capstone: '🎓 Capstone project(s)' };
+
+// A short practical planning note included with every generated plan.
+function planningNote_(plan){
+  return `Plan it like an appointment: pick the same ${plan.perWeek} day${plan.perWeek===1?'':'s'} each week and block ${plan.hoursPerDay} hour${plan.hoursPerDay===1?'':'s'} on your calendar — a scheduled slot is far more likely to happen than "whenever I find time." If you miss a week, don't try to double up and catch up all at once — just pick the plan back up where you left off and message your mentor if you're stuck.`;
+}
 // Renders the tailored plan straight into a downloadable PDF file using
 // jsPDF (loaded from CDN in <head>) — a real file save, not a print dialog.
 // Falls back to the print-ready page if jsPDF didn't load (e.g. offline).
@@ -1247,6 +1346,7 @@ function downloadTailoredPlanPdf_(p, plan){
   let y = 50;
   const progName = PROGRAMMES[p.programme]?.name || p.programme;
   const fmt = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const eng = computeEngine(p);
 
   doc.setTextColor(217,99,31); doc.setFont('helvetica','bold'); doc.setFontSize(18);
   doc.text('Your Self-Paced Learning Plan', marginX, y); y += 20;
@@ -1282,6 +1382,15 @@ function downloadTailoredPlanPdf_(p, plan){
     y += 22;
   }
 
+  // pace explainer box
+  doc.setFontSize(9); doc.setTextColor(154,52,18);
+  const paceLines = doc.splitTextToSize(`What does ${eng.activitiesPerWeek?eng.activitiesPerWeek.toFixed(1):'0.0'}/wk mean? ${paceExplainer_(eng)}`, pageW-2*marginX-16);
+  const paceH = paceLines.length*11 + 14;
+  doc.setFillColor(255,247,237); doc.rect(marginX, y-11, pageW-2*marginX, paceH, 'F');
+  doc.text(paceLines, marginX+8, y+2);
+  doc.setTextColor(15,23,42);
+  y += paceH + 12;
+
   // table header
   const colX = [marginX, marginX+45, marginX+140];
   const colW = [45, 95, pageW-marginX-colX[2]];
@@ -1298,17 +1407,41 @@ function downloadTailoredPlanPdf_(p, plan){
   drawHeader();
 
   doc.setFontSize(9);
-  plan.items.forEach((it, idx)=>{
-    const label = `${it.phase==='Capstone'?'GR ':'MD '}${it.label}`;
-    const lines = doc.splitTextToSize(label, colW[2]-8);
-    const rowH = Math.max(16, lines.length*11 + 6);
-    if(y + rowH > 800){ doc.addPage(); y = 50; drawHeader(); }
-    if(idx % 2 === 0){ doc.setFillColor(248,250,252); doc.rect(marginX, y-11, pageW-2*marginX, rowH, 'F'); }
-    doc.text(String(it.week), colX[0]+4, y);
-    doc.text(fmt(it.start), colX[1]+4, y);
-    doc.text(lines, colX[2]+4, y);
-    y += rowH;
+  groupPlanItems_(plan.items).forEach(group=>{
+    if(y + 20 > 800){ doc.addPage(); y = 50; drawHeader(); }
+    doc.setFillColor(244,246,249); doc.rect(marginX, y-11, pageW-2*marginX, 18, 'F');
+    doc.setFont('helvetica','bold'); doc.setTextColor(15,23,42);
+    doc.text(PHASE_SECTION_TITLE[group.phase] || group.phase, colX[0]+4, y+1);
+    doc.setFont('helvetica','normal');
+    y += 18;
+    group.items.forEach((it, idx)=>{
+      const lines = doc.splitTextToSize(it.label, colW[2]-8);
+      const rowH = Math.max(16, lines.length*11 + 6);
+      if(y + rowH > 800){ doc.addPage(); y = 50; drawHeader(); }
+      if(idx % 2 === 0){ doc.setFillColor(248,250,252); doc.rect(marginX, y-11, pageW-2*marginX, rowH, 'F'); }
+      doc.text(String(it.week), colX[0]+4, y);
+      doc.text(fmt(it.start), colX[1]+4, y);
+      doc.text(lines, colX[2]+4, y);
+      y += rowH;
+    });
   });
+
+  // planning tip + quote
+  y += 10;
+  if(y + 60 > 800){ doc.addPage(); y = 50; }
+  doc.setFontSize(9); doc.setTextColor(21,128,61);
+  const tipLines = doc.splitTextToSize(`Planning tip: ${planningNote_(plan)}`, pageW-2*marginX-16);
+  const tipH = tipLines.length*11 + 14;
+  doc.setFillColor(240,253,244); doc.rect(marginX, y-11, pageW-2*marginX, tipH, 'F');
+  doc.text(tipLines, marginX+8, y+2);
+  y += tipH + 12;
+
+  if(y + 30 > 800){ doc.addPage(); y = 50; }
+  doc.setFont('helvetica','italic'); doc.setFontSize(9.5); doc.setTextColor(71,85,105);
+  const quoteLines = doc.splitTextToSize(`"${pickQuote_(p.id)}"`, pageW-2*marginX);
+  doc.text(quoteLines, marginX, y);
+  y += quoteLines.length*13 + 10;
+  doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
 
   y += 16;
   if(y > 800){ doc.addPage(); y = 50; }
@@ -1340,12 +1473,18 @@ function planToIcs_(p, plan){
 
 function planToText_(p, plan){
   const fmt = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const eng = computeEngine(p);
   let out = `Lesson plan — ${p.name} (${p.id})\nProgramme: ${PROGRAMMES[p.programme]?.name || p.programme}\n`;
   out += `Pace: ${plan.perWeek} study day${plan.perWeek===1?'':'s'}/week · Capstones: ${plan.capstoneCount}\n\n`;
-  plan.items.forEach(it=>{
-    out += `Week ${it.week} (${fmt(it.start)}): ${it.label}\n`;
+  out += `What does ${eng.activitiesPerWeek?eng.activitiesPerWeek.toFixed(1):'0.0'}/wk mean?\n${paceExplainer_(eng)}\n\n`;
+  groupPlanItems_(plan.items).forEach(group=>{
+    out += `${PHASE_SECTION_TITLE[group.phase] || group.phase}\n`;
+    group.items.forEach(it=>{ out += `  Week ${it.week} (${fmt(it.start)}): ${it.label}\n`; });
+    out += `\n`;
   });
-  out += `\nTarget completion: ${fmt(plan.endDate)}\n`;
+  out += `Target completion: ${fmt(plan.endDate)}\n\n`;
+  out += `Planning tip: ${planningNote_(plan)}\n\n`;
+  out += `"${pickQuote_(p.id)}"\n`;
   return out;
 }
 
@@ -1356,25 +1495,34 @@ function planToText_(p, plan){
 function downloadPlanAsPdf_(p, plan){
   const fmt = (d)=> d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
   const progName = PROGRAMMES[p.programme]?.name || p.programme;
-  const rows = plan.items.map(it=>`
+  const eng = computeEngine(p);
+  const rows = groupPlanItems_(plan.items).map(group=>`
+    <tr class="section"><td colspan="3">${PHASE_SECTION_TITLE[group.phase] || group.phase}</td></tr>
+    ${group.items.map(it=>`
     <tr>
       <td>${it.week}</td>
       <td>${fmt(it.start)}</td>
-      <td>${it.phase === 'Capstone' ? '🎓 ' : '📘 '}${it.label}</td>
-    </tr>`).join('');
+      <td>${it.label}</td>
+    </tr>`).join('')}`).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${p.name} — Lesson Plan</title>
   <style>
     @page{ margin:28px; }
     body{ font-family:'Segoe UI', Arial, sans-serif; color:#0F172A; margin:0; padding:32px; }
     h1{ font-size:20px; margin:0 0 2px; color:#D9631F; }
     h2{ font-size:13px; font-weight:400; color:#475569; margin:0 0 18px; }
-    .meta{ display:flex; gap:24px; margin-bottom:20px; font-size:12.5px; }
+    .meta{ display:flex; gap:24px; margin-bottom:20px; font-size:12.5px; flex-wrap:wrap; }
     .meta div{ background:#F4F6F9; border-radius:8px; padding:8px 14px; }
     .meta b{ display:block; font-size:11px; color:#64748B; font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:2px; }
+    .callout{ font-size:12px; border-radius:8px; padding:12px 14px; margin-bottom:16px; line-height:1.5; }
+    .callout.pace{ background:#FFF7ED; color:#9A3412; }
+    .callout.tip{ background:#F0FDF4; color:#15803D; }
+    .callout b{ display:block; margin-bottom:4px; }
+    .quote{ font-style:italic; font-size:12.5px; color:#475569; margin:16px 0; }
     table{ width:100%; border-collapse:collapse; font-size:12.5px; }
     th{ text-align:left; background:#0F172A; color:#fff; padding:8px 10px; }
     td{ padding:8px 10px; border-bottom:1px solid #E2E8F0; }
     tr:nth-child(even){ background:#F8FAFC; }
+    tr.section td{ background:#F4F6F9; font-weight:700; color:#0F172A; }
     .footer{ margin-top:22px; font-size:11px; color:#94A3B8; }
     @media print{ .no-print{ display:none; } }
   </style></head>
@@ -1387,17 +1535,122 @@ function downloadPlanAsPdf_(p, plan){
       <div><b>Total weeks</b>${plan.totalWeeks}</div>
       <div><b>Target completion</b>${fmt(plan.endDate)}</div>
     </div>
+    <div class="callout pace"><b>What does ${eng.activitiesPerWeek?eng.activitiesPerWeek.toFixed(1):'0.0'}/wk mean?</b>${paceExplainer_(eng)}</div>
     <table>
       <thead><tr><th>Week</th><th>Starting</th><th>Focus</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <div class="footer">10Alytics Self-Paced Learning · Generated ${fmt(new Date())} · Plan assumes 4 capstone projects, splitting the programme's capstone weeks between them.</div>
+    <div class="callout tip" style="margin-top:16px;"><b>Planning tip</b>${planningNote_(plan)}</div>
+    <div class="quote">"${pickQuote_(p.id)}"</div>
+    <div class="footer">10Alytics Self-Paced Learning · Generated ${fmt(new Date())} · Plan assumes ${plan.capstoneCount} capstone project(s), splitting the programme's capstone weeks between them.</div>
     <script>window.onload = () => setTimeout(() => window.print(), 300);<\/script>
   </body></html>`;
   const w = window.open('', '_blank');
   if(!w){ showToast('Please allow pop-ups to download the PDF.'); return; }
   w.document.write(html);
   w.document.close();
+}
+
+// ---------- onboarding pack ----------
+// Fills the 10Alytics onboarding email template with this participant's
+// real data. Returns both a Word-doc-ready HTML version (downloadable,
+// opens directly in Word/Google Docs) and a plain-text version (for
+// copy/paste into Gmail or wherever the mentor actually sends from).
+function buildOnboardingContent_(p){
+  const eng = computeEngine(p);
+  const progName = PROGRAMMES[p.programme]?.name || p.programme;
+  const firstName = (p.name||'').trim().split(/\s+/)[0] || p.name;
+  const fmt = (d)=> d ? d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '[to be confirmed]';
+  const portalLink = SPL_TRACKER_LINK || '[SPL tracker link — set SPL_TRACKER_LINK near the top of the script]';
+  const portalPassword = PARTICIPANT_PORTAL_PASSWORD || '[shared portal password — set PARTICIPANT_PORTAL_PASSWORD near the top of the script]';
+  const mentor = p.mentor || '[unassigned — assign a mentor before sending]';
+
+  const fields = {
+    firstName, progName,
+    id: p.id, cohort: p.cohortId || '—', totalModules: eng.totalModules || '—',
+    mentor, targetDate: fmt(eng.predictedFinal), portalLink, email: p.email || '',
+    portalPassword, days: p.preferredDays || SETTINGS.defaultStudyDays || 2, hours: p.hoursPerDay || SETTINGS.defaultHours || 2,
+  };
+
+  const html = `
+    <p>Hi ${fields.firstName},</p>
+    <p>Welcome to 10Alytics! 🎉 You're officially enrolled in the <b>${fields.progName}</b> Self-Paced Learning (SPL) track — and we couldn't be more excited to have you. This email is your complete starter kit: your programme details, your personal study plan, and your own login to track your progress every step of the way.</p>
+    <h3>1. Your Programme at a Glance</h3>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
+      <tr><td><b>Programme</b></td><td>${fields.progName}</td></tr>
+      <tr><td><b>Participant ID</b></td><td>${fields.id}</td></tr>
+      <tr><td><b>Cohort</b></td><td>${fields.cohort}</td></tr>
+      <tr><td><b>Total modules</b></td><td>${fields.totalModules}</td></tr>
+      <tr><td><b>Your assigned mentor</b></td><td>${fields.mentor}</td></tr>
+      <tr><td><b>Target completion</b></td><td>${fields.targetDate} (plus a grace period if you need it)</td></tr>
+    </table>
+    <h3>2. Your Personal Study Plan (attached 📎)</h3>
+    <p>Attached to this email is your very own week-by-week study plan, built around when you told us you want to start — showing exactly what to study each week, and when your capstone project(s) begin. Save it, print it, pin it above your desk — whatever helps you see the finish line.</p>
+    <h3>3. Log In to Your Own Progress Page 🚀</h3>
+    <p>This is the exciting part: you now have your own private login to track your journey in real time. Here's what you'll see:</p>
+    <ul>
+      <li>A live progress ring showing exactly how far along you are</li>
+      <li>Milestone badges as you hit 25%, 50%, 75%, and 100% 🌱🔥🚀🏆</li>
+      <li>A countdown to your target completion date</li>
+      <li>Your full module list, with completed ones checked off</li>
+      <li>A one-tap button to confirm your progress each week</li>
+    </ul>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;">
+      <tr><td><b>Portal link</b></td><td>${fields.portalLink}</td></tr>
+      <tr><td><b>Login email</b></td><td>${fields.email}</td></tr>
+      <tr><td><b>Password</b></td><td>${fields.portalPassword} — shared by all participants, keep it handy</td></tr>
+    </table>
+    <h3>4. How Self-Paced Learning Works</h3>
+    <ul>
+      <li>Work through your modules at your own pace, guided by the study plan attached to this email.</li>
+      <li>We recommend at least ${fields.days} study days a week, ${fields.hours} hours a day, to stay on track.</li>
+      <li>Confirm your progress each week right from your portal, or use the check-in form linked there — it takes two minutes and helps us support you if you fall behind.</li>
+      <li>Expect a friendly reminder email each week nudging you back to your videos.</li>
+    </ul>
+    <h3>5. Your Mentor Has Your Back</h3>
+    <p>${fields.mentor} is your go-to for questions, blockers, or if life gets in the way of your schedule. Reach out any time — we'd always rather help early than catch up late.</p>
+    <h3>6. Your First 7 Days ✅</h3>
+    <ul>
+      <li>Reply to confirm you've received this email and can log in.</li>
+      <li>Add your study plan to your calendar or print it out.</li>
+      <li>Log in to your portal and take a look around.</li>
+      <li>Block out your first study session this week.</li>
+      <li>Complete your first module and watch that progress ring move! 🎉</li>
+    </ul>
+    <p>We're genuinely excited to see what you build. Welcome to the 10Alytics family — let's get started!</p>
+    <p>Warmly,<br>10Alytics Self-Paced Learning Team</p>
+  `;
+
+  const text = html
+    .replace(/<h3>/g,'\n\n').replace(/<\/h3>/g,'\n')
+    .replace(/<li>/g,'• ').replace(/<\/li>/g,'\n')
+    .replace(/<\/tr>/g,'\n').replace(/<td><b>/g,'').replace(/<\/b><\/td><td>/g,': ').replace(/<\/td>/g,'')
+    .replace(/<[^>]+>/g,'')
+    .replace(/&amp;/g,'&').replace(/\n{3,}/g,'\n\n').trim();
+
+  return {
+    html, text,
+    subject: '🎉 Welcome to 10Alytics — Your Learning Journey Starts Now!',
+    fields,
+  };
+}
+
+// Downloads the filled onboarding pack as a .doc file — a Blob of HTML
+// with the Word MIME type, which Word/Google Docs open directly (no docx
+// library needed). Ready to attach the PDF lesson plan and send.
+function downloadOnboardingDoc_(p){
+  const content = buildOnboardingContent_(p);
+  const docHtml = `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="utf-8"><title>${p.name} — Onboarding Pack</title>
+  <style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1F2937;} h3{color:#D9631F;font-size:13pt;margin:18px 0 6px;} table{margin:8px 0;}</style>
+  </head><body>${content.html}</body></html>`;
+  const blob = new Blob(['\ufeff', docHtml], { type: 'application/msword' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${p.id}-onboarding-pack.doc`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Onboarding pack downloaded — attach the PDF lesson plan before sending.');
 }
 
 function openLessonPlanDrawer(id){
@@ -1454,23 +1707,35 @@ function openLessonPlanDrawer(id){
         : `<div class="admin-only-note" style="border-color:#FED7AA;background:#FFF7ED;color:#9A3412;">⚠ At ${plan.perWeek} day${plan.perWeek===1?'':'s'}/week this runs past the ${plan.monthsLeft}-month target. Try <b>${plan.recommendedPace} day${plan.recommendedPace===1?'':'s'}/week</b> (or more hours/day) to finish by ${fmt(plan.targetDate)}.</div>`;
     }
 
+    const eng = computeEngine(p);
+    const sections = groupPlanItems_(plan.items);
+    const sectionRows = sections.map(g=>`
+      <tr class="plan-section-row"><td colspan="3" style="padding:6px 8px;font-weight:700;background:#F4F6F9;color:#0F172A;">${PHASE_SECTION_TITLE[g.phase]||g.phase}</td></tr>
+      ${g.items.map(it=>`<tr><td style="padding:6px 8px;">${it.week}</td><td style="padding:6px 8px;">${fmt(it.start)}</td><td style="padding:6px 8px;">${it.label}</td></tr>`).join('')}
+    `).join('');
+
     document.getElementById('planOutput').innerHTML = `
       <div class="metric-grid" style="margin-top:4px;">
         <div class="metric"><div class="k">Weekly commitment</div><div class="v">${plan.weeklyHours} hrs/wk</div></div>
         <div class="metric"><div class="k">Target completion</div><div class="v">${fmt(plan.endDate)}</div></div>
       </div>
       ${paceBanner}
+      <div class="admin-only-note" style="margin-top:10px;background:#FFF7ED;border-color:#FED7AA;color:#9A3412;">
+        <b>What does ${eng.activitiesPerWeek ? eng.activitiesPerWeek.toFixed(1) : '0.0'}/wk mean?</b><br>${paceExplainer_(eng)}
+      </div>
       <div class="field-group" style="margin-top:10px;">
-        <label>${plan.totalWeeks} week plan${plan.useNamedModules ? ' · tailored module names' : ''}</label>
+        <label>${plan.totalWeeks} week plan, in sections${plan.useNamedModules ? ' · tailored module names' : ''}</label>
         <div style="max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;">
           <table style="width:100%;font-size:12.5px;">
             <thead><tr><th style="text-align:left;padding:6px 8px;">Week</th><th style="text-align:left;padding:6px 8px;">Starting</th><th style="text-align:left;padding:6px 8px;">Focus</th></tr></thead>
-            <tbody>
-              ${plan.items.map(it=>`<tr><td style="padding:6px 8px;">${it.week}</td><td style="padding:6px 8px;">${fmt(it.start)}</td><td style="padding:6px 8px;">${it.phase==='Capstone'?'🎓 ':'📘 '}${it.label}</td></tr>`).join('')}
-            </tbody>
+            <tbody>${sectionRows}</tbody>
           </table>
         </div>
       </div>
+      <div class="admin-only-note" style="margin-top:10px;background:#F0FDF4;border-color:#BBF7D0;color:#15803D;">
+        <b>Planning tip</b><br>${planningNote_(plan)}
+      </div>
+      <div class="admin-only-note" style="margin-top:8px;font-style:italic;">"${pickQuote_(p.id)}"</div>
       <div style="display:flex;gap:8px;margin-top:10px;">
         <button id="planDownloadPdfBtn" class="primary" style="flex:1;">Download PDF</button>
         <button id="planCopyTextBtn" style="flex:1;">Copy as text</button>
@@ -1678,6 +1943,7 @@ function renderKPIs(computed){
   const checkedInEver = count(c=> checkinsFor(c.p).length > 0);
   const checkinRate = n ? (checkedInEver/n*100) : 0;
   const needsEscalation = count(c=> ['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(c.eng.escalation));
+  const onboardingSentCount = count(c=> !!ONBOARDING_SENT[c.p.id]?.sent);
 
   const cards = [
     ['Total participants', n, ''],
@@ -1691,6 +1957,7 @@ function renderKPIs(computed){
     ['Unassigned mentor', mentorUnassigned, mentorUnassigned>0?'amber':'green'],
     ['Ever checked in', checkinRate.toFixed(0)+'%', checkinRate>=75?'green':checkinRate>=40?'amber':'rose'],
     ['Needs escalation', needsEscalation, needsEscalation>0?'rose':'green'],
+    ['Onboarding sent', `${onboardingSentCount}/${n}`, onboardingSentCount>=n?'green':onboardingSentCount>0?'amber':'rose'],
   ];
   document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls])=>`
     <div class="kpi ${cls}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
@@ -1904,6 +2171,33 @@ function renderDataQuality(){
   `).join('');
   tbody.querySelectorAll('tr').forEach(tr=>{
     tr.addEventListener('click', ()=> openDrawer(tr.dataset.id));
+  });
+}
+
+function renderOnboardingStatus(){
+  const tbody = document.getElementById('onboardingStatusRollup');
+  const emptyEl = document.getElementById('onboardingStatusEmpty');
+  if(!tbody || !emptyEl) return;
+  const pending = participants.filter(p=> !ONBOARDING_SENT[p.id]?.sent);
+  if(!pending.length){
+    tbody.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  tbody.innerHTML = pending.map(p=>`
+    <tr data-id="${p.id}">
+      <td style="cursor:pointer;"><div class="name">${p.name}</div><div class="pid">${p.id}</div></td>
+      <td><span class="prog-code">${p.programme||'—'}</span></td>
+      <td>${p.mentor || '<span class="muted">Unassigned</span>'}</td>
+      <td><button class="onboarding-send-btn" data-id="${p.id}" style="white-space:nowrap;">Send →</button></td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('tr > td:first-child').forEach(td=>{
+    td.addEventListener('click', ()=> openDrawer(td.closest('tr').dataset.id));
+  });
+  tbody.querySelectorAll('.onboarding-send-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); openDrawer(btn.dataset.id); });
   });
 }
 
@@ -2277,6 +2571,7 @@ function renderAll(){
   renderMentorRollup(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinCompliance();
   renderDataQuality();
+  renderOnboardingStatus();
   renderCharts(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinsTable();
 }
@@ -2525,6 +2820,22 @@ async function openDrawer(id){
       </div>
 
       <div>
+        <div class="section-title">Onboarding pack</div>
+        <hr class="sep">
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button id="onboardingDownloadBtn" style="flex:1;">📄 Download Word doc</button>
+          <button id="onboardingCopyBtn" style="flex:1;">Copy email text</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;margin-top:10px;">
+          <input type="checkbox" id="onboardingSentCheck" style="width:auto;margin:0;" ${ONBOARDING_SENT[p.id]?.sent ? 'checked' : ''}>
+          Onboarding pack sent
+        </label>
+        <div class="muted" style="font-size:11.5px;margin-top:4px;" id="onboardingSentNote">
+          ${ONBOARDING_SENT[p.id]?.sent ? `Sent ${fmtShort(new Date(ONBOARDING_SENT[p.id].date))} by ${ONBOARDING_SENT[p.id].by}` : 'Not sent yet · visible to all staff once checked'}
+        </div>
+      </div>
+
+      <div>
         <div class="section-title">Editable inputs</div>
         <hr class="sep">
         <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
@@ -2590,6 +2901,22 @@ async function openDrawer(id){
   document.getElementById('saveBtn').onclick = () => saveDrawer(p);
   document.getElementById('planBtn').onclick = () => openLessonPlanDrawer(p.id);
   document.getElementById('removeBtn').onclick = () => removeParticipant(p.id);
+  document.getElementById('onboardingDownloadBtn').onclick = () => downloadOnboardingDoc_(p);
+  document.getElementById('onboardingCopyBtn').onclick = () => {
+    const content = buildOnboardingContent_(p);
+    try{ navigator.clipboard.writeText(content.text); }catch(e){}
+    showToast('Onboarding email text copied to clipboard.');
+  };
+  document.getElementById('onboardingSentCheck').onchange = async (e) => {
+    await setOnboardingSent(p.id, e.target.checked);
+    const noteEl = document.getElementById('onboardingSentNote');
+    if(noteEl){
+      noteEl.textContent = e.target.checked
+        ? `Sent ${fmtShort(today())} by ${currentUserEmail() || 'unknown'}`
+        : 'Not sent yet · visible to all staff once checked';
+    }
+    showToast(e.target.checked ? 'Marked as sent — every staff member will see this.' : 'Marked as not sent.');
+  };
   document.getElementById('jumpToCheckins').onclick = (e) => {
     e.preventDefault();
     switchTab('checkins');
@@ -2870,6 +3197,7 @@ async function boot(){
   populateProgFilter();
   populateCheckinWeekFilter();
   updateSyncFootnotes_();
+  ONBOARDING_SENT = await loadOnboardingSentMap();
 
   const base = JSON.parse(JSON.stringify(BUNDLE.participants));
   const removed = await loadRemoved();
