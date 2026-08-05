@@ -499,7 +499,13 @@ if (typeof window.storage === 'undefined') {
 // See README.md "Connecting the live data source" for exact steps.
 const DATA_SOURCE = {
   participantsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=923648041&single=true&output=csv',
-  programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1912207092&single=true&output=csv',
+  // Left BLANK on purpose: the correct programme list (with fixed module
+  // counts) is now baked into BUNDLE.programmes below, so it no longer
+  // depends on a Google Sheet tab that can drift out of sync. If you ever
+  // want this to be Sheet-driven again, paste the published CSV link back
+  // in here — but make sure the sheet's Total_Modules column matches
+  // BUNDLE.programmes first, or it will silently overwrite this fix again.
+  programmesCsvUrl: '',
   settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1407597732&single=true&output=csv',
   // Weekly check-in responses. Point this at the "Publish to web > CSV" link
   // for the response sheet behind your check-in Google Form. Leave blank to
@@ -510,7 +516,11 @@ const DATA_SOURCE = {
   // of just a module count). "Publish to web > CSV" the Modules tab and
   // paste its link here. Leave blank and the portal falls back to a plain
   // numbered list ("Module 1", "Module 2"...) instead of real topic names.
-  modulesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1522038206&single=true&output=csv',
+  // Left BLANK on purpose, same reason as programmesCsvUrl above: the full,
+  // real module/topic list for every programme is now baked into
+  // BUNDLE.modules below, so plans always show real class names without
+  // needing a Sheet tab kept perfectly in sync.
+  modulesCsvUrl: '',
 };
 
 // Link to the actual Google Form participants fill in. Shown as a button on
