@@ -69,6 +69,38 @@
   .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
   .kpi.teal .num{color:var(--teal);}
 
+  /* ---- KPI Evidence tab ---- */
+  .kpi-hero{
+    background:linear-gradient(135deg,var(--ink) 0%,#1e293b 100%);border-radius:16px;padding:22px 26px;
+    color:#fff;display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:space-between;
+  }
+  .kpi-hero h1{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin:0 0 6px;font-weight:700;}
+  .kpi-hero .actual{font-size:44px;font-weight:800;font-family:var(--mono);line-height:1;}
+  .kpi-hero .actual small{font-size:16px;font-weight:600;color:#94a3b8;margin-left:6px;}
+  .kpi-hero .stat-blk{display:flex;flex-direction:column;gap:2px;}
+  .kpi-hero .stat-blk .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;}
+  .kpi-hero .stat-blk .v{font-size:20px;font-weight:700;font-family:var(--mono);}
+  .kpi-hero .status-pill{font-size:13px;font-weight:800;border-radius:999px;padding:7px 16px;letter-spacing:.3px;}
+  .kpi-hero .status-pill.achieved{background:var(--green-soft);color:var(--green);}
+  .kpi-hero .status-pill.below{background:var(--rose-soft);color:var(--rose);}
+  .kpi-metrics-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:18px;}
+  .kpi-metric-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;}
+  .kpi-metric-card .mc-title{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);}
+  .kpi-metric-card .mc-val{font-size:28px;font-weight:800;font-family:var(--mono);margin-top:4px;}
+  .kpi-metric-card .mc-sub{font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
+  .kpi-warning{background:var(--rose-soft);color:var(--rose);border:1px solid rgba(190,18,60,.35);border-radius:10px;
+    padding:10px 14px;font-size:12.5px;font-weight:600;margin-top:14px;}
+  .kpi-filter-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+  .kpi-filter-row select, .kpi-filter-row input{
+    font:inherit;font-size:12.5px;padding:7px 10px;border-radius:9px;border:1px solid var(--line);background:var(--paper);color:var(--ink);
+  }
+  .trend-target-line{border-top:2px dashed var(--amber);}
+  .action-required-row td{border-left:3px solid var(--rose);}
+  .evidence-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0;}
+  .evidence-grid .ev-item{padding:14px 18px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);}
+  .evidence-grid .ev-item .k{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);}
+  .evidence-grid .ev-item .v{font-size:18px;font-weight:700;font-family:var(--mono);margin-top:3px;}
+
   /* ---- main layout ---- */
   .main{max-width:1360px;margin:28px auto 60px;padding:0 24px;}
   .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
@@ -264,6 +296,7 @@
   <div class="tabbar">
     <button class="tab-btn active" data-tab="dashboard" id="tabDashboard">Dashboard</button>
     <button class="tab-btn" data-tab="checkins" id="tabCheckins">Weekly Check-ins</button>
+    <button class="tab-btn" data-tab="kpi" id="tabKpi">KPI Evidence</button>
   </div>
 </div>
 
@@ -436,6 +469,88 @@
     </div>
   </div>
   <p class="footnote" id="checkinsFootnote">Participant self-reports come from the linked check-in form.</p>
+</div>
+
+<div class="main" id="kpiView" style="display:none;">
+
+  <!-- SELF-PACED CHECK-IN KPI — top-of-page management answer -->
+  <div class="kpi-hero">
+    <div>
+      <h1>Self-Paced Learner Check-In KPI</h1>
+      <div class="actual" id="kpiHeroActual">—<small>Target 80%</small></div>
+    </div>
+    <div class="stat-blk"><div class="k">Reporting week</div><div class="v" id="kpiHeroWeek" style="font-size:14px;">—</div></div>
+    <div class="stat-blk"><div class="k">Expected</div><div class="v" id="kpiHeroExpected">—</div></div>
+    <div class="stat-blk"><div class="k">Completed</div><div class="v" id="kpiHeroCompleted">—</div></div>
+    <div class="stat-blk"><div class="k">Variance to target</div><div class="v" id="kpiHeroVariance">—</div></div>
+    <div id="kpiHeroStatus" class="status-pill achieved">—</div>
+  </div>
+  <div id="kpiWarningArea"></div>
+
+  <div class="panel" style="margin-top:20px;">
+    <div class="panel-head">
+      <div><h2>Filters</h2><div class="sub">All cards, the trend and the tables below respond to these</div></div>
+      <div class="kpi-filter-row">
+        <select id="kpiFilterWeek"></select>
+        <select id="kpiFilterProg"><option value="">All programmes</option></select>
+        <select id="kpiFilterCohort"><option value="">All cohorts</option></select>
+        <select id="kpiFilterMentor"><option value="">All mentors</option></select>
+        <select id="kpiFilterRisk"><option value="">All risk</option><option>Green</option><option>Yellow</option><option>Red</option></select>
+        <select id="kpiFilterCheckinStatus"><option value="">All check-in status</option><option value="Completed">Completed</option><option value="Missed">Missed</option><option value="Pending">Pending</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-metrics-row">
+    <div class="kpi-metric-card"><div class="mc-title">A · Check-In Completion Rate (Primary KPI)</div>
+      <div class="mc-val" id="mcCompletion">—</div><div class="mc-sub">Target 80% · completed &amp; documented ÷ expected eligible learners</div></div>
+    <div class="kpi-metric-card"><div class="mc-title">B · Feedback Submission Rate (Supporting)</div>
+      <div class="mc-val" id="mcFeedback">—</div><div class="mc-sub">Any form submission received ÷ expected eligible learners</div></div>
+    <div class="kpi-metric-card"><div class="mc-title">C · Learner Response Rate (Supporting)</div>
+      <div class="mc-val" id="mcResponse">—</div><div class="mc-sub">Completed check-ins with a substantive response ÷ completed</div></div>
+  </div>
+
+  <div class="kpis" id="kpiCards" style="position:static;margin:18px 0 0;"></div>
+
+  <div class="panel" style="margin-top:20px;">
+    <div class="panel-head"><div><h2>Weekly check-in trend</h2><div class="sub" id="kpiTrendSub">Historical performance across the appraisal period — every week is kept, never overwritten</div></div></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Week</th><th>Expected</th><th>Completed</th><th>Rate</th><th>Target</th><th>Status</th></tr></thead>
+        <tbody id="kpiTrendBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:20px;">
+    <div class="panel-head"><div><h2>Learners requiring action</h2><div class="sub">Overdue, missed, unresponsive, at-risk, or behind pace — for the selected reporting week</div></div></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Participant</th><th>Programme</th><th>Mentor</th><th>Last check-in</th><th>Risk</th><th>Progress</th><th>Required action</th></tr></thead>
+        <tbody id="kpiActionBody"></tbody>
+      </table>
+      <div class="checkin-empty" id="kpiActionEmpty" style="display:none;">No learners currently need action for this selection. ✓</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:20px;">
+    <div class="panel-head"><div><h2>KPI Evidence — appraisal record</h2><div class="sub">Self-Paced Learner Check-In Process · Target 80% · dynamically calculated, never hard-coded</div></div>
+      <button class="primary" id="kpiPrintBtn">Print / save as PDF</button>
+    </div>
+    <div class="evidence-grid" id="kpiEvidenceGrid"></div>
+    <div style="padding:14px 18px;">
+      <div class="sub" style="margin-bottom:6px;">Data quality — check-in rows excluded from the KPI this week</div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Participant / row</th><th>Issue</th></tr></thead>
+          <tbody id="kpiDataQualityBody"></tbody>
+        </table>
+        <div class="checkin-empty" id="kpiDataQualityEmpty" style="display:none;">No invalid or duplicate check-in rows detected for this week. ✓</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="footnote" id="kpiFootnote">Last data refresh: — · Computed entirely in your browser from ParticipantDB + WeeklyFeedback.</p>
 </div>
 
 <div class="overlay" id="overlay">
@@ -2354,6 +2469,8 @@ function renderAll(){
   renderOnboardingStatus();
   renderCharts(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinsTable();
+  const kpiViewEl = document.getElementById('kpiView');
+  if(kpiViewEl && kpiViewEl.style.display !== 'none') renderKpiTab();
 }
 
 function getCheckinFiltered(){
@@ -2449,11 +2566,373 @@ function renderCheckinsTable(){
   });
 }
 
+// =========================================================================
+// SELF-PACED LEARNER CHECK-IN KPI ENGINE  (Target: 80%)
+// -------------------------------------------------------------------------
+// KPI = Completed & documented eligible check-ins ÷ Expected eligible
+// check-ins × 100. Deliberately NOT "feedback submissions ÷ participants" —
+// see METRIC A/B/C split below, which the tab keeps visually distinct.
+// =========================================================================
+const KPI_TARGET = 80;
+let KPI_LAST_REFRESH = null;
+
+// A learner is "eligible" for a weekly check-in if they are a real,
+// currently in-progress self-paced learner: not a data-quality placeholder
+// row, not yet Completed, and not Defaulted (Defaulted learners have exited
+// the active caseload pending admin review — see Escalation Week 4).
+function isEligibleForCheckin_(p, eng){
+  if(p.idGenerated) return false;
+  return eng.status === 'Active' || eng.status === 'Needs Follow-up' || eng.status === 'At Risk';
+}
+
+// Validates one raw WeeklyFeedback row. Invalid rows are excluded from
+// every KPI numerator/denominator and surfaced in the Data Quality table
+// instead, so they can never silently inflate the KPI (SOP section 16).
+function validateCheckinRow_(row, participantsById){
+  if(!row.participantId) return {valid:false, reason:'Missing Participant_ID on the check-in row.'};
+  if(!participantsById[row.participantId]) return {valid:false, reason:'Participant_ID does not match any record in ParticipantDB.'};
+  const wk = row.weekEnding || row.timestamp;
+  const d = wk ? new Date(wk) : null;
+  if(!wk || isNaN(d)) return {valid:false, reason:'Invalid or missing check-in date.'};
+  return {valid:true, reason:null};
+}
+
+// Every distinct reporting week present in the check-in data, newest first.
+function allReportingWeeks_(){
+  return [...new Set((BUNDLE.checkins||[]).map(en=> en.weekEnding || (en.timestamp||'').slice(0,10)).filter(Boolean))]
+    .sort((a,b)=> new Date(b)-new Date(a));
+}
+
+function kpiFilterFn_(){
+  const prog = document.getElementById('kpiFilterProg')?.value || '';
+  const cohort = document.getElementById('kpiFilterCohort')?.value || '';
+  const mentor = document.getElementById('kpiFilterMentor')?.value || '';
+  const risk = document.getElementById('kpiFilterRisk')?.value || '';
+  return (p, eng) => {
+    if(prog && p.programme !== prog) return false;
+    if(cohort && (p.cohortId||'') !== cohort) return false;
+    if(mentor && (p.mentor||'') !== mentor) return false;
+    if(risk && eng.risk !== risk) return false;
+    return true;
+  };
+}
+
+// Core calculation for one reporting week + the active filter set. Returns
+// every number the hero, cards, metrics row and evidence page need.
+function computeCheckinKpiForWeek_(weekEnding){
+  const participantsById = {};
+  participants.forEach(p=> participantsById[p.id] = p);
+  const filterFn = kpiFilterFn_();
+
+  const engByP = participants.map(p=>({p, eng:computeEngine(p)}));
+  const eligible = engByP.filter(({p,eng}) => isEligibleForCheckin_(p,eng) && filterFn(p,eng));
+  const eligibleIds = new Set(eligible.map(({p})=>p.id));
+  const expected = eligible.length;
+
+  const raw = weekEnding ? (BUNDLE.checkins||[]).filter(r => (r.weekEnding || (r.timestamp||'').slice(0,10)) === weekEnding) : [];
+  const seen = new Set();
+  const completedIds = new Set();
+  const dataIssues = []; // {label, reason} — excluded from the KPI
+  raw.forEach(row=>{
+    const v = validateCheckinRow_(row, participantsById);
+    if(!v.valid){
+      dataIssues.push({label: row.fullName || row.participantId || '(unidentified row)', reason: v.reason});
+      return;
+    }
+    if(!eligibleIds.has(row.participantId)) return; // not eligible under current filters/status — not an error, just out of scope
+    const key = row.participantId + '|' + weekEnding;
+    if(seen.has(key)){
+      dataIssues.push({label: participantsById[row.participantId]?.name || row.participantId, reason: 'Duplicate weekly check-in — first submission counted, this one excluded.'});
+      return;
+    }
+    seen.add(key);
+    completedIds.add(row.participantId);
+  });
+
+  const completed = completedIds.size;
+  const rate = expected ? (completed/expected*100) : null;
+
+  // Metric B — Feedback Submission Rate: ANY raw submission from an
+  // eligible learner this week (participation), independent of validity/dedup.
+  const anySubmitted = new Set(raw.map(r=>r.participantId).filter(id=>eligibleIds.has(id))).size;
+  const feedbackRate = expected ? (anySubmitted/expected*100) : null;
+
+  // Metric C — Learner Response Rate: of the VALID completed check-ins,
+  // how many carried a substantive learner response (challenge/blocker or
+  // next-week commitment filled in), vs. a bare/blank submission.
+  const respondedCount = raw.filter(r=> eligibleIds.has(r.participantId) && completedIds.has(r.participantId) &&
+    ((r.challenges && r.challenges.trim()) || (r.planNextWeek && r.planNextWeek.trim()))).length;
+  const responseRate = completed ? (respondedCount/completed*100) : null;
+
+  // Open vs. closed week — a week is still "open" (pending, not yet missed)
+  // for 7 days after weekEnding; once closed, non-completions become "missed".
+  const wkDate = weekEnding ? new Date(weekEnding) : null;
+  const isOpenWeek = wkDate && !isNaN(wkDate) ? daysBetween(wkDate, today()) < 7 : true;
+  const notCompleted = eligible.filter(({p})=> !completedIds.has(p.id));
+  const pending = isOpenWeek ? notCompleted.length : 0;
+  const missed = isOpenWeek ? 0 : notCompleted.length;
+
+  const atRiskEligible = eligible.filter(({eng})=> eng.risk==='Red').length;
+
+  return { weekEnding, expected, completed, rate, feedbackRate, responseRate,
+    pending, missed, notCompleted, atRiskEligible, dataIssues, eligible };
+}
+
+// Historical snapshotting (SOP section 17) — persists one KPI record per
+// reporting week to window.storage so the trend survives even if a
+// participant's status later changes (which would otherwise silently
+// rewrite past weeks if we always recomputed off *current* ParticipantDB
+// state). Snapshots are write-once: once a week is saved it is never
+// overwritten, matching "do not overwrite previous weeks."
+async function snapshotKpiWeek_(weekEnding, result){
+  const key = 'kpi-snapshot:' + weekEnding;
+  try{
+    await window.storage.get(key);
+    return; // already snapshotted — leave history intact
+  }catch(e){ /* not found yet — fall through and save */ }
+  try{
+    await window.storage.set(key, JSON.stringify({
+      weekEnding, expected: result.expected, completed: result.completed, rate: result.rate, savedAt: new Date().toISOString(),
+    }));
+  }catch(e){ /* storage unavailable — trend falls back to live recompute only */ }
+}
+
+async function loadKpiSnapshots_(){
+  const out = {};
+  try{
+    const {keys} = await window.storage.list('kpi-snapshot:');
+    for(const k of keys){
+      try{ const {value} = await window.storage.get(k); const parsed = JSON.parse(value); out[parsed.weekEnding] = parsed; }catch(e){}
+    }
+  }catch(e){}
+  return out;
+}
+
+function populateKpiFilters_(){
+  const progSel = document.getElementById('kpiFilterProg');
+  const cohortSel = document.getElementById('kpiFilterCohort');
+  const mentorSel = document.getElementById('kpiFilterMentor');
+  const weekSel = document.getElementById('kpiFilterWeek');
+  if(!progSel || !weekSel) return;
+  const progCur = progSel.value, cohortCur = cohortSel.value, mentorCur = mentorSel.value, weekCur = weekSel.value;
+
+  progSel.innerHTML = '<option value="">All programmes</option>' + BUNDLE.programmes
+    .slice().sort((a,b)=>a.code.localeCompare(b.code))
+    .map(pr=>`<option value="${pr.code}">${pr.code} — ${pr.name}</option>`).join('');
+  const cohorts = [...new Set(participants.map(p=>p.cohortId).filter(Boolean))].sort();
+  cohortSel.innerHTML = '<option value="">All cohorts</option>' + cohorts.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const mentors = [...new Set(participants.map(p=>p.mentor).filter(Boolean))].sort();
+  mentorSel.innerHTML = '<option value="">All mentors</option>' + mentors.map(m=>`<option value="${m}">${m}</option>`).join('');
+
+  const weeks = allReportingWeeks_();
+  weekSel.innerHTML = weeks.map((w,i)=>{
+    const d = new Date(w);
+    const label = (!isNaN(d) ? `Week of ${fmtShort(d)}` : w) + (i===0 ? ' (latest)' : '');
+    return `<option value="${w}">${label}</option>`;
+  }).join('') || '<option value="">No reporting weeks yet</option>';
+
+  if(BUNDLE.programmes.some(pr=>pr.code===progCur)) progSel.value = progCur;
+  if(cohorts.includes(cohortCur)) cohortSel.value = cohortCur;
+  if(mentors.includes(mentorCur)) mentorSel.value = mentorCur;
+  if(weeks.includes(weekCur)) weekSel.value = weekCur;
+}
+
+function selectedKpiWeek_(){
+  const sel = document.getElementById('kpiFilterWeek');
+  return sel && sel.value ? sel.value : (allReportingWeeks_()[0] || null);
+}
+
+function renderKpiTab(){
+  populateKpiFilters_();
+  const weekEnding = selectedKpiWeek_();
+  const result = weekEnding ? computeCheckinKpiForWeek_(weekEnding) : null;
+
+  // ---- data-source warning (SOP section 15) ----
+  const warnEl = document.getElementById('kpiWarningArea');
+  if(CHECKIN_STATUS.error){
+    warnEl.innerHTML = `<div class="kpi-warning">⚠ Check-in data source unavailable (${CHECKIN_STATUS.error}). Dashboard values may be outdated — showing the last successfully loaded data.</div>`;
+  } else if(!CHECKIN_STATUS.configured){
+    warnEl.innerHTML = `<div class="kpi-warning">⚠ Weekly check-in data source isn't connected yet. Set DATA_SOURCE.checkinsCsvUrl to calculate the real KPI.</div>`;
+  } else if(!weekEnding){
+    warnEl.innerHTML = `<div class="kpi-warning">⚠ No check-in submissions found yet for any reporting week.</div>`;
+  } else {
+    warnEl.innerHTML = '';
+  }
+
+  if(!result){
+    document.getElementById('kpiHeroActual').innerHTML = '—<small>Target 80%</small>';
+    document.getElementById('kpiHeroStatus').textContent = 'NO DATA';
+    document.getElementById('kpiCards').innerHTML = '';
+    document.getElementById('kpiTrendBody').innerHTML = '';
+    document.getElementById('kpiActionBody').innerHTML = '';
+    document.getElementById('kpiEvidenceGrid').innerHTML = '';
+    return;
+  }
+  snapshotKpiWeek_(weekEnding, result);
+
+  // ---- hero (management view — answers "are we hitting 80%?" in 5 seconds) ----
+  const rateTxt = result.rate===null ? '—' : result.rate.toFixed(0)+'%';
+  document.getElementById('kpiHeroActual').innerHTML = `${rateTxt}<small>Target ${KPI_TARGET}%</small>`;
+  document.getElementById('kpiHeroWeek').textContent = (()=>{ const d=new Date(weekEnding); return !isNaN(d)?`Week of ${fmtShort(d)}`:weekEnding; })();
+  document.getElementById('kpiHeroExpected').textContent = result.expected;
+  document.getElementById('kpiHeroCompleted').textContent = result.completed;
+  const variance = result.rate===null ? null : (result.rate - KPI_TARGET);
+  document.getElementById('kpiHeroVariance').textContent = variance===null ? '—' : `${variance>=0?'+':''}${variance.toFixed(0)} pts`;
+  const statusEl = document.getElementById('kpiHeroStatus');
+  const achieved = result.rate!==null && result.rate >= KPI_TARGET;
+  statusEl.textContent = result.rate===null ? 'NO DATA' : (achieved ? 'ACHIEVED' : 'BELOW TARGET');
+  statusEl.className = 'status-pill ' + (achieved ? 'achieved' : 'below');
+
+  // ---- three distinct metrics (SOP section 9) ----
+  document.getElementById('mcCompletion').textContent = rateTxt;
+  document.getElementById('mcFeedback').textContent = result.feedbackRate===null?'—':result.feedbackRate.toFixed(0)+'%';
+  document.getElementById('mcResponse').textContent = result.responseRate===null?'—':result.responseRate.toFixed(0)+'%';
+
+  // ---- 10 KPI cards (SOP section 4) ----
+  const cards = [
+    ['Expected Check-Ins', result.expected, ''],
+    ['Completed Check-Ins', result.completed, 'green'],
+    ['Check-In Completion Rate', rateTxt, achieved?'green':'rose'],
+    ['KPI Target', KPI_TARGET+'%', 'teal'],
+    ['Variance to Target', variance===null?'—':`${variance>=0?'+':''}${variance.toFixed(0)}pp`, variance===null?'':variance>=0?'green':'rose'],
+    ['Pending Check-Ins', result.pending, result.pending>0?'amber':'green'],
+    ['Missed Check-Ins', result.missed, result.missed>0?'rose':'green'],
+    ['At-Risk Learners', result.atRiskEligible, result.atRiskEligible>0?'rose':'green'],
+    ['Feedback Completion Rate', result.feedbackRate===null?'—':result.feedbackRate.toFixed(0)+'%', ''],
+    ['Learner Response Rate', result.responseRate===null?'—':result.responseRate.toFixed(0)+'%', ''],
+  ];
+  document.getElementById('kpiCards').innerHTML = cards.map(([lbl,num,cls])=>`
+    <div class="kpi ${cls}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
+  `).join('');
+
+  // ---- weekly trend, historical, never overwritten (SOP sections 10 & 17) ----
+  renderKpiTrend_();
+
+  // ---- learners requiring action (SOP section 13) ----
+  renderKpiActionTable_(result);
+
+  // ---- evidence page (SOP section 14) ----
+  renderKpiEvidence_(weekEnding, result);
+
+  // ---- data quality table for this week (SOP section 16) ----
+  const dqBody = document.getElementById('kpiDataQualityBody');
+  const dqEmpty = document.getElementById('kpiDataQualityEmpty');
+  if(result.dataIssues.length){
+    dqEmpty.style.display = 'none';
+    dqBody.innerHTML = result.dataIssues.map(i=>`<tr><td>${i.label}</td><td>${i.reason}</td></tr>`).join('');
+  } else {
+    dqBody.innerHTML = '';
+    dqEmpty.style.display = 'block';
+  }
+
+  const refreshTxt = KPI_LAST_REFRESH ? KPI_LAST_REFRESH.toLocaleString() : '—';
+  document.getElementById('kpiFootnote').textContent = `Last data refresh: ${refreshTxt} · Computed entirely in your browser from ParticipantDB + WeeklyFeedback.`;
+}
+
+async function renderKpiTrend_(){
+  const snapshots = await loadKpiSnapshots_();
+  const weeks = allReportingWeeks_();
+  const tbody = document.getElementById('kpiTrendBody');
+  if(!weeks.length){ tbody.innerHTML = '<tr><td colspan="6" class="muted">No reporting weeks yet</td></tr>'; return; }
+  const rows = weeks.map(w=>{
+    const live = computeCheckinKpiForWeek_(w);
+    // Prefer the write-once snapshot (locks in the numbers as of when that
+    // week was first evaluated) but fall back to a live recompute if this
+    // browser has no snapshot for it yet (e.g. first time this week is seen).
+    const snap = snapshots[w];
+    const expected = snap ? snap.expected : live.expected;
+    const completed = snap ? snap.completed : live.completed;
+    const rate = snap ? snap.rate : live.rate;
+    const rateTxt = rate===null ? '—' : rate.toFixed(0)+'%';
+    const achieved = rate!==null && rate >= KPI_TARGET;
+    const d = new Date(w);
+    return `<tr class="${w===selectedKpiWeek_()?'trend-target-line':''}">
+      <td>${!isNaN(d)?`Week of ${fmtShort(d)}`:w}</td>
+      <td>${expected}</td><td>${completed}</td>
+      <td><span class="badge ${achieved?'green':'rose'}">${rateTxt}</span></td>
+      <td>${KPI_TARGET}%</td>
+      <td>${rate===null?'<span class="muted">—</span>':achieved?'<span class="badge green">Achieved</span>':'<span class="badge rose">Below</span>'}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows.join('');
+}
+
+function renderKpiActionTable_(result){
+  const tbody = document.getElementById('kpiActionBody');
+  const emptyEl = document.getElementById('kpiActionEmpty');
+  const statusFilter = document.getElementById('kpiFilterCheckinStatus')?.value || '';
+  const weekIsOpen = result.pending > 0 || (result.pending===0 && result.missed===0);
+  if(statusFilter === 'Completed'){
+    // "Completed" learners have no action required — table intentionally empty for this filter.
+    tbody.innerHTML = '';
+    document.getElementById('kpiActionEmpty').style.display = 'block';
+    document.getElementById('kpiActionEmpty').textContent = 'Filtered to Completed — no action items to show (this table only lists non-completions).';
+    return;
+  }
+  if(statusFilter === 'Missed' && weekIsOpen){ tbody.innerHTML=''; emptyEl.style.display='block'; emptyEl.textContent='This reporting week is still open — nothing has "missed" yet, only pending.'; return; }
+  if(statusFilter === 'Pending' && !weekIsOpen){ tbody.innerHTML=''; emptyEl.style.display='block'; emptyEl.textContent='This reporting week is closed — nothing is "pending" anymore, only missed.'; return; }
+  const rows = [];
+  result.notCompleted.forEach(({p,eng})=>{
+    const reasons = [];
+    if(result.missed>0 || (result.pending===0 && result.missed===0)) reasons.push('Check-in missed this week');
+    else reasons.push('Check-in overdue / pending');
+    if(eng.risk==='Red') reasons.push('Risk flag: Red');
+    if(eng.daysSinceActivity===null || eng.daysSinceActivity > (SETTINGS.esc1||7)) reasons.push('No recent activity — learner unresponsive');
+    if(['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(eng.escalation)) reasons.push(`Escalation required: ${eng.escalation}`);
+    if(eng.bufferDays!==null && eng.bufferDays<0) reasons.push('Progress below expected pace');
+    rows.push({p,eng,reasons});
+  });
+  if(!rows.length){
+    tbody.innerHTML = '';
+    emptyEl.textContent = 'No learners currently need action for this selection. ✓';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  tbody.innerHTML = rows.map(({p,eng,reasons})=>`
+    <tr class="action-required-row" data-id="${p.id}" style="cursor:pointer;">
+      <td><div class="name">${p.name}</div><div class="pid">${p.id}</div></td>
+      <td><span class="prog-code">${p.programme}</span></td>
+      <td>${p.mentor || '<span class="muted">Unassigned</span>'}</td>
+      <td>${p.lastCheckin ? fmtShort(new Date(p.lastCheckin)) : '<span class="muted">Never</span>'}</td>
+      <td><span class="badge ${riskClass(eng.risk)}">${eng.risk||'—'}</span></td>
+      <td>${(eng.progressPct*100).toFixed(0)}%</td>
+      <td style="font-size:12px;">${reasons.join('; ')}</td>
+    </tr>`).join('');
+  tbody.querySelectorAll('tr').forEach(tr=> tr.addEventListener('click', ()=> openDrawer(tr.dataset.id)));
+}
+
+function renderKpiEvidence_(weekEnding, result){
+  const d = new Date(weekEnding);
+  const items = [
+    ['KPI', 'Self-Paced Learner Check-In Process'],
+    ['Target', KPI_TARGET+'%'],
+    ['Reporting period', !isNaN(d) ? `Week of ${fmtShort(d)}` : weekEnding],
+    ['Expected Check-Ins', result.expected],
+    ['Completed Check-Ins', result.completed],
+    ['Completion Rate', result.rate===null?'—':result.rate.toFixed(0)+'%'],
+    ['Variance', result.rate===null?'—':`${(result.rate-KPI_TARGET)>=0?'+':''}${(result.rate-KPI_TARGET).toFixed(0)} pts`],
+    ['KPI Status', result.rate===null?'—':(result.rate>=KPI_TARGET?'Achieved':'Below Target')],
+    ['Learners monitored', result.expected],
+    ['Check-ins completed', result.completed],
+    ['Missed check-ins', result.missed],
+    ['At-risk learners identified', result.atRiskEligible],
+    ['Escalations', result.notCompleted.filter(({eng})=>['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(eng.escalation)).length],
+    ['Feedback completion rate', result.feedbackRate===null?'—':result.feedbackRate.toFixed(0)+'%'],
+    ['Response rate', result.responseRate===null?'—':result.responseRate.toFixed(0)+'%'],
+  ];
+  document.getElementById('kpiEvidenceGrid').innerHTML = items.map(([k,v])=>`
+    <div class="ev-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
 function switchTab(tab){
   document.getElementById('tabDashboard').classList.toggle('active', tab==='dashboard');
   document.getElementById('tabCheckins').classList.toggle('active', tab==='checkins');
+  document.getElementById('tabKpi').classList.toggle('active', tab==='kpi');
   document.getElementById('dashboardView').style.display = tab==='dashboard' ? '' : 'none';
   document.getElementById('checkinsView').style.display = tab==='checkins' ? '' : 'none';
+  document.getElementById('kpiView').style.display = tab==='kpi' ? '' : 'none';
+  if(tab==='kpi') renderKpiTab();
 }
 
 async function openCheckinDrawer(id){
@@ -2973,6 +3452,7 @@ async function createParticipant(){
 // ---------- boot ----------
 async function boot(){
   await refreshLiveData_();
+  KPI_LAST_REFRESH = new Date();
   updateCohortRulePill();
   populateProgFilter();
   populateCheckinWeekFilter();
@@ -3009,12 +3489,19 @@ async function boot(){
 
   document.getElementById('tabDashboard').addEventListener('click', ()=>switchTab('dashboard'));
   document.getElementById('tabCheckins').addEventListener('click', ()=>switchTab('checkins'));
+  document.getElementById('tabKpi').addEventListener('click', ()=>switchTab('kpi'));
   document.getElementById('checkinSearch').addEventListener('input', renderCheckinsTable);
   document.getElementById('checkinWeekFilter').addEventListener('change', renderCheckinsTable);
   document.getElementById('openFormBtn').addEventListener('click', ()=>{
     if(CHECKIN_FORM_URL) window.open(CHECKIN_FORM_URL, '_blank');
     else showToast('Add your Google Form link to CHECKIN_FORM_URL in the script.');
   });
+  ['kpiFilterWeek','kpiFilterProg','kpiFilterCohort','kpiFilterMentor','kpiFilterRisk','kpiFilterCheckinStatus'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', renderKpiTab);
+  });
+  const kpiPrintBtn = document.getElementById('kpiPrintBtn');
+  if(kpiPrintBtn) kpiPrintBtn.addEventListener('click', ()=> window.print());
 
   renderAll();
 
