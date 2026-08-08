@@ -491,6 +491,7 @@
     <div class="panel-head">
       <div><h2>Filters</h2><div class="sub">All cards, the trend and the tables below respond to these</div></div>
       <div class="kpi-filter-row">
+        <select id="kpiFilterQuarter"></select>
         <select id="kpiFilterWeek"></select>
         <select id="kpiFilterProg"><option value="">All programmes</option></select>
         <select id="kpiFilterCohort"><option value="">All cohorts</option></select>
@@ -2576,6 +2577,35 @@ function renderCheckinsTable(){
 const KPI_TARGET = 80;
 let KPI_LAST_REFRESH = null;
 
+// -----------------------------------------------------------------------
+// REPORTING QUARTERS
+// -----------------------------------------------------------------------
+// Calendar-aligned quarters. Edit the start/end dates here if your fiscal
+// year isn't calendar-aligned — nothing else in the KPI engine needs to
+// change, everything downstream reads from this list. `end` is inclusive.
+const QUARTERS = [
+  { id: 'Q1-2026', label: 'Q1 2026 (Jan–Mar)', start: '2026-01-01', end: '2026-03-31' },
+  { id: 'Q2-2026', label: 'Q2 2026 (Apr–Jun)', start: '2026-04-01', end: '2026-06-30' },
+  { id: 'Q3-2026', label: 'Q3 2026 (Jul–Sep)', start: '2026-07-01', end: '2026-09-30' },
+];
+// Which quarter is selected by default when the tab first loads. Reviewing
+// Q3 right now, per the appraisal window ending 30 Sep 2026.
+const DEFAULT_QUARTER_ID = 'Q3-2026';
+
+function currentQuarter_(){
+  const sel = document.getElementById('kpiFilterQuarter');
+  const id = sel ? sel.value : DEFAULT_QUARTER_ID;
+  return QUARTERS.find(q=>q.id===id) || QUARTERS.find(q=>q.id===DEFAULT_QUARTER_ID) || null;
+}
+
+function weekInQuarter_(weekEnding, quarter){
+  if(!quarter) return true;
+  const d = new Date(weekEnding);
+  if(isNaN(d)) return false;
+  return d >= new Date(quarter.start) && d <= new Date(quarter.end);
+}
+
+
 // A learner is "eligible" for a weekly check-in if they are a real,
 // currently in-progress self-paced learner: not a data-quality placeholder
 // row, not yet Completed, and not Defaulted (Defaulted learners have exited
@@ -2597,9 +2627,12 @@ function validateCheckinRow_(row, participantsById){
   return {valid:true, reason:null};
 }
 
-// Every distinct reporting week present in the check-in data, newest first.
+// Every distinct reporting week present in the check-in data, newest first,
+// scoped to the currently selected quarter (see QUARTERS above).
 function allReportingWeeks_(){
+  const quarter = currentQuarter_();
   return [...new Set((BUNDLE.checkins||[]).map(en=> en.weekEnding || (en.timestamp||'').slice(0,10)).filter(Boolean))]
+    .filter(w=> weekInQuarter_(w, quarter))
     .sort((a,b)=> new Date(b)-new Date(a));
 }
 
@@ -2709,12 +2742,19 @@ async function loadKpiSnapshots_(){
 }
 
 function populateKpiFilters_(){
+  const quarterSel = document.getElementById('kpiFilterQuarter');
   const progSel = document.getElementById('kpiFilterProg');
   const cohortSel = document.getElementById('kpiFilterCohort');
   const mentorSel = document.getElementById('kpiFilterMentor');
   const weekSel = document.getElementById('kpiFilterWeek');
   if(!progSel || !weekSel) return;
   const progCur = progSel.value, cohortCur = cohortSel.value, mentorCur = mentorSel.value, weekCur = weekSel.value;
+
+  if(quarterSel && !quarterSel.dataset.init){
+    quarterSel.innerHTML = QUARTERS.map(q=>`<option value="${q.id}">${q.label}</option>`).join('');
+    quarterSel.value = DEFAULT_QUARTER_ID;
+    quarterSel.dataset.init = '1'; // only set the default once — after that, respect the user's own selection
+  }
 
   progSel.innerHTML = '<option value="">All programmes</option>' + BUNDLE.programmes
     .slice().sort((a,b)=>a.code.localeCompare(b.code))
@@ -2832,8 +2872,11 @@ function renderKpiTab(){
 async function renderKpiTrend_(){
   const snapshots = await loadKpiSnapshots_();
   const weeks = allReportingWeeks_();
+  const quarter = currentQuarter_();
+  const subEl = document.getElementById('kpiTrendSub');
+  if(subEl) subEl.textContent = `${quarter ? quarter.label + ' — ' : ''}historical performance, every week kept, never overwritten`;
   const tbody = document.getElementById('kpiTrendBody');
-  if(!weeks.length){ tbody.innerHTML = '<tr><td colspan="6" class="muted">No reporting weeks yet</td></tr>'; return; }
+  if(!weeks.length){ tbody.innerHTML = `<tr><td colspan="6" class="muted">No reporting weeks in ${quarter?quarter.label:'this range'} yet</td></tr>`; return; }
   const rows = weeks.map(w=>{
     const live = computeCheckinKpiForWeek_(w);
     // Prefer the write-once snapshot (locks in the numbers as of when that
@@ -2904,10 +2947,12 @@ function renderKpiActionTable_(result){
 
 function renderKpiEvidence_(weekEnding, result){
   const d = new Date(weekEnding);
+  const quarter = currentQuarter_();
   const items = [
     ['KPI', 'Self-Paced Learner Check-In Process'],
     ['Target', KPI_TARGET+'%'],
-    ['Reporting period', !isNaN(d) ? `Week of ${fmtShort(d)}` : weekEnding],
+    ['Quarter', quarter ? `${quarter.label} · ${quarter.start} to ${quarter.end}` : '—'],
+    ['Reporting period (week)', !isNaN(d) ? `Week of ${fmtShort(d)}` : weekEnding],
     ['Expected Check-Ins', result.expected],
     ['Completed Check-Ins', result.completed],
     ['Completion Rate', result.rate===null?'—':result.rate.toFixed(0)+'%'],
@@ -3496,9 +3541,12 @@ async function boot(){
     if(CHECKIN_FORM_URL) window.open(CHECKIN_FORM_URL, '_blank');
     else showToast('Add your Google Form link to CHECKIN_FORM_URL in the script.');
   });
-  ['kpiFilterWeek','kpiFilterProg','kpiFilterCohort','kpiFilterMentor','kpiFilterRisk','kpiFilterCheckinStatus'].forEach(id=>{
+  ['kpiFilterQuarter','kpiFilterWeek','kpiFilterProg','kpiFilterCohort','kpiFilterMentor','kpiFilterRisk','kpiFilterCheckinStatus'].forEach(id=>{
     const el = document.getElementById(id);
-    if(el) el.addEventListener('change', renderKpiTab);
+    if(el) el.addEventListener('change', ()=>{
+      if(id==='kpiFilterQuarter') document.getElementById('kpiFilterWeek').value = ''; // week list is about to change under it
+      renderKpiTab();
+    });
   });
   const kpiPrintBtn = document.getElementById('kpiPrintBtn');
   if(kpiPrintBtn) kpiPrintBtn.addEventListener('click', ()=> window.print());
