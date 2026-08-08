@@ -676,7 +676,7 @@ const ADMIN_EMAIL = 'ubong@10alytics.org';
 // the browser that made them). Deploy Code.gs (see README) and paste the
 // resulting /exec URL here. Leave blank to fall back to the old
 // browser-only local draft behaviour.
-const MENTOR_API_URL = 'https://script.google.com/a/macros/10alytics.org/s/AKfycbwaZneiMWXWq_s0bophhSIy0zQ3dpecDkOsTdMD4alzjjjpjTIcSIOUDl4ytrbRSqO-9Q/exec';
+const MENTOR_API_URL = 'https://script.google.com/a/macros/10alytics.org/s/AKfycby8Xni1T6yJ81mIfjlJTDLdkhApypYp7PfRZinHLYsEdDKH_aT3zxWvQwIjGciAr8Cu/exec';
 // This is just the NAME of the browser-storage slot the admin token gets
 // kept in for the session — it is NOT the token itself. The real secret
 // (whatever you set ADMIN_TOKEN to in Code.gs) gets typed into the
@@ -809,6 +809,45 @@ async function updateParticipantInSheet_(participantId, fields){
       mode:'no-cors',
       body: JSON.stringify({ action:'updateParticipant', token, participantId, fields })
     });
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+// Sends a brand-new participant straight to the ParticipantDB sheet via the
+// same Apps Script backend used for mentor/profile edits. Mirrors
+// postMentorToSheet_ / updateParticipantInSheet_ exactly, so it needs a
+// matching 'addParticipant' case added to Code.gs (see README) — until
+// that's deployed, this will no-op and the participant stays local-only
+// (same as before this patch).
+async function addParticipantToSheet_(p){
+  if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
+  const token = ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — participant was NOT synced to the Sheet.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({
+        action:'addParticipant',
+        token,
+        participantId: p.id,
+        fields: {
+          Participant_ID: p.id,
+          Full_Name: p.name,
+          Email: p.email,
+          Programme_Code: p.programme,
+          Cohort_ID: p.cohortId,
+          Payment_Status: p.paymentStatus,
+          Preferred_Study_Days_Per_Week: p.preferredDays,
+          Hours_Available_Per_Day: p.hoursPerDay,
+          Modules_Completed: p.modulesCompleted,
+        }
+      })
+    });
+    // no-cors again means we can't read success/failure back — see the note
+    // above postMentorToSheet_ for why.
     return { ok:true, sent:true };
   }catch(e){
     return { ok:false, error: e.message };
@@ -3491,7 +3530,15 @@ async function createParticipant(){
   await saveExtraParticipants(extra);
   closeDrawer();
   renderAll();
-  showToast('Participant added.');
+
+  const sync = await addParticipantToSheet_(p);
+  if(sync.ok && sync.sent){
+    showToast('Participant added and sent to the Sheet — check ParticipantDB to confirm.');
+  } else if(sync.skipped){
+    showToast('Participant added locally only — Sheet sync needs Code.gs to support "addParticipant" and an admin token. See README.');
+  } else {
+    showToast('Participant added locally, but Sheet sync failed: ' + (sync.error || 'unknown error'));
+  }
 }
 
 // ---------- boot ----------
