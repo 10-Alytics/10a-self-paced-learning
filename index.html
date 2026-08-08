@@ -306,6 +306,20 @@
 
 <div id="flagArea"></div>
 
+<div id="intakeReconcileBanner"></div>
+
+<div class="panel" id="intakePanel">
+  <div class="panel-head">
+    <div><h2>New participants by week</h2><div class="sub" id="intakeSub">Grouped by when each participant was added — helps catch anyone stuck outside the Sheet</div></div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Week</th><th>Added</th><th>In ParticipantDB?</th><th>Names</th></tr></thead>
+      <tbody id="intakeTbody"></tbody>
+    </table>
+  </div>
+</div>
+
 <div class="panel" id="chartsPanel">
   <div class="panel-head">
     <div><h2>Overview</h2><div class="sub">Visual snapshot of the full participant list — unaffected by the filters below</div></div>
@@ -1090,6 +1104,24 @@ let participants = [];
 let sortKey = 'risk';
 let sortDir = 1;
 let activeId = null;
+// Participants that only exist in this browser's local storage — added on
+// the site but not (yet, or not successfully) written to ParticipantDB.
+// Populated fresh in boot() every load. This is what the reconciliation
+// banner and weekly-intake panel use to explain count mismatches.
+let UNSYNCED_EXTRA = [];
+
+// Monday (00:00) of the week containing d, used to bucket participants by
+// intake week. Returns null for anything unparseable.
+function mondayOf_(d){
+  const dt = new Date(d);
+  if(isNaN(dt)) return null;
+  const day = dt.getDay();
+  const diff = (day===0 ? -6 : 1) - day;
+  const m = new Date(dt);
+  m.setDate(dt.getDate()+diff);
+  m.setHours(0,0,0,0);
+  return m;
+}
 
 // ---------- persistence ----------
 async function loadOverrides(id){
@@ -2497,6 +2529,78 @@ function getFiltered(){
   return computed;
 }
 
+// Groups every participant by the Monday of the week they were added, and
+// shows a reconciliation banner explaining any gap between "what's on the
+// site" and "what's actually in ParticipantDB". Source of the "added"
+// date, in priority order: addedAt (set when someone uses "Add
+// participant" on this patched version going forward), then
+// SelfPaced_Approval_Date, then SelfPaced_Request_Date from the Sheet —
+// falling back to "Unknown" for older rows that have none of these.
+function renderIntakePanel(){
+  const banner = document.getElementById('intakeReconcileBanner');
+  const liveCount = BUNDLE.participants.length;
+  const siteCount = participants.length;
+  if(banner){
+    if(UNSYNCED_EXTRA.length){
+      const names = UNSYNCED_EXTRA.map(p=>`${p.name} (${p.id})`).join(', ');
+      banner.innerHTML = `<div class="kpi-warning" style="margin:0 0 16px;">
+        Live Sheet shows ${liveCount} participants, this page shows ${siteCount} —
+        ${UNSYNCED_EXTRA.length} added here ${UNSYNCED_EXTRA.length===1?'hasn\'t':'haven\'t'} reached ParticipantDB yet:
+        <b>${names}</b>. Re-check the Sheet sync (admin token, Code.gs deployment) or re-add ${UNSYNCED_EXTRA.length===1?'them':'them'} once it's fixed.
+      </div>`;
+    } else if(liveCount !== siteCount){
+      banner.innerHTML = `<div class="kpi-warning" style="margin:0 0 16px;">
+        Live Sheet shows ${liveCount} participants, this page shows ${siteCount} — worth a hard refresh
+        (Ctrl/Cmd+Shift+R) in case the published CSV hasn't caught up yet.
+      </div>`;
+    } else {
+      banner.innerHTML = '';
+    }
+  }
+
+  const tbody = document.getElementById('intakeTbody');
+  if(!tbody) return;
+  const buckets = {}; // key -> { monday, items: [{p, synced}] }
+  participants.forEach(p=>{
+    const dateStr = p.addedAt || p.approvalDate || p.requestDate || null;
+    const mon = dateStr ? mondayOf_(dateStr) : null;
+    const key = mon ? mon.toISOString().slice(0,10) : 'unknown';
+    buckets[key] = buckets[key] || { monday: mon, items: [] };
+    buckets[key].items.push({ p, synced: !UNSYNCED_EXTRA.some(e=>e.id===p.id) });
+  });
+
+  const keys = Object.keys(buckets).sort((a,b)=>{
+    if(a==='unknown') return 1;
+    if(b==='unknown') return -1;
+    return new Date(b) - new Date(a); // most recent week first
+  });
+
+  if(!keys.length){
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">No participants yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = keys.map(key=>{
+    const bucket = buckets[key];
+    const weekLabel = bucket.monday
+      ? `Week of ${fmtShort(bucket.monday)}`
+      : 'Unknown / no date recorded';
+    const allSynced = bucket.items.every(i=>i.synced);
+    const statusBadge = allSynced
+      ? `<span class="badge green">In Sheet</span>`
+      : `<span class="badge rose">${bucket.items.filter(i=>!i.synced).length} not synced</span>`;
+    const names = bucket.items.map(i=>
+      i.synced ? i.p.name : `<b style="color:var(--rose)">${i.p.name} ⚠</b>`
+    ).join(', ');
+    return `<tr>
+      <td>${weekLabel}</td>
+      <td>${bucket.items.length}</td>
+      <td>${statusBadge}</td>
+      <td>${names}</td>
+    </tr>`;
+  }).join('');
+}
+
 function renderAll(){
   const computed = getFiltered();
   renderKPIs(participants.map(p=>({p,eng:computeEngine(p)}))); // KPIs always reflect ALL participants, unfiltered
@@ -2509,6 +2613,7 @@ function renderAll(){
   renderOnboardingStatus();
   renderCharts(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinsTable();
+  renderIntakePanel();
   const kpiViewEl = document.getElementById('kpiView');
   if(kpiViewEl && kpiViewEl.style.display !== 'none') renderKpiTab();
 }
@@ -3522,7 +3627,8 @@ async function createParticipant(){
     cohortId: document.getElementById('n_cohortId').value.trim(),
     paymentStatus: document.getElementById('n_payment').value,
     preferredDays: 2, hoursPerDay: 2, modulesCompleted: 0,
-    lastCheckin: null, comments: ''
+    lastCheckin: null, comments: '',
+    addedAt: new Date().toISOString(),
   };
   participants.push(p);
   const extra = await loadExtraParticipants();
@@ -3554,7 +3660,16 @@ async function boot(){
   const base = JSON.parse(JSON.stringify(BUNDLE.participants));
   const removed = await loadRemoved();
   const extra = await loadExtraParticipants();
-  let all = base.filter(p => !removed.includes(p.id)).concat(extra.filter(p=>!removed.includes(p.id)));
+  const baseIds = new Set(base.map(p=>p.id));
+  // Once a locally-added participant shows up in the live Sheet data, the
+  // Sheet copy (base) wins and the local copy is dropped from the merged
+  // list — otherwise they'd be double-counted forever (this was happening
+  // before: local storage never got cleared out after a successful sync).
+  // Whatever's LEFT in extra-but-not-in-base is genuinely still unsynced —
+  // that's the gap between "what the app shows" and "what's really in the
+  // Sheet", surfaced in the reconciliation banner below.
+  UNSYNCED_EXTRA = extra.filter(p => !baseIds.has(p.id) && !removed.includes(p.id));
+  let all = base.filter(p => !removed.includes(p.id)).concat(UNSYNCED_EXTRA);
 
   // apply any saved edits on top of base data
   for(const p of all){
