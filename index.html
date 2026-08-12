@@ -216,8 +216,15 @@
   .toast{
     position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
     background:var(--navy);color:#fff;padding:10px 18px;border-radius:10px;font-size:12.5px;transition:all .25s ease;z-index:100;
+    display:flex;align-items:center;gap:12px;max-width:90vw;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast .toast-action{
+    background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);color:#fff;
+    padding:4px 10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none;
+  }
+  .toast .toast-action:hover{background:rgba(255,255,255,.24);}
+  #removedBtn.has-removed{border-color:var(--rose);color:var(--rose);}
   .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
   .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
   @media (max-width:640px){ .kpis{margin:-24px 12px 0;} .main{padding:0 12px;} }
@@ -362,6 +369,7 @@
         <button id="assignMentorsBtn">Assign mentors</button>
         <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
         <button id="exportAtRiskPdfBtn" title="Export everyone currently At Risk or Defaulted as a PDF">Export at-risk (PDF)</button>
+        <button id="removedBtn" title="View and restore anyone removed from your local view">↩ Removed</button>
         <button class="primary" id="addBtn">+ Add participant</button>
       </div>
     </div>
@@ -572,7 +580,7 @@
   <div class="drawer" id="drawer"></div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
 
 </div><!-- /appRoot -->
 
@@ -3433,22 +3441,110 @@ async function saveDrawer(p){
 
 async function removeParticipant(id){
   if(!confirm('Remove this participant from the tracker? This only affects your local view.')) return;
-  participants = participants.filter(p=>p.id!==id);
+  const p = participants.find(x=>x.id===id);
+  participants = participants.filter(x=>x.id!==id);
   const removed = await loadRemoved();
-  removed.push(id);
+  if(!removed.includes(id)) removed.push(id);
   await saveRemoved(removed);
   closeDrawer();
   renderAll();
-  showToast('Participant removed.');
+  updateRemovedBtnLabel_();
+  showToast('Removed ' + (p ? p.name : id) + ' from your local view.', {
+    label: 'Undo',
+    onClick: () => restoreParticipant(id),
+  });
+}
+
+// Brings a participant back into the local view. This never touches the
+// Sheet — "removed" only ever filtered the local table (see removeParticipant),
+// so undoing it is just dropping the ID from the local removed-list and
+// re-merging them from the same source (BUNDLE.participants / UNSYNCED_EXTRA)
+// used at boot, with any saved edits (incl. mentor) re-applied on top.
+async function restoreParticipant(id){
+  const removed = await loadRemoved();
+  const idx = removed.indexOf(id);
+  if(idx === -1){ showToast('That participant is not in your removed list.'); return; }
+  removed.splice(idx, 1);
+  await saveRemoved(removed);
+
+  if(!participants.some(x=>x.id===id)){
+    const source = BUNDLE.participants.find(b=>b.id===id) || UNSYNCED_EXTRA.find(e=>e.id===id);
+    if(source){
+      const p = JSON.parse(JSON.stringify(source));
+      const ov = await loadOverrides(id);
+      Object.assign(p, ov);
+      participants.push(p);
+    }
+  }
+
+  renderAll();
+  updateRemovedBtnLabel_();
+  showToast('Restored — back in the tracker, mentor assignment unchanged.');
+}
+
+// Shows every locally-removed participant (name/ID pulled from the same
+// source data so it reads correctly even after a page reload) with a
+// one-click Restore per row.
+async function openRemovedDrawer(){
+  const removed = await loadRemoved();
+  const rows = removed.map(id=>{
+    const src = BUNDLE.participants.find(b=>b.id===id) || UNSYNCED_EXTRA.find(e=>e.id===id);
+    const name = src ? src.name : '(unknown)';
+    const email = src ? (src.email||'') : '';
+    const serial = src ? (src.serial||'') : '';
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);">
+        <div>
+          <div class="name">${name}</div>
+          <div class="pid">${serial ? serial + ' · ' : ''}${id}</div>
+          ${email ? `<div class="email">${email}</div>` : ''}
+        </div>
+        <button class="primary restore-one-btn" data-id="${id}">Restore</button>
+      </div>`;
+  }).join('') || `<div class="muted" style="padding:14px 0;">Nothing removed right now — your local view matches the Sheet.</div>`;
+
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>Removed participants</h3>
+      <div class="muted">Removed only from your local view — nothing here was deleted from the Sheet. Restoring brings someone straight back into your table with their mentor assignment and edits intact.</div>
+    </div>
+    <div class="drawer-body">${rows}</div>
+    <div class="save-row"><button class="ghost" id="closeRemovedBtn" style="flex:1;">Close</button></div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeRemovedBtn').onclick = closeDrawer;
+  document.querySelectorAll('.restore-one-btn').forEach(btn=>{
+    btn.onclick = () => restoreParticipant(btn.dataset.id);
+  });
+}
+
+async function updateRemovedBtnLabel_(){
+  const btn = document.getElementById('removedBtn');
+  if(!btn) return;
+  const removed = await loadRemoved();
+  btn.textContent = removed.length ? `↩ Removed (${removed.length})` : '↩ Removed';
+  btn.classList.toggle('has-removed', removed.length > 0);
 }
 
 let toastTimer;
-function showToast(msg){
+// action = { label, onClick } to show a clickable button inside the toast
+// (used for "Undo" right after a removal). Toast stays up longer when an
+// action is present, since the person needs a moment to read + click it.
+function showToast(msg, action){
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  document.getElementById('toastMsg').textContent = msg;
+  const old = t.querySelector('.toast-action');
+  if(old) old.remove();
+  if(action){
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = action.label;
+    btn.onclick = () => { t.classList.remove('show'); clearTimeout(toastTimer); action.onClick(); };
+    t.appendChild(btn);
+  }
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), action ? 6000 : 2200);
 }
 
 // ---------- mentor auto-assignment ----------
@@ -3689,6 +3785,7 @@ async function boot(){
     document.getElementById(id).addEventListener('input', renderAll);
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
+  document.getElementById('removedBtn').addEventListener('click', openRemovedDrawer);
   document.getElementById('assignMentorsBtn').addEventListener('click', openAssignMentorsDrawer);
   document.getElementById('exportAtRiskCsvBtn').addEventListener('click', exportAtRiskCsv);
   document.getElementById('exportAtRiskPdfBtn').addEventListener('click', exportAtRiskPdf);
@@ -3714,6 +3811,7 @@ async function boot(){
   if(kpiPrintBtn) kpiPrintBtn.addEventListener('click', ()=> window.print());
 
   renderAll();
+  updateRemovedBtnLabel_();
 
   // ---- access control: hide/lock mentor-assignment controls for non-admins ----
   const assignBtn = document.getElementById('assignMentorsBtn');
