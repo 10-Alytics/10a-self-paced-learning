@@ -5,6 +5,7 @@
 <title>SPLMS — Self-Paced Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --ink:#0F172A;
@@ -298,6 +299,7 @@
     <button class="tab-btn active" data-tab="dashboard" id="tabDashboard">Dashboard</button>
     <button class="tab-btn" data-tab="checkins" id="tabCheckins">Weekly Check-ins</button>
     <button class="tab-btn" data-tab="kpi" id="tabKpi">KPI Evidence</button>
+    <button class="tab-btn" data-tab="reports" id="tabReports">Weekly Report</button>
   </div>
 </div>
 
@@ -586,6 +588,82 @@
   </div>
 
   <p class="footnote" id="kpiFootnote">Last data refresh: — · Computed entirely in your browser from ParticipantDB + WeeklyFeedback.</p>
+</div>
+
+<div class="main" id="reportsView" style="display:none;">
+
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Weekly Report</h2><div class="sub">Walk through the tracker with filters, then download the result — everything below responds to the filters</div></div>
+      <div class="kpi-filter-row">
+        <select id="rfWeek"><option value="">Most recent check-in per learner</option></select>
+        <select id="rfProg"><option value="">All programmes</option></select>
+        <select id="rfCohort"><option value="">All cohorts</option></select>
+        <select id="rfMentor"><option value="">All mentors</option></select>
+        <select id="rfRisk"><option value="">All risk</option><option>Green</option><option>Yellow</option><option>Red</option></select>
+        <select id="rfStatus">
+          <option value="">All status</option>
+          <option value="Active">Active</option>
+          <option value="Needs Follow-up">Needs Follow-up</option>
+          <option value="At Risk">At Risk</option>
+          <option value="Defaulted">Defaulted</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <select id="rfPayment">
+          <option value="">All payment status</option>
+          <option value="Verified">Verified</option>
+          <option value="Pending">Pending</option>
+          <option value="Declined">Payment Defaulter</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--ink-soft);">
+          <input type="checkbox" id="rfIncludeComments" style="width:auto;margin:0;" checked>
+          Include feedback / comments
+        </label>
+      </div>
+    </div>
+    <div style="padding:14px 18px 4px;" class="sub" id="reportFilterSummary">—</div>
+  </div>
+
+  <div class="kpis" id="reportKpis" style="position:static;margin:14px 0 0;"></div>
+
+  <div class="panel" style="margin-top:18px;">
+    <div class="panel-head">
+      <div><h2>Roster for this selection</h2><div class="sub" id="reportRosterSub">—</div></div>
+      <div class="controls">
+        <button class="primary" id="reportPdfBtn">📄 Download PDF</button>
+        <button id="reportXlsxBtn">📊 Download Excel (.xlsx)</button>
+        <button id="reportCsvBtn">Download CSV</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Participant</th><th>Programme</th><th>Cohort</th><th>Mentor</th>
+            <th>Progress</th><th>Risk</th><th>Status</th><th>Payment</th>
+          </tr>
+        </thead>
+        <tbody id="reportRosterTbody"></tbody>
+      </table>
+      <div class="checkin-empty" id="reportRosterEmpty" style="display:none;">No participants match this filter combination.</div>
+    </div>
+    <div class="admin-only-note" style="margin:0 18px 16px;">
+      A true <code>.pbix</code> file can only be authored inside Power BI Desktop — it isn't a plain data format a
+      browser can generate. The Excel download above is the practical equivalent: open Power BI Desktop → Get Data →
+      Excel → point it at this file (or paste the CSV in). Build your visuals once and save that as your <code>.pbix</code>;
+      after that, refreshing just means re-exporting this file each week and hitting Refresh in Power BI.
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;" id="reportFeedbackPanel">
+    <div class="panel-head">
+      <div><h2>Feedback &amp; comments</h2><div class="sub" id="reportFeedbackSub">—</div></div>
+    </div>
+    <div style="padding:16px 18px;" id="reportFeedbackBody"></div>
+    <div class="checkin-empty" id="reportFeedbackEmpty" style="display:none;">No check-in feedback for this selection.</div>
+  </div>
+
+  <p class="footnote" id="reportFootnote">Generated entirely in your browser from the same live data as the rest of this tracker.</p>
 </div>
 
 <div class="overlay" id="overlay">
@@ -2542,6 +2620,62 @@ function renderCharts(computed){
       scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, x:{ grid:{ display:false } } },
     },
   });
+
+  // Caseload by mentor (including an "Unassigned" bucket)
+  const mentorCounts = {};
+  TEAM_MEMBERS.forEach(m=> mentorCounts[m] = 0);
+  let unassignedCount = 0;
+  computed.forEach(({p})=>{ p.mentor ? (mentorCounts[p.mentor] = (mentorCounts[p.mentor]||0)+1) : unassignedCount++; });
+  const mentorLabels = [...TEAM_MEMBERS, 'Unassigned'];
+  const mentorData = [...TEAM_MEMBERS.map(m=>mentorCounts[m]||0), unassignedCount];
+  document.getElementById('chartMentorSub').textContent = unassignedCount>0 ? `${unassignedCount} unassigned` : 'Everyone has a mentor';
+  destroyChart_('mentor');
+  CHART_INSTANCES.mentor = new Chart(document.getElementById('chartMentor'), {
+    type: 'bar',
+    data: {
+      labels: mentorLabels,
+      datasets: [{ data: mentorData, backgroundColor: mentorLabels.map(l=> l==='Unassigned' ? '#94A3B8' : '#0F766E'), borderRadius: 5, maxBarThickness: 40 }],
+    },
+    options: {
+      indexAxis: 'y',
+      plugins:{ legend:{ display:false }, tooltip:{ displayColors:false } },
+      scales:{ x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
+    },
+  });
+
+  // Weekly check-in trend — submissions per week (bars) + % met commitment (line, right axis)
+  const byWeek = {};
+  (BUNDLE.checkins||[]).forEach(en=>{
+    const key = en.weekEnding || (en.timestamp||'').slice(0,10);
+    if(!key) return;
+    byWeek[key] = byWeek[key] || {n:0, metYes:0, metTotal:0};
+    byWeek[key].n++;
+    if(en.metCommitment){ byWeek[key].metTotal++; if(/yes/i.test(en.metCommitment)) byWeek[key].metYes++; }
+  });
+  const weekKeys = Object.keys(byWeek).sort((a,b)=> new Date(a)-new Date(b));
+  const weekLabels = weekKeys.map(k=>{ const d = new Date(k); return !isNaN(d) ? fmtShort(d) : k; });
+  document.getElementById('chartWeeklySub').textContent = weekKeys.length ? `${weekKeys.length} week(s) of data` : 'No check-in submissions yet';
+  destroyChart_('weekly');
+  const weeklyCanvas = document.getElementById('chartWeekly');
+  if(weeklyCanvas){
+    CHART_INSTANCES.weekly = new Chart(weeklyCanvas, {
+      data: {
+        labels: weekLabels,
+        datasets: [
+          { type:'bar', label:'Submissions', data: weekKeys.map(k=>byWeek[k].n), backgroundColor:'#D9631F', borderRadius:4, maxBarThickness:36, yAxisID:'y' },
+          { type:'line', label:'% met commitment', data: weekKeys.map(k=> byWeek[k].metTotal ? Math.round(byWeek[k].metYes/byWeek[k].metTotal*100) : null), spanGaps:true, borderColor:'#15803D', backgroundColor:'#15803D', tension:.3, yAxisID:'y1', pointRadius:4 },
+        ],
+      },
+      options: {
+        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:12, font:{size:11} } } },
+        scales:{
+          y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' }, title:{ display:true, text:'Submissions', font:{size:10.5} } },
+          y1:{ beginAtZero:true, max:100, position:'right', grid:{ display:false }, ticks:{ callback:(v)=>v+'%' }, title:{ display:true, text:'% met commitment', font:{size:10.5} } },
+          x:{ grid:{ display:false } },
+        },
+      },
+    });
+  }
 }
 
 // ---------- per-participant drawer charts ----------
@@ -2607,61 +2741,6 @@ function renderDrawerCharts(p, eng){
       options: {
         plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:(item)=> item.raw===1?'Met commitment':item.raw===0?'Missed commitment':'No data' } } },
         scales:{ y:{ min:-0.2, max:1.2, ticks:{ stepSize:1, callback:(v)=> v===1?'Yes':v===0?'No':'' } }, x:{ grid:{ display:false } } },
-      },
-    });
-  }
-  // Caseload by mentor (including an "Unassigned" bucket)
-  const mentorCounts = {};
-  TEAM_MEMBERS.forEach(m=> mentorCounts[m] = 0);
-  let unassignedCount = 0;
-  computed.forEach(({p})=>{ p.mentor ? (mentorCounts[p.mentor] = (mentorCounts[p.mentor]||0)+1) : unassignedCount++; });
-  const mentorLabels = [...TEAM_MEMBERS, 'Unassigned'];
-  const mentorData = [...TEAM_MEMBERS.map(m=>mentorCounts[m]||0), unassignedCount];
-  document.getElementById('chartMentorSub').textContent = unassignedCount>0 ? `${unassignedCount} unassigned` : 'Everyone has a mentor';
-  destroyChart_('mentor');
-  CHART_INSTANCES.mentor = new Chart(document.getElementById('chartMentor'), {
-    type: 'bar',
-    data: {
-      labels: mentorLabels,
-      datasets: [{ data: mentorData, backgroundColor: mentorLabels.map(l=> l==='Unassigned' ? '#94A3B8' : '#0F766E'), borderRadius: 5, maxBarThickness: 40 }],
-    },
-    options: {
-      indexAxis: 'y',
-      plugins:{ legend:{ display:false }, tooltip:{ displayColors:false } },
-      scales:{ x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
-    },
-  });
-
-  // Weekly check-in trend — submissions per week (bars) + % met commitment (line, right axis)
-  const byWeek = {};
-  (BUNDLE.checkins||[]).forEach(en=>{
-    const key = en.weekEnding || (en.timestamp||'').slice(0,10);
-    if(!key) return;
-    byWeek[key] = byWeek[key] || {n:0, metYes:0, metTotal:0};
-    byWeek[key].n++;
-    if(en.metCommitment){ byWeek[key].metTotal++; if(/yes/i.test(en.metCommitment)) byWeek[key].metYes++; }
-  });
-  const weekKeys = Object.keys(byWeek).sort((a,b)=> new Date(a)-new Date(b));
-  const weekLabels = weekKeys.map(k=>{ const d = new Date(k); return !isNaN(d) ? fmtShort(d) : k; });
-  document.getElementById('chartWeeklySub').textContent = weekKeys.length ? `${weekKeys.length} week(s) of data` : 'No check-in submissions yet';
-  destroyChart_('weekly');
-  const weeklyCanvas = document.getElementById('chartWeekly');
-  if(weeklyCanvas){
-    CHART_INSTANCES.weekly = new Chart(weeklyCanvas, {
-      data: {
-        labels: weekLabels,
-        datasets: [
-          { type:'bar', label:'Submissions', data: weekKeys.map(k=>byWeek[k].n), backgroundColor:'#D9631F', borderRadius:4, maxBarThickness:36, yAxisID:'y' },
-          { type:'line', label:'% met commitment', data: weekKeys.map(k=> byWeek[k].metTotal ? Math.round(byWeek[k].metYes/byWeek[k].metTotal*100) : null), spanGaps:true, borderColor:'#15803D', backgroundColor:'#15803D', tension:.3, yAxisID:'y1', pointRadius:4 },
-        ],
-      },
-      options: {
-        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:12, font:{size:11} } } },
-        scales:{
-          y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' }, title:{ display:true, text:'Submissions', font:{size:10.5} } },
-          y1:{ beginAtZero:true, max:100, position:'right', grid:{ display:false }, ticks:{ callback:(v)=>v+'%' }, title:{ display:true, text:'% met commitment', font:{size:10.5} } },
-          x:{ grid:{ display:false } },
-        },
       },
     });
   }
@@ -2987,6 +3066,351 @@ function renderCheckinsTable(){
   tbody.querySelectorAll('tr').forEach(tr=>{
     tr.addEventListener('click', ()=> openCheckinDrawer(tr.dataset.id));
   });
+}
+
+// =========================================================================
+// WEEKLY REPORT — filterable roster + feedback, downloadable as
+// PDF / Excel / CSV. See the note in the Reports panel for why there's no
+// direct .pbix export: that format can only be authored in Power BI
+// Desktop itself, so the Excel/CSV downloads here are the real handoff
+// point — Power BI imports either one directly via Get Data.
+// =========================================================================
+
+// Populates the programme/cohort/mentor/week dropdowns. Cohort + week
+// options depend on live data, so this is called on every boot() /
+// refresh, not just once.
+function populateReportFilters(){
+  const progSel = document.getElementById('rfProg');
+  if(progSel && progSel.options.length <= 1){
+    BUNDLE.programmes.forEach(pr=>{
+      const o = document.createElement('option');
+      o.value = pr.code; o.textContent = `${pr.code} — ${pr.name}`;
+      progSel.appendChild(o);
+    });
+  }
+  const mentorSel = document.getElementById('rfMentor');
+  if(mentorSel && mentorSel.options.length <= 1){
+    TEAM_MEMBERS.forEach(m=>{
+      const o = document.createElement('option');
+      o.value = m; o.textContent = m;
+      mentorSel.appendChild(o);
+    });
+    const unassignedOpt = document.createElement('option');
+    unassignedOpt.value = '__unassigned__'; unassignedOpt.textContent = 'Unassigned';
+    mentorSel.appendChild(unassignedOpt);
+  }
+
+  const cohortSel = document.getElementById('rfCohort');
+  if(cohortSel){
+    const current = cohortSel.value;
+    const cohorts = [...new Set(participants.map(p=>p.cohortId).filter(Boolean))].sort();
+    cohortSel.innerHTML = '<option value="">All cohorts</option>' + cohorts.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if(cohorts.includes(current)) cohortSel.value = current;
+  }
+
+  const weekSel = document.getElementById('rfWeek');
+  if(weekSel){
+    const current = weekSel.value;
+    const weeks = [...new Set((BUNDLE.checkins||[]).map(en=> en.weekEnding || (en.timestamp||'').slice(0,10)).filter(Boolean))]
+      .sort((a,b)=> new Date(b)-new Date(a));
+    weekSel.innerHTML = '<option value="">Most recent check-in per learner</option>' + weeks.map(w=>{
+      const d = new Date(w);
+      const label = !isNaN(d) ? `Week of ${fmtShort(d)}` : w;
+      return `<option value="${w}">${label}</option>`;
+    }).join('');
+    if(weeks.includes(current)) weekSel.value = current;
+  }
+}
+
+// The roster half of the report — same shape of filtering as the main
+// Dashboard table (programme/risk/status/mentor/payment), plus a cohort
+// filter, so staff can walk from "everyone" down to exactly the slice
+// they want before exporting.
+function getReportFiltered(){
+  const fw = document.getElementById('rfWeek')?.value || '';
+  const fp = document.getElementById('rfProg')?.value || '';
+  const fc = document.getElementById('rfCohort')?.value || '';
+  const fm = document.getElementById('rfMentor')?.value || '';
+  const fr = document.getElementById('rfRisk')?.value || '';
+  const fs = document.getElementById('rfStatus')?.value || '';
+  const fpay = document.getElementById('rfPayment')?.value || '';
+
+  let computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  if(fp) computed = computed.filter(({p})=>p.programme===fp);
+  if(fc) computed = computed.filter(({p})=>p.cohortId===fc);
+  if(fm === '__unassigned__') computed = computed.filter(({p})=>!p.mentor);
+  else if(fm) computed = computed.filter(({p})=>p.mentor===fm);
+  if(fr) computed = computed.filter(({eng})=>eng.risk===fr);
+  if(fs) computed = computed.filter(({eng})=>eng.status===fs);
+  if(fpay) computed = computed.filter(({p})=>(p.paymentStatus||'')===fpay);
+  // Restrict to learners who actually have a check-in in the selected week
+  // — without this, picking a specific week wouldn't narrow the roster,
+  // just the feedback list below it, which is confusing when walking
+  // through filters top to bottom.
+  if(fw) computed = computed.filter(({p})=> checkinsFor(p).some(en=> (en.weekEnding || (en.timestamp||'').slice(0,10)) === fw));
+
+  computed.sort((a,b)=> (a.p.name||'').localeCompare(b.p.name||''));
+  return computed;
+}
+
+// Feedback entries for the current roster + week selection. With a week
+// chosen, every matching check-in for that week is included. With "Most
+// recent check-in per learner" (the default), only each learner's latest
+// submission is shown, so the panel stays a manageable weekly-sized read
+// rather than their entire check-in history.
+function getReportFeedback(computed){
+  const fw = document.getElementById('rfWeek')?.value || '';
+  const out = [];
+  computed.forEach(({p})=>{
+    const entries = checkinsFor(p);
+    if(fw){
+      entries.filter(en=> (en.weekEnding || (en.timestamp||'').slice(0,10)) === fw)
+        .forEach(en=> out.push({p, en}));
+    } else if(entries.length){
+      out.push({p, en: entries[0]}); // checkinsFor() is already sorted newest-first
+    }
+  });
+  out.sort((a,b)=> new Date(b.en.weekEnding||b.en.timestamp||0) - new Date(a.en.weekEnding||a.en.timestamp||0));
+  return out;
+}
+
+function reportFilterSummaryText_(){
+  const bits = [];
+  const fw = document.getElementById('rfWeek');
+  const fp = document.getElementById('rfProg');
+  const fc = document.getElementById('rfCohort');
+  const fm = document.getElementById('rfMentor');
+  const fr = document.getElementById('rfRisk');
+  const fs = document.getElementById('rfStatus');
+  const fpay = document.getElementById('rfPayment');
+  if(fw?.value) bits.push(fw.options[fw.selectedIndex].textContent);
+  else bits.push('most recent check-in per learner');
+  if(fp?.value) bits.push(fp.options[fp.selectedIndex].textContent);
+  if(fc?.value) bits.push(`Cohort ${fc.value}`);
+  if(fm?.value) bits.push(fm.value==='__unassigned__' ? 'Unassigned mentor' : `Mentor: ${fm.value}`);
+  if(fr?.value) bits.push(`${fr.value} risk`);
+  if(fs?.value) bits.push(fs.value);
+  if(fpay?.value) bits.push(fpay.options[fpay.selectedIndex].textContent);
+  return bits.join(' · ');
+}
+
+function renderReportsTab(){
+  if(!document.getElementById('reportsView')) return;
+  populateReportFilters();
+  const computed = getReportFiltered();
+  const includeComments = document.getElementById('rfIncludeComments')?.checked ?? true;
+
+  document.getElementById('reportFilterSummary').textContent = `Showing: ${reportFilterSummaryText_()} — ${computed.length} participant(s)`;
+
+  // KPI strip
+  const n = computed.length;
+  const counts = {Green:0, Yellow:0, Red:0};
+  let completed = 0, progressSum = 0;
+  computed.forEach(({eng})=>{
+    if(eng.risk && counts[eng.risk]!==undefined) counts[eng.risk]++;
+    if(eng.status==='Completed') completed++;
+    progressSum += eng.progressPct || 0;
+  });
+  const avgProgress = n ? Math.round((progressSum/n)*100) : 0;
+  document.getElementById('reportKpis').innerHTML = `
+    <div class="kpi"><div class="num">${n}</div><div class="lbl">In this selection</div></div>
+    <div class="kpi"><div class="num">${completed}</div><div class="lbl">Completed</div></div>
+    <div class="kpi"><div class="num">${avgProgress}%</div><div class="lbl">Avg. progress</div></div>
+    <div class="kpi"><div class="num">${counts.Red}</div><div class="lbl">Red risk</div></div>
+    <div class="kpi"><div class="num">${counts.Yellow}</div><div class="lbl">Yellow risk</div></div>
+    <div class="kpi"><div class="num">${counts.Green}</div><div class="lbl">Green risk</div></div>
+  `;
+
+  // Roster table
+  const tbody = document.getElementById('reportRosterTbody');
+  const emptyEl = document.getElementById('reportRosterEmpty');
+  document.getElementById('reportRosterSub').textContent = `${n} participant(s) match the filters above`;
+  if(!n){
+    tbody.innerHTML = '';
+    emptyEl.style.display = '';
+  } else {
+    emptyEl.style.display = 'none';
+    tbody.innerHTML = computed.map(({p,eng})=>`
+      <tr data-id="${p.id}" style="cursor:pointer;">
+        <td><div class="name">${p.name}</div><div class="pid">${p.id}</div></td>
+        <td><span class="prog-code">${p.programme||'—'}</span></td>
+        <td>${p.cohortId||'—'}</td>
+        <td>${p.mentor || '<span class="muted">Unassigned</span>'}</td>
+        <td>${(eng.progressPct*100).toFixed(0)}%</td>
+        <td><span class="badge ${riskClass(eng.risk)}">${eng.risk||'—'}</span></td>
+        <td><span class="badge ${statusClass(eng.status)}">${eng.status}</span></td>
+        <td><span class="badge ${paymentClass(p.paymentStatus)}">${isPaymentDefaulter(p) ? 'Payment Defaulter' : (p.paymentStatus || '—')}</span></td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('tr').forEach(tr=> tr.addEventListener('click', ()=> openDrawer(tr.dataset.id)));
+  }
+
+  // Feedback / comments panel
+  const feedbackPanel = document.getElementById('reportFeedbackPanel');
+  const feedbackBody = document.getElementById('reportFeedbackBody');
+  const feedbackEmpty = document.getElementById('reportFeedbackEmpty');
+  const feedbackSub = document.getElementById('reportFeedbackSub');
+  if(!includeComments){
+    feedbackPanel.style.display = 'none';
+  } else {
+    feedbackPanel.style.display = '';
+    const feedback = getReportFeedback(computed);
+    feedbackSub.textContent = `${feedback.length} submission(s) for this selection`;
+    if(!feedback.length){
+      feedbackBody.innerHTML = '';
+      feedbackEmpty.style.display = '';
+    } else {
+      feedbackEmpty.style.display = 'none';
+      feedbackBody.innerHTML = feedback.map(({p,en})=>{
+        const d = new Date(en.weekEnding || en.timestamp);
+        const dateLabel = !isNaN(d) ? fmtShort(d) : (en.weekEnding || en.timestamp || '—');
+        return `
+          <div class="checkin-card">
+            <div class="ci-head">
+              <div class="ci-date">${p.name} <span class="muted" style="font-weight:400;">(${p.id})</span> · Week of ${dateLabel}</div>
+              ${en.metCommitment ? `<span class="badge ${/yes/i.test(en.metCommitment)?'green':'amber'}">${en.metCommitment==='' ? '—' : (/yes/i.test(en.metCommitment)?'Met commitment':'Missed commitment')}</span>` : ''}
+            </div>
+            ${en.topicsThisWeek ? `<div class="checkin-comments" style="margin-top:10px;"><b>Topics studied:</b> ${en.topicsThisWeek}</div>` : ''}
+            ${en.challenges ? `<div class="checkin-comments" style="margin-top:10px;"><b>Challenges:</b> ${en.challenges}</div>` : ''}
+            ${en.planNextWeek ? `<div class="checkin-comments" style="margin-top:10px;"><b>Plan for next week:</b> ${en.planNextWeek}</div>` : ''}
+            ${en.comments ? `<div class="checkin-comments" style="margin-top:10px;">${en.comments}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+
+// ---------- report exports ----------
+function reportExportRows_(){
+  const computed = getReportFiltered();
+  const includeComments = document.getElementById('rfIncludeComments')?.checked ?? true;
+  const roster = computed.map(({p,eng})=>({
+    Participant_ID: p.id, Full_Name: p.name, Email: p.email||'', Programme: p.programme||'',
+    Cohort_ID: p.cohortId||'', Assigned_Mentor: p.mentor||'Unassigned',
+    Progress_Pct: Math.round((eng.progressPct||0)*100), Risk: eng.risk||'', Status: eng.status,
+    Payment_Status: isPaymentDefaulter(p) ? 'Payment Defaulter' : (p.paymentStatus||''),
+    Weeks_Remaining: eng.weeksRemaining===null?'':eng.weeksRemaining.toFixed(1),
+  }));
+  const feedback = includeComments ? getReportFeedback(computed).map(({p,en})=>({
+    Participant_ID: p.id, Full_Name: p.name,
+    Week_Ending: en.weekEnding || (en.timestamp||'').slice(0,10),
+    Met_Commitment: en.metCommitment||'', Days_Studied: en.daysKept??'',
+    Topics_This_Week: en.topicsThisWeek||'', Challenges: en.challenges||'',
+    Plan_Next_Week: en.planNextWeek||'', Comments: en.comments||'',
+  })) : [];
+  return { computed, roster, feedback };
+}
+
+function exportReportCsv(){
+  const { roster } = reportExportRows_();
+  if(!roster.length){ showToast('No participants match the current filters.'); return; }
+  const headers = Object.keys(roster[0]);
+  const esc = (v)=> { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const csv = [headers, ...roster.map(r=>headers.map(h=>r[h]))].map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `weekly-report-${today().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`Exported ${roster.length} participant(s) to CSV.`);
+}
+
+function exportReportXlsx(){
+  if(!window.XLSX){
+    showToast("Couldn't load the Excel engine — try the CSV export instead.");
+    return;
+  }
+  const { roster, feedback } = reportExportRows_();
+  if(!roster.length){ showToast('No participants match the current filters.'); return; }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(roster), 'Participants');
+  if(feedback.length){
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(feedback), 'Weekly Feedback');
+  }
+  XLSX.writeFile(wb, `weekly-report-${today().toISOString().slice(0,10)}.xlsx`);
+  showToast('Excel workbook downloaded — ready to import into Power BI (Get Data → Excel).');
+}
+
+function exportReportPdf(){
+  const { computed, feedback } = reportExportRows_();
+  if(!computed.length){ showToast('No participants match the current filters.'); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    showToast("Couldn't load the PDF engine — try the CSV or Excel export instead.");
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const marginX = 40;
+  let y = 50;
+
+  doc.setTextColor(217,99,31); doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('SPLMS — Weekly Report', marginX, y); y += 18;
+  doc.setTextColor(71,85,105); doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+  doc.text(`Generated ${today().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}`, marginX, y); y += 13;
+  const summaryLines = doc.splitTextToSize(`Filters: ${reportFilterSummaryText_()} — ${computed.length} participant(s)`, pageW-2*marginX);
+  doc.text(summaryLines, marginX, y); y += summaryLines.length*12 + 10;
+
+  const colX = [marginX, marginX+150, marginX+250, marginX+330, marginX+400, marginX+460];
+  const drawHeader = ()=>{
+    doc.setFillColor(217,99,31);
+    doc.rect(marginX, y-12, pageW-2*marginX, 20, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    doc.text('Name', colX[0]+4, y+2);
+    doc.text('Prog / Cohort', colX[1]+4, y+2);
+    doc.text('Mentor', colX[2]+4, y+2);
+    doc.text('Progress', colX[3]+4, y+2);
+    doc.text('Risk', colX[4]+4, y+2);
+    doc.text('Status', colX[5]+4, y+2);
+    y += 18;
+    doc.setFont('helvetica','normal'); doc.setTextColor(15,23,42);
+  };
+  drawHeader();
+  doc.setFontSize(8);
+  computed.forEach(({p,eng}, idx)=>{
+    const rowH = 15;
+    if(y + rowH > 780){ doc.addPage(); y = 50; drawHeader(); }
+    if(idx % 2 === 0){ doc.setFillColor(253,231,214); doc.rect(marginX, y-11, pageW-2*marginX, rowH, 'F'); }
+    doc.text(`${p.name} (${p.id})`, colX[0]+4, y, {maxWidth: colX[1]-colX[0]-8});
+    doc.text(`${p.programme} · ${p.cohortId||'—'}`, colX[1]+4, y, {maxWidth: colX[2]-colX[1]-8});
+    doc.text(p.mentor||'Unassigned', colX[2]+4, y, {maxWidth: colX[3]-colX[2]-8});
+    doc.text(`${(eng.progressPct*100).toFixed(0)}%`, colX[3]+4, y);
+    doc.text(eng.risk||'—', colX[4]+4, y);
+    doc.text(eng.status, colX[5]+4, y, {maxWidth: pageW-marginX-colX[5]-8});
+    y += rowH;
+  });
+
+  if(feedback.length){
+    y += 20;
+    if(y > 760){ doc.addPage(); y = 50; }
+    doc.setTextColor(217,99,31); doc.setFont('helvetica','bold'); doc.setFontSize(13);
+    doc.text('Feedback & comments', marginX, y); y += 18;
+    doc.setFontSize(8.5);
+    feedback.forEach(({p,en})=>{
+      const d = new Date(en.weekEnding || en.timestamp);
+      const dateLabel = !isNaN(d) ? fmtShort(d) : (en.weekEnding || en.timestamp || '—');
+      const lines = [];
+      lines.push(`${p.name} (${p.id}) — Week of ${dateLabel}${en.metCommitment ? ' — '+en.metCommitment : ''}`);
+      if(en.topicsThisWeek) lines.push(`Topics: ${en.topicsThisWeek}`);
+      if(en.challenges) lines.push(`Challenges: ${en.challenges}`);
+      if(en.planNextWeek) lines.push(`Plan next week: ${en.planNextWeek}`);
+      if(en.comments) lines.push(`Comments: ${en.comments}`);
+      lines.forEach((line, i)=>{
+        const wrapped = doc.splitTextToSize(line, pageW-2*marginX);
+        if(y + wrapped.length*11 > 780){ doc.addPage(); y = 50; }
+        doc.setFont('helvetica', i===0 ? 'bold' : 'normal');
+        doc.setTextColor(i===0 ? 15 : 71, i===0 ? 23 : 85, i===0 ? 42 : 105);
+        doc.text(wrapped, marginX, y);
+        y += wrapped.length*11 + 2;
+      });
+      y += 6;
+    });
+  }
+
+  doc.save(`weekly-report-${today().toISOString().slice(0,10)}.pdf`);
+  showToast('Weekly report PDF downloaded.');
 }
 
 // =========================================================================
@@ -3396,10 +3820,13 @@ function switchTab(tab){
   document.getElementById('tabDashboard').classList.toggle('active', tab==='dashboard');
   document.getElementById('tabCheckins').classList.toggle('active', tab==='checkins');
   document.getElementById('tabKpi').classList.toggle('active', tab==='kpi');
+  document.getElementById('tabReports').classList.toggle('active', tab==='reports');
   document.getElementById('dashboardView').style.display = tab==='dashboard' ? '' : 'none';
   document.getElementById('checkinsView').style.display = tab==='checkins' ? '' : 'none';
   document.getElementById('kpiView').style.display = tab==='kpi' ? '' : 'none';
+  document.getElementById('reportsView').style.display = tab==='reports' ? '' : 'none';
   if(tab==='kpi') renderKpiTab();
+  if(tab==='reports') renderReportsTab();
 }
 
 async function openCheckinDrawer(id){
@@ -4107,6 +4534,18 @@ async function boot(){
   document.getElementById('tabDashboard').addEventListener('click', ()=>switchTab('dashboard'));
   document.getElementById('tabCheckins').addEventListener('click', ()=>switchTab('checkins'));
   document.getElementById('tabKpi').addEventListener('click', ()=>switchTab('kpi'));
+  document.getElementById('tabReports').addEventListener('click', ()=>switchTab('reports'));
+  ['rfWeek','rfProg','rfCohort','rfMentor','rfRisk','rfStatus','rfPayment','rfIncludeComments'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener(id==='rfIncludeComments' ? 'change' : 'input', renderReportsTab);
+  });
+  const reportPdfBtn = document.getElementById('reportPdfBtn');
+  const reportXlsxBtn = document.getElementById('reportXlsxBtn');
+  const reportCsvBtn = document.getElementById('reportCsvBtn');
+  if(reportPdfBtn) reportPdfBtn.addEventListener('click', exportReportPdf);
+  if(reportXlsxBtn) reportXlsxBtn.addEventListener('click', exportReportXlsx);
+  if(reportCsvBtn) reportCsvBtn.addEventListener('click', exportReportCsv);
+  populateReportFilters();
   document.getElementById('checkinSearch').addEventListener('input', renderCheckinsTable);
   document.getElementById('checkinWeekFilter').addEventListener('change', renderCheckinsTable);
   document.getElementById('openFormBtn').addEventListener('click', ()=>{
