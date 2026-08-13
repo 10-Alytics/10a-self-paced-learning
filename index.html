@@ -285,7 +285,8 @@
         <p>Self-Paced Learning · live cohort &amp; risk engine</p>
       </div>
     </div>
-    <button class="app-logout" style="margin-left:auto;" onclick="staffSignOut()">Sign out</button>
+    <button class="app-logout" id="restoreVersionBtn" style="margin-left:auto;" onclick="openRestorePanel()">Restore previous version</button>
+    <button class="app-logout" onclick="staffSignOut()">Sign out</button>
     <div class="rule-pill" id="cohortRulePill">
       <b>Deadline rule:</b> each programme runs 6 months from its cohort start month, plus a grace
       period from the Settings tab. Example — <code>C26-05</code> starts May 2026, programme ends
@@ -307,6 +308,18 @@
 <div id="flagArea"></div>
 
 <div id="intakeReconcileBanner"></div>
+
+<div class="panel" id="adminDashboardSyncPanel" style="display:none;">
+  <div class="panel-head">
+    <div><h2>Admin Dashboard sync check</h2><div class="sub">Comparing the Sheet's own "AdminDashboard" tab against what this page computes live from ParticipantDB</div></div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead><tr><th>Metric</th><th>Sheet's AdminDashboard tab</th><th>This page (live)</th><th></th></tr></thead>
+      <tbody id="adminDashboardSyncTbody"></tbody>
+    </table>
+  </div>
+</div>
 
 <div class="panel" id="intakePanel">
   <div class="panel-head">
@@ -358,6 +371,12 @@
           <option value="Defaulted">Defaulted</option>
           <option value="Completed">Completed</option>
         </select>
+        <select id="filterPayment">
+          <option value="">All payment status</option>
+          <option value="Verified">Verified</option>
+          <option value="Pending">Pending</option>
+          <option value="Declined">Payment Defaulter</option>
+        </select>
         <select id="filterMentor"><option value="">All mentors</option></select>
         <button id="assignMentorsBtn">Assign mentors</button>
         <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
@@ -378,6 +397,7 @@
             <th data-k="pace">Pace needed</th>
             <th data-k="risk">Risk</th>
             <th data-k="status">Status</th>
+            <th data-k="payment">Payment</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -651,6 +671,16 @@ const DATA_SOURCE = {
   // BUNDLE.modules below, so plans always show real class names without
   // needing a Sheet tab kept perfectly in sync.
   modulesCsvUrl: '',
+  // The separate "Admin Dashboard" tab in the Sheet — a different tab from
+  // ParticipantDB, used to eyeball totals against what this page computes.
+  // NOTE: the exact column layout of this tab wasn't available when this
+  // was wired up, so the sync below reads it generically (whatever columns
+  // exist) and only flags a mismatch if it can find something that looks
+  // like a total-participants figure. If the numbers don't line up, check
+  // the "Admin Dashboard sync" panel on the Dashboard tab for what was
+  // actually read from the sheet, and tell 10Alytics support the real
+  // column headers so this can be tightened up.
+  adminDashboardCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=25325647&single=true&output=csv',
 };
 
 // Link to the actual Google Form participants fill in. Shown as a button on
@@ -684,6 +714,26 @@ const ALLOWED_EMAIL_DOMAINS = ['@10alytics.org', '@10alytics.io', '@10alytics.ca
 // Only this address can assign/reassign mentors. Everyone else sees
 // mentor assignments as read-only. Comparison is case-insensitive.
 const ADMIN_EMAIL = 'ubong@10alytics.org';
+
+// -----------------------------------------------------------------------
+// SUPERADMIN — "Restore previous version"
+// -----------------------------------------------------------------------
+// A separate secret key (NOT tied to any one email address) that unlocks
+// the version-history / restore panel. Anyone signed in can see that the
+// feature exists, but only someone who knows this key can actually open
+// a past snapshot and roll the tracker back to it, or bring back a
+// participant that was removed by mistake. Change this string any time —
+// nothing else needs to be updated.
+const SUPERADMIN_KEY = '10Alytics LearnOps';
+function isSuperAdmin(){ return sessionStorage.getItem('splms-superadmin-ok') === '1'; }
+function unlockSuperAdmin(key){
+  if((key||'').trim() === SUPERADMIN_KEY){
+    sessionStorage.setItem('splms-superadmin-ok', '1');
+    return true;
+  }
+  return false;
+}
+function lockSuperAdmin(){ sessionStorage.removeItem('splms-superadmin-ok'); }
 
 // Google Apps Script Web App URL that writes Assigned_Mentor directly to
 // the ParticipantDB sheet, so changes show up for every device (not just
@@ -931,6 +981,75 @@ async function fetchCsv_(url, requiredHeader) {
   return parseCsv_(await res.text(), requiredHeader);
 }
 
+// Raw row tokenizer (no header mapping) — used for AdminDashboard below,
+// whose layout is "label in column A, value in column B" rather than a
+// normal one-row-per-record table, so it can't go through parseCsv_.
+function tokenizeCsvRows_(text) {
+  const rawRows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else if (c === '"') { inQuotes = true; }
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && next === '\n') i++;
+      row.push(field); field = '';
+      rawRows.push(row);
+      row = [];
+    } else { field += c; }
+  }
+  if (field !== '' || row.length) { row.push(field); rawRows.push(row); }
+  return rawRows.map(r => r.map(v => (v || '').trim()));
+}
+
+// Reads the Sheet's own "AdminDashboard" tab — a separate, hand-built
+// summary tab (Total Participants / Active / At Risk / etc. in column A,
+// the number in column B, then a BY PROGRAMME table further down) that's
+// meant to mirror ParticipantDB but is driven by its own formulas, which
+// can silently fall out of sync (e.g. if a formula's row range wasn't
+// extended when new participants were added). This reads it as-is and
+// stores it on BUNDLE.adminDashboardSheet so the Dashboard tab can show a
+// side-by-side comparison against what this page computes live from
+// ParticipantDB, and flag any drift.
+async function fetchAdminDashboardSheet_(url) {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+    const rows = tokenizeCsvRows_(await res.text());
+    const metrics = {};
+    let byProgHeaderIdx = -1;
+    rows.forEach((r, i) => {
+      const label = (r[0] || '').trim();
+      if (!label) return;
+      if (label === 'Programme_Code') { byProgHeaderIdx = i; return; }
+      const val = parseFloat((r[1] || '').replace(/[,%]/g, ''));
+      if (!isNaN(val) && byProgHeaderIdx === -1) metrics[label] = val;
+    });
+    const byProgramme = [];
+    if (byProgHeaderIdx !== -1) {
+      for (let i = byProgHeaderIdx + 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r[0]) break;
+        byProgramme.push({
+          code: r[0],
+          total: parseFloat(r[1]) || 0,
+          avgProgress: parseFloat(r[2]) || 0,
+          green: parseFloat(r[3]) || 0,
+          yellow: parseFloat(r[4]) || 0,
+          red: parseFloat(r[5]) || 0,
+        });
+      }
+    }
+    BUNDLE.adminDashboardSheet = { metrics, byProgramme, fetchedOk: true };
+  } catch (err) {
+    BUNDLE.adminDashboardSheet = { metrics: {}, byProgramme: [], fetchedOk: false, error: err.message };
+  }
+}
+
 function toNum_(v, fallback) {
   const n = parseFloat(v);
   return isNaN(n) ? fallback : n;
@@ -1080,6 +1199,9 @@ async function refreshLiveData_() {
           outlineLabel: pick_(r, ['Course_Outline_Label','Course outline label']) || '',
         })).sort((a,b)=> a.weekNumber - b.weekNumber);
     }
+    if (DATA_SOURCE.adminDashboardCsvUrl) {
+      await fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl);
+    }
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
@@ -1150,6 +1272,83 @@ async function loadRemoved(){
 }
 async function saveRemoved(list){
   await window.storage.set(STORE_PREFIX+':removed', JSON.stringify(list), false);
+}
+
+// -----------------------------------------------------------------------
+// VERSION HISTORY / "Restore previous version" (superadmin only)
+// -----------------------------------------------------------------------
+// A snapshot is a full copy of everything this browser has ever changed
+// locally on top of the live Sheet: removed participants, locally-added
+// participants, and every per-participant edit override. Restoring a
+// snapshot puts all three back exactly as they were at that point in
+// time. Snapshots are kept per-browser (same as the rest of this app's
+// local storage) and capped at the most recent 20 so storage doesn't
+// grow forever.
+const SNAPSHOT_KEY = STORE_PREFIX + ':snapshots';
+const SNAPSHOT_LIMIT = 20;
+
+async function loadSnapshots(){
+  try{
+    const r = await window.storage.get(SNAPSHOT_KEY, false);
+    return r ? JSON.parse(r.value) : [];
+  }catch(e){ return []; }
+}
+async function saveSnapshots(list){
+  await window.storage.set(SNAPSHOT_KEY, JSON.stringify(list.slice(0, SNAPSHOT_LIMIT)), false);
+}
+
+// Call this right BEFORE any locally-destructive action (removing a
+// participant, editing a profile, adding one, assigning mentors) so
+// there's always a "before" state to roll back to. Cheap — only stores
+// what's different from the live Sheet, not the whole participant list.
+async function captureSnapshot_(label){
+  try{
+    const removed = await loadRemoved();
+    const extra = await loadExtraParticipants();
+    const overrides = {};
+    const ids = new Set([...BUNDLE.participants.map(p=>p.id), ...extra.map(p=>p.id)]);
+    for(const id of ids){
+      const ov = await loadOverrides(id);
+      if(ov && Object.keys(ov).length) overrides[id] = ov;
+    }
+    const snapshots = await loadSnapshots();
+    snapshots.unshift({
+      id: 'snap_' + Date.now(),
+      at: new Date().toISOString(),
+      by: currentUserEmail() || 'unknown',
+      label: label || 'Change',
+      removed, extra, overrides,
+    });
+    await saveSnapshots(snapshots);
+  }catch(e){ console.error('captureSnapshot_ failed:', e); }
+}
+
+// Rolls the local tracker state (removed / extra / overrides) back to
+// exactly what a past snapshot recorded, then reloads the page's data so
+// the change is visible immediately. Superadmin-only — enforced by the
+// caller (the Restore panel), not this function, so keep it that way.
+async function restoreSnapshot_(snapshotId){
+  const snapshots = await loadSnapshots();
+  const snap = snapshots.find(s=>s.id===snapshotId);
+  if(!snap) return { ok:false, error:'Snapshot not found.' };
+  await saveRemoved(snap.removed || []);
+  await saveExtraParticipants(snap.extra || []);
+  for(const id of Object.keys(snap.overrides || {})){
+    await saveOverride(id, snap.overrides[id]);
+  }
+  await boot();
+  return { ok:true };
+}
+
+// Restores a single removed participant without touching anything else —
+// this is the fast path for "I deleted someone by mistake, just bring
+// them back", used by both the Restore panel and the reconciliation
+// banner's quick-fix link.
+async function restoreRemovedParticipant_(id){
+  const removed = await loadRemoved();
+  const next = removed.filter(rid=>rid!==id);
+  await saveRemoved(next);
+  await boot();
 }
 
 // Onboarding-pack-sent tracking. Deliberately SHARED (not per-browser) —
@@ -1231,6 +1430,14 @@ function updateCohortRulePill(){
   `;
 }
 
+// A "payment defaulter" is anyone whose Payment_Status column reads
+// Declined — this is exactly what shows up highlighted red in the
+// ParticipantDB sheet. Centralised here so the badge, filter, and KPI
+// card all agree on the same definition.
+function isPaymentDefaulter(p){
+  return (p.paymentStatus||'').trim().toLowerCase() === 'declined';
+}
+
 function computeEngine(p){
   const prog = PROGRAMMES[p.programme] || {totalModules:0, capstoneWeeks:2};
   const totalModules = prog.totalModules || 0;
@@ -1273,7 +1480,8 @@ function computeEngine(p){
   else escalation = 'Week 4 - Default Review';
 
   let status;
-  if(progressPct >= 1) status = 'Completed';
+  if(p.completionOverride === 'completed') status = 'Completed'; // manual move-to-completed (see drawer)
+  else if(progressPct >= 1) status = 'Completed';
   else if(escalation === 'Week 4 - Default Review') status = 'Defaulted';
   else if(escalation === 'Week 2 - Follow-up Call' || escalation === 'Week 3 - Escalation' || risk === 'Red') status = 'At Risk';
   else if(escalation === 'Week 1 - Reminder') status = 'Needs Follow-up';
@@ -1893,6 +2101,13 @@ function statusClass(s){
   if(s==='Needs Follow-up') return 'amber';
   return 'slate';
 }
+function paymentClass(s){
+  const v = (s||'').trim().toLowerCase();
+  if(v==='declined') return 'rose'; // payment defaulter — matches the red highlight used on the Sheet
+  if(v==='verified') return 'green';
+  if(v==='pending') return 'amber';
+  return 'slate';
+}
 
 function renderKPIs(computed){
   const n = computed.length;
@@ -1911,6 +2126,7 @@ function renderKPIs(computed){
   const checkinRate = n ? (checkedInEver/n*100) : 0;
   const needsEscalation = count(c=> ['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(c.eng.escalation));
   const onboardingSentCount = count(c=> !!ONBOARDING_SENT[c.p.id]?.sent);
+  const paymentDefaulters = count(c=> isPaymentDefaulter(c.p));
 
   const cards = [
     ['Total participants', n, ''],
@@ -1918,7 +2134,8 @@ function renderKPIs(computed){
     ['Needs follow-up', followup, 'amber'],
     ['At risk', atrisk, 'rose'],
     ['Defaulted', defaulted, 'rose'],
-    ['Completed', completed, 'green'],
+    ['Payment defaulters', paymentDefaulters, paymentDefaulters>0?'rose':'green', {type:'payment', value:'Declined'}],
+    ['Completed', completed, 'green', {type:'status', value:'Completed'}],
     ['Avg progress', avgProg.toFixed(0)+'%', 'teal'],
     ['Mentor coverage', mentorCoverage.toFixed(0)+'%', mentorCoverage>=90?'green':mentorCoverage>=60?'amber':'rose'],
     ['Unassigned mentor', mentorUnassigned, mentorUnassigned>0?'amber':'green'],
@@ -1926,9 +2143,18 @@ function renderKPIs(computed){
     ['Needs escalation', needsEscalation, needsEscalation>0?'rose':'green'],
     ['Onboarding sent', `${onboardingSentCount}/${n}`, onboardingSentCount>=n?'green':onboardingSentCount>0?'amber':'rose'],
   ];
-  document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls])=>`
-    <div class="kpi ${cls}"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
+  document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls,jump])=>`
+    <div class="kpi ${cls}" ${jump ? `style="cursor:pointer;" data-jump-type="${jump.type}" data-jump-value="${jump.value}" title="Click to filter the table below"` : ''}><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
   `).join('');
+  document.querySelectorAll('#kpis [data-jump-type]').forEach(card=>{
+    card.addEventListener('click', ()=>{
+      const type = card.dataset.jumpType, value = card.dataset.jumpValue;
+      if(type==='status') document.getElementById('filterStatus').value = value;
+      if(type==='payment') document.getElementById('filterPayment').value = value;
+      renderAll();
+      document.getElementById('tableSub').closest('.panel').scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
 }
 
 function renderFlags(computed){
@@ -1985,6 +2211,7 @@ function renderTable(computed){
       <td class="pid">${eng.activitiesPerWeek ? eng.activitiesPerWeek.toFixed(1)+'/wk' : '—'}</td>
       <td><span class="badge ${riskClass(eng.risk)}">${eng.risk || '—'}</span></td>
       <td><span class="badge ${statusClass(eng.status)}">${eng.status}</span></td>
+      <td><span class="badge ${paymentClass(p.paymentStatus)}">${isPaymentDefaulter(p) ? 'Payment Defaulter' : (p.paymentStatus || '—')}</span></td>
     </tr>
   `).join('');
   tbody.querySelectorAll('tr').forEach(tr=>{
@@ -2494,6 +2721,7 @@ function getFiltered(){
   const fr = document.getElementById('filterRisk').value;
   const fs = document.getElementById('filterStatus').value;
   const fm = document.getElementById('filterMentor').value;
+  const fpay = document.getElementById('filterPayment').value;
   let computed = participants.map(p=>({p, eng: computeEngine(p)}));
   if(q){
     computed = computed.filter(({p})=>
@@ -2507,6 +2735,7 @@ function getFiltered(){
   if(fs) computed = computed.filter(({eng})=>eng.status===fs);
   if(fm === '__unassigned__') computed = computed.filter(({p})=>!p.mentor);
   else if(fm) computed = computed.filter(({p})=>p.mentor===fm);
+  if(fpay) computed = computed.filter(({p})=>(p.paymentStatus||'')===fpay);
 
   computed.sort((a,b)=>{
     let av, bv;
@@ -2520,6 +2749,7 @@ function getFiltered(){
       case 'pace': av=a.eng.activitiesPerWeek||0; bv=b.eng.activitiesPerWeek||0; break;
       case 'risk': { const order={Red:0,Yellow:1,Green:2,null:3}; av=order[a.eng.risk]; bv=order[b.eng.risk]; break; }
       case 'status': av=a.eng.status; bv=b.eng.status; break;
+      case 'payment': av=a.p.paymentStatus||''; bv=b.p.paymentStatus||''; break;
       default: av=0; bv=0;
     }
     if(av<bv) return -1*sortDir;
@@ -2550,8 +2780,10 @@ function renderIntakePanel(){
       </div>`;
     } else if(liveCount !== siteCount){
       banner.innerHTML = `<div class="kpi-warning" style="margin:0 0 16px;">
-        Live Sheet shows ${liveCount} participants, this page shows ${siteCount} — worth a hard refresh
-        (Ctrl/Cmd+Shift+R) in case the published CSV hasn't caught up yet.
+        Live Sheet shows ${liveCount} participants, this page shows ${siteCount}. Try a hard refresh
+        (Ctrl/Cmd+Shift+R) in case the published CSV hasn't caught up yet — and if the count is
+        lower here, check <b>"Restore previous version"</b> in the header: someone may have been
+        removed from this browser's local view without being removed from the Sheet.
       </div>`;
     } else {
       banner.innerHTML = '';
@@ -2614,8 +2846,54 @@ function renderAll(){
   renderCharts(participants.map(p=>({p,eng:computeEngine(p)})));
   renderCheckinsTable();
   renderIntakePanel();
+  renderAdminDashboardSync();
   const kpiViewEl = document.getElementById('kpiView');
   if(kpiViewEl && kpiViewEl.style.display !== 'none') renderKpiTab();
+}
+
+// Side-by-side check against the Sheet's own AdminDashboard tab (see
+// fetchAdminDashboardSheet_ above). Only shown once that tab has actually
+// been fetched. Rows where the two numbers disagree are highlighted so
+// staff can catch a stale AdminDashboard formula (e.g. a SUM range that
+// wasn't extended when new participants were added) at a glance.
+function renderAdminDashboardSync(){
+  const panel = document.getElementById('adminDashboardSyncPanel');
+  const tbody = document.getElementById('adminDashboardSyncTbody');
+  if(!panel || !tbody) return;
+  const sheet = BUNDLE.adminDashboardSheet;
+  if(!sheet || !DATA_SOURCE.adminDashboardCsvUrl){ panel.style.display='none'; return; }
+  panel.style.display = '';
+  if(!sheet.fetchedOk){
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">Could not reach the AdminDashboard tab: ${sheet.error||'unknown error'}. Make sure it's Published to the web as CSV.</td></tr>`;
+    return;
+  }
+  const computed = participants.map(p=>({p, eng:computeEngine(p)}));
+  const n = computed.length;
+  const count = f => computed.filter(f).length;
+  const live = {
+    'Total Participants': n,
+    'Active': count(c=>c.eng.status==='Active'),
+    'Needs Follow-up': count(c=>c.eng.status==='Needs Follow-up'),
+    'At Risk': count(c=>c.eng.status==='At Risk'),
+    'Defaulted': count(c=>c.eng.status==='Defaulted'),
+    'Completed': count(c=>c.eng.status==='Completed'),
+    'Risk: Green': count(c=>c.eng.risk==='Green'),
+    'Risk: Yellow': count(c=>c.eng.risk==='Yellow'),
+    'Risk: Red': count(c=>c.eng.risk==='Red'),
+  };
+  const rows = Object.keys(live).map(label=>{
+    const sheetVal = sheet.metrics[label];
+    const liveVal = live[label];
+    const known = sheetVal !== undefined;
+    const mismatch = known && Number(sheetVal) !== Number(liveVal);
+    return `<tr class="${mismatch?'action-required-row':''}">
+      <td>${label}</td>
+      <td>${known ? sheetVal : '<span class="muted">not found in tab</span>'}</td>
+      <td>${liveVal}</td>
+      <td>${!known ? '' : mismatch ? '<span class="badge rose">Out of sync</span>' : '<span class="badge green">Matches</span>'}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows || '<tr><td colspan="4" class="muted">No comparable metrics found.</td></tr>';
 }
 
 function getCheckinFiltered(){
@@ -3306,8 +3584,17 @@ async function openDrawer(id){
           <div class="field-group">
             <label>Payment status</label>
             <select id="f_payment">
-              ${['Verified','Pending','Declined'].map(s=>`<option ${s===p.paymentStatus?'selected':''}>${s}</option>`).join('')}
+              ${['Verified','Pending','Declined'].map(s=>`<option value="${s}" ${s===p.paymentStatus?'selected':''}>${s==='Declined' ? 'Declined — Payment Defaulter' : s}</option>`).join('')}
             </select>
+            ${isPaymentDefaulter(p) ? '<div class="admin-only-note" style="color:var(--rose);border-color:rgba(190,18,60,.35);">Flagged as a payment defaulter — shows red in ParticipantDB and rolls up into the "Payment defaulters" KPI card.</div>' : ''}
+          </div>
+          <div class="field-group">
+            <label>Completion override</label>
+            <select id="f_completionOverride">
+              <option value="" ${!p.completionOverride ? 'selected' : ''}>None — status follows modules completed</option>
+              <option value="completed" ${p.completionOverride==='completed' ? 'selected' : ''}>Mark as Completed (manual)</option>
+            </select>
+            <div class="admin-only-note">Use this to move someone into "Completed" even if their module count isn't fully up to date — e.g. they finished via capstone/certificate. This is local to the tracker; it doesn't change Modules_Completed on the Sheet.</div>
           </div>
           <div class="field-group">
             <label>Assigned mentor</label>
@@ -3379,6 +3666,7 @@ function closeDrawer(){
 }
 
 async function saveDrawer(p){
+  await captureSnapshot_('Edit ' + p.name + ' (' + p.id + ')');
   const before = {
     name:p.name, email:p.email, cohortId:p.cohortId, paymentStatus:p.paymentStatus,
     modulesCompleted:p.modulesCompleted, preferredDays:p.preferredDays,
@@ -3397,11 +3685,14 @@ async function saveDrawer(p){
   p.preferredDays = parseInt(document.getElementById('f_days').value,10) || 2;
   p.lastCheckin = document.getElementById('f_checkin').value || null;
   p.comments = document.getElementById('f_comments').value;
+  const completionOverrideEl = document.getElementById('f_completionOverride');
+  p.completionOverride = completionOverrideEl ? (completionOverrideEl.value || null) : p.completionOverride;
 
   await saveOverride(p.id, {
     name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
-    preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
+    preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments,
+    completionOverride:p.completionOverride
   });
 
   // Build a { RealColumnName: newValue } object of only what actually
@@ -3432,14 +3723,16 @@ async function saveDrawer(p){
 }
 
 async function removeParticipant(id){
-  if(!confirm('Remove this participant from the tracker? This only affects your local view.')) return;
+  const p = participants.find(x=>x.id===id);
+  if(!confirm('Remove this participant from the tracker? This only affects your local view — it can be undone from "Restore previous version" in the header.')) return;
+  await captureSnapshot_('Remove ' + (p ? p.name : id) + ' (' + id + ')');
   participants = participants.filter(p=>p.id!==id);
   const removed = await loadRemoved();
   removed.push(id);
   await saveRemoved(removed);
   closeDrawer();
   renderAll();
-  showToast('Participant removed.');
+  showToast('Participant removed. Use "Restore previous version" in the header if this was a mistake.');
 }
 
 let toastTimer;
@@ -3620,6 +3913,7 @@ async function createParticipant(){
   const name = document.getElementById('n_name').value.trim();
   if(!id || !name){ showToast('ID and name are required.'); return; }
   if(participants.some(p=>p.id===id)){ showToast('That Participant ID already exists.'); return; }
+  await captureSnapshot_('Add ' + name + ' (' + id + ')');
   const p = {
     id, name,
     email: document.getElementById('n_email').value.trim(),
@@ -3645,6 +3939,122 @@ async function createParticipant(){
   } else {
     showToast('Participant added locally, but Sheet sync failed: ' + (sync.error || 'unknown error'));
   }
+}
+
+// ---------- restore previous version (superadmin) ----------
+async function openRestorePanel(){
+  if(!isSuperAdmin()){
+    document.getElementById('drawer').innerHTML = `
+      <div class="drawer-head"><h3>Restore previous version</h3><div class="muted">Enter the superadmin key to continue</div></div>
+      <div class="drawer-body">
+        <div class="field-group">
+          <label>Superadmin key</label>
+          <input type="password" id="superadminKeyInput" placeholder="Enter key" autocomplete="off">
+        </div>
+        <div class="login-error" id="superadminError"></div>
+      </div>
+      <div class="save-row">
+        <button class="primary" id="unlockBtn" style="flex:1;">Unlock</button>
+        <button class="ghost" id="closeBtn3">Cancel</button>
+      </div>
+    `;
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('closeBtn3').onclick = closeDrawer;
+    const doUnlock = () => {
+      const key = document.getElementById('superadminKeyInput').value;
+      if(unlockSuperAdmin(key)){ openRestorePanel(); }
+      else { document.getElementById('superadminError').textContent = 'Incorrect key.'; }
+    };
+    document.getElementById('unlockBtn').onclick = doUnlock;
+    document.getElementById('superadminKeyInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); doUnlock(); } });
+    return;
+  }
+
+  const removed = await loadRemoved();
+  const extra = await loadExtraParticipants();
+  // BUNDLE.participants is the live Sheet snapshot as last fetched — a
+  // removed ID that's still in there (like Alfreda) can be matched back
+  // to a real name even though it's currently hidden from the table.
+  const allKnown = [...BUNDLE.participants, ...extra];
+  const removedRows = removed.map(id=>{
+    const match = allKnown.find(p=>p.id===id);
+    return { id, name: match ? match.name : '(not found in current Sheet data — restoring will still un-hide the ID)' };
+  });
+  const snapshots = await loadSnapshots();
+
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>Restore previous version</h3>
+      <div class="muted">Superadmin unlocked · ${currentUserEmail()||'—'}</div>
+    </div>
+    <div class="drawer-body">
+      <div>
+        <div class="section-title">Removed participants</div>
+        <hr class="sep">
+        <div class="muted" style="font-size:11.5px;margin-top:6px;">Anyone removed from this tracker (on this browser) shows up here — restoring puts them straight back, no need to re-add them.</div>
+        ${removedRows.length ? `
+          <table style="margin-top:8px;">
+            <thead><tr><th>Name</th><th>ID</th><th></th></tr></thead>
+            <tbody>
+              ${removedRows.map(r=>`
+                <tr>
+                  <td>${r.name}</td>
+                  <td class="pid">${r.id}</td>
+                  <td><button data-restore-id="${r.id}" class="restoreOneBtn">Restore</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="muted" style="margin-top:8px;">Nobody has been removed on this browser.</div>'}
+      </div>
+      <div style="margin-top:20px;">
+        <div class="section-title">Snapshot history</div>
+        <hr class="sep">
+        <div class="muted" style="font-size:11.5px;margin-top:6px;">A snapshot is captured automatically before every edit, removal, or new participant — pick one to roll everything back to that point.</div>
+        ${snapshots.length ? `
+          <table style="margin-top:8px;">
+            <thead><tr><th>When</th><th>Change</th><th>By</th><th></th></tr></thead>
+            <tbody>
+              ${snapshots.map(s=>`
+                <tr>
+                  <td style="font-size:11.5px;">${new Date(s.at).toLocaleString()}</td>
+                  <td>${s.label}</td>
+                  <td class="muted" style="font-size:11px;">${s.by}</td>
+                  <td><button data-snapshot-id="${s.id}" class="restoreSnapBtn">Restore this version</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="muted" style="margin-top:8px;">No snapshots yet.</div>'}
+      </div>
+      <div class="admin-only-note" style="margin-top:16px;">
+        This history lives on this browser only (same as every other local edit here — see the data-source badge at the top of the page). Restoring never rewrites the Google Sheet itself, only this tracker's local removed/added/edited state.
+      </div>
+    </div>
+    <div class="save-row">
+      <button class="ghost" id="lockBtn">Lock superadmin</button>
+      <button class="ghost" id="closeBtn4" style="flex:1;">Close</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeBtn4').onclick = closeDrawer;
+  document.getElementById('lockBtn').onclick = () => { lockSuperAdmin(); closeDrawer(); showToast('Superadmin locked.'); };
+  document.querySelectorAll('.restoreOneBtn').forEach(btn=>{
+    btn.onclick = async () => {
+      const id = btn.dataset.restoreId;
+      await restoreRemovedParticipant_(id);
+      showToast('Participant restored.');
+      openRestorePanel();
+    };
+  });
+  document.querySelectorAll('.restoreSnapBtn').forEach(btn=>{
+    btn.onclick = async () => {
+      if(!confirm('Restore the tracker to this earlier version? Local edits made after this snapshot will be replaced.')) return;
+      const res = await restoreSnapshot_(btn.dataset.snapshotId);
+      if(res.ok){ showToast('Restored to previous version.'); closeDrawer(); }
+      else showToast('Restore failed: ' + res.error);
+    };
+  });
 }
 
 // ---------- boot ----------
@@ -3685,7 +4095,7 @@ async function boot(){
       renderAll();
     });
   });
-  ['search','filterProg','filterRisk','filterStatus','filterMentor'].forEach(id=>{
+  ['search','filterProg','filterRisk','filterStatus','filterMentor','filterPayment'].forEach(id=>{
     document.getElementById(id).addEventListener('input', renderAll);
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
