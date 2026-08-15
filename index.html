@@ -243,7 +243,6 @@
   }
   .login-card button:hover{opacity:.92;}
   .login-error{color:var(--rose);font-size:12.5px;margin-top:10px;min-height:16px;}
-  .login-foot{margin-top:16px;font-size:11px;color:#94A3B8;line-height:1.5;}
   .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;}
 
   .app-logout{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);}
@@ -254,10 +253,10 @@
 <div id="loginGate">
   <div class="login-card">
     <h2>10Alytics · SPL Tracker</h2>
-    <p class="lede">Staff &amp; mentors only — sign in with your 10Alytics email to continue.</p>
+    <p class="lede">Staff &amp; mentors only — sign in with your work email to continue.</p>
     <form id="loginForm">
       <label for="loginEmail">Email address</label>
-      <input type="email" id="loginEmail" placeholder="you@10alytics.org" autocomplete="username" required>
+      <input type="email" id="loginEmail" placeholder="you@yourcompany.com" autocomplete="username" required>
       <label for="loginPassword">Access password</label>
       <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;margin:2px 0 0;">
@@ -267,11 +266,6 @@
       <button type="submit">Sign in</button>
       <div class="login-error" id="loginError"></div>
     </form>
-    <div class="login-foot">
-      Use your 10Alytics email (@10alytics.org / .io / .ca) with the team password.
-      This is a lightweight gate, not full identity verification. Mentor-assignment changes are
-      still restricted to the admin account regardless of who is signed in.
-    </div>
   </div>
 </div>
 
@@ -958,9 +952,9 @@ function initLoginGate(){
       const password = document.getElementById('loginPassword').value;
       const errEl = document.getElementById('loginError');
 
-      // Staff & mentors only — 10Alytics domain + shared staff password.
+      // Staff & mentors only — company domain + shared staff password.
       if(!ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
-        errEl.textContent = 'This tracker is for 10Alytics staff and mentors — use your 10Alytics email.';
+        errEl.textContent = 'This tracker is for authorised staff and mentors only.';
         return;
       }
       if(password !== SITE_PASSWORD){
@@ -1729,7 +1723,17 @@ function computeEngine(p){
   // Projected Completion (section 5) — reuses the predicted-final-completion
   // date the engine already derives from actual pace, evidence, and the
   // programme timeline. Always an ESTIMATE — labelled as such in the UI.
-  const projectedCompletion = isCompleted ? (p.completionMeta && p.completionMeta.date ? new Date(p.completionMeta.date) : null) : predictedFinal;
+  // IMPORTANT: a learner with zero recorded progress and no check-in
+  // evidence has no real pace to forecast from yet — projecting "today +
+  // generic default pace" made every brand-new learner in the same
+  // programme show the same date regardless of cohort (a Nov cohort and a
+  // Feb cohort both showing Oct 2026). Instead, anchor to THEIR OWN
+  // cohort's contractual deadline (6 months + grace period from their
+  // actual cohort start) until they have real activity to forecast from.
+  const hasRealPaceEvidence = completed > 0 || !!p.lastCheckin;
+  const projectedCompletion = isCompleted
+    ? (p.completionMeta && p.completionMeta.date ? new Date(p.completionMeta.date) : null)
+    : (hasRealPaceEvidence || !graceEnd ? predictedFinal : graceEnd);
 
   // data-quality flag: does the Cohort_ID's month disagree with the month embedded in Participant_ID?
   let flag = null;
@@ -2377,6 +2381,12 @@ function confDots(n){
 
 // ---------- rendering ----------
 function riskClass(r){ return r==='Green'?'green':r==='Yellow'?'amber':r==='Red'?'rose':'slate'; }
+// Once a learner is Completed, their risk badge should read Green/Complete
+// rather than a stale Red/Yellow left over from before they finished.
+function riskDisplay(eng){
+  if(eng.isCompleted) return { cls:'green', label:'Complete' };
+  return { cls: riskClass(eng.risk), label: eng.risk || '—' };
+}
 function statusClass(s){
   if(s==='Completed') return 'green';
   if(s==='At Risk' || s==='Defaulted') return 'rose';
@@ -2387,7 +2397,7 @@ function engagementClass(s){
   if(s==='Active') return 'green';
   if(s==='Needs Attention') return 'amber';
   if(s==='At Risk') return 'rose';
-  if(s==='Completed') return 'slate';
+  if(s==='Completed') return 'green';
   return 'slate';
 }
 function progressStatusClass(s){
@@ -2502,9 +2512,8 @@ function renderTable(computed){
   tbody.innerHTML = computed.map(({p,eng})=>{
     const varianceTxt = eng.progressVariance===null ? '—' : `${eng.progressVariance>=0?'+':''}${(eng.progressVariance*100).toFixed(0)}pt`;
     const varianceColor = eng.progressVariance===null ? '' : eng.progressVariance>=0 ? 'color:var(--green);' : eng.progressVariance<=-0.25 ? 'color:var(--rose);' : 'color:var(--amber);';
-    const projectedTxt = eng.isCompleted
-      ? (eng.projectedCompletion ? fmtShort(eng.projectedCompletion) : '—')
-      : (eng.projectedCompletion ? fmtShort(eng.projectedCompletion) + ' (proj.)' : '—');
+    const projectedTxt = projectedCompletionLabel(eng);
+    const rd = riskDisplay(eng);
     return `
     <tr data-id="${p.id}">
       <td>
@@ -2526,7 +2535,7 @@ function renderTable(computed){
       <td class="pid">${eng.daysSinceActivity===null?'—':Math.round(eng.daysSinceActivity)}</td>
       <td class="pid">${eng.evidenceCount}</td>
       <td><span class="badge ${engagementClass(eng.engagementStatus)}" title="${(eng.engagementReasons||[]).join(' ')}">${eng.engagementStatus}</span></td>
-      <td><span class="badge ${riskClass(eng.risk)}">${eng.risk || '—'}</span></td>
+      <td><span class="badge ${rd.cls}">${rd.label}</span></td>
       <td class="pid">${projectedTxt}</td>
       <td><span class="badge ${statusClass(eng.isCompleted?'Completed':eng.status)}">${eng.isCompleted ? 'Completed' : 'In Progress'}</span></td>
     </tr>
@@ -2534,6 +2543,18 @@ function renderTable(computed){
   tbody.querySelectorAll('tr').forEach(tr=>{
     tr.addEventListener('click', ()=> openDrawer(tr.dataset.id));
   });
+}
+
+// Formats a projected/expected completion date, distinguishing a genuine
+// forward-looking estimate from a deadline that has already passed (so
+// staff can tell "on track for Nov" apart from "was due back in June").
+function projectedCompletionLabel(eng){
+  if(eng.isCompleted) return eng.projectedCompletion ? fmtShort(eng.projectedCompletion) : '—';
+  if(!eng.projectedCompletion) return '—';
+  const overdue = eng.projectedCompletion < today();
+  return overdue
+    ? `Overdue since ${fmtShort(eng.projectedCompletion)}`
+    : `${fmtShort(eng.projectedCompletion)} (proj.)`;
 }
 
 // Shared bucketing: engagement-status counts (Active/Attention/AtRisk/Completed)
@@ -4014,7 +4035,9 @@ function renderEvidenceSummary(){
 
   const body = document.getElementById('evidenceLearnerBody');
   if(body){
-    body.innerHTML = computed.map(({p,eng})=>`
+    body.innerHTML = computed.map(({p,eng})=>{
+      const rd = riskDisplay(eng);
+      return `
       <tr data-id="${p.id}" style="cursor:pointer;">
         <td><div class="name">${p.name}</div><div class="pid">${p.id}</div></td>
         <td><span class="prog-code">${p.programme}</span></td>
@@ -4024,10 +4047,10 @@ function renderEvidenceSummary(){
         <td>${eng.progressVariance===null?'—':(eng.progressVariance>=0?'+':'')+(eng.progressVariance*100).toFixed(0)+'pt'}</td>
         <td>${p.lastCheckin ? fmtShort(new Date(p.lastCheckin)) : '<span class="muted">—</span>'}</td>
         <td>${eng.evidenceCount}</td>
-        <td><span class="badge ${riskClass(eng.risk)}">${eng.risk||'—'}</span></td>
-        <td>${eng.projectedCompletion ? fmtShort(eng.projectedCompletion) : '—'}</td>
+        <td><span class="badge ${rd.cls}">${rd.label}</span></td>
+        <td>${projectedCompletionLabel(eng)}</td>
       </tr>
-    `).join('');
+    `;}).join('');
     body.querySelectorAll('tr').forEach(tr=> tr.addEventListener('click', ()=> openDrawer(tr.dataset.id)));
   }
 }
@@ -4389,7 +4412,7 @@ async function openDrawer(id){
           <div class="metric"><div class="k">Predicted modules done</div><div class="v" style="font-size:12px;">${fmtShort(eng.predictedModuleCompletion)}</div></div>
           <div class="metric"><div class="k">Predicted final (+capstone)</div><div class="v" style="font-size:12px;">${fmtShort(eng.predictedFinal)}</div></div>
           <div class="metric"><div class="k">Buffer days</div><div class="v">${eng.bufferDays===null?'—':eng.bufferDays.toFixed(0)}</div></div>
-          <div class="metric"><div class="k">Risk status</div><div class="v"><span class="badge ${riskClass(eng.risk)}">${eng.risk||'—'}</span></div></div>
+          <div class="metric"><div class="k">Risk status</div><div class="v"><span class="badge ${riskDisplay(eng).cls}">${riskDisplay(eng).label}</span></div></div>
           <div class="metric"><div class="k">Escalation stage</div><div class="v" style="font-size:11.5px;">${eng.escalation||'—'}</div></div>
           <div class="metric"><div class="k">Participant status</div><div class="v"><span class="badge ${statusClass(eng.status)}">${eng.status}</span></div></div>
           <div class="metric"><div class="k">Internship eligible</div><div class="v" style="font-size:12px;">${eng.internshipEligible}</div></div>
