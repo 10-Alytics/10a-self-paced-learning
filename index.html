@@ -297,9 +297,16 @@
   </div>
   <div class="tabbar">
     <button class="tab-btn active" data-tab="dashboard" id="tabDashboard">Dashboard</button>
-    <button class="tab-btn" data-tab="checkins" id="tabCheckins">Weekly Check-ins</button>
-    <button class="tab-btn" data-tab="kpi" id="tabKpi">KPI Evidence</button>
-    <button class="tab-btn" data-tab="reports" id="tabReports">Weekly Report</button>
+    <button class="tab-btn" data-tab="learners" id="tabLearners">Learners</button>
+    <button class="tab-btn" data-tab="mentors" id="tabMentors">Mentors</button>
+    <button class="tab-btn" data-tab="kpi" id="tabKpi">Evidence</button>
+    <button class="tab-btn" data-tab="checkins" id="tabCheckins">Check-ins</button>
+  </div>
+  <div class="rule-pill" id="quarterPill" style="margin-top:10px;max-width:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <b>Reporting period:</b>
+    <select id="quarterSelect" style="font:inherit;font-size:12.5px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;"></select>
+    <span class="muted" id="quarterHint" style="color:#A9B4C9;font-size:11.5px;"></span>
+    <button class="app-logout" id="reportsBtn" style="margin-left:auto;padding:6px 12px;font-size:12px;">📊 Reports</button>
   </div>
 </div>
 
@@ -352,69 +359,11 @@
 
   <div class="panel">
     <div class="panel-head">
-      <div>
-        <h2>Participants</h2>
-        <div class="sub" id="tableSub">—</div>
-      </div>
-      <div class="controls">
-        <input type="text" id="search" placeholder="Search name, ID, email…">
-        <select id="filterProg"><option value="">All programmes</option></select>
-        <select id="filterRisk">
-          <option value="">All risk</option>
-          <option value="Green">Green</option>
-          <option value="Yellow">Yellow</option>
-          <option value="Red">Red</option>
-        </select>
-        <select id="filterStatus">
-          <option value="">All status</option>
-          <option value="Active">Active</option>
-          <option value="Needs Follow-up">Needs Follow-up</option>
-          <option value="At Risk">At Risk</option>
-          <option value="Defaulted">Defaulted</option>
-          <option value="Completed">Completed</option>
-        </select>
-        <select id="filterPayment">
-          <option value="">All payment status</option>
-          <option value="Verified">Verified</option>
-          <option value="Pending">Pending</option>
-          <option value="Declined">Payment Defaulter</option>
-        </select>
-        <select id="filterMentor"><option value="">All mentors</option></select>
-        <button id="assignMentorsBtn">Assign mentors</button>
-        <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
-        <button id="exportAtRiskPdfBtn" title="Export everyone currently At Risk or Defaulted as a PDF">Export at-risk (PDF)</button>
-        <button class="primary" id="addBtn">+ Add participant</button>
-      </div>
+      <div><h2>By programme</h2><div class="sub">Live rollup — click Learners tab for the full roster</div></div>
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead>
-          <tr>
-            <th data-k="name">Participant</th>
-            <th data-k="programme">Programme</th>
-            <th data-k="cohortId">Cohort</th>
-            <th data-k="cohortEnd">Cohort window (6 mo)</th>
-            <th data-k="progress">Progress</th>
-            <th data-k="weeksRemaining">Wks left</th>
-            <th data-k="pace">Pace needed</th>
-            <th data-k="risk">Risk</th>
-            <th data-k="status">Status</th>
-            <th data-k="payment">Payment</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-      <div class="empty" id="emptyState" style="display:none;">No participants match these filters.</div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-head">
-      <div><h2>By programme</h2><div class="sub">Live rollup from the participant table above</div></div>
-    </div>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>Programme</th><th>Enrolled</th><th>Avg progress</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
+        <thead><tr><th>Programme</th><th>Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th></tr></thead>
         <tbody id="progRollup"></tbody>
       </table>
     </div>
@@ -422,11 +371,11 @@
 
   <div class="panel">
     <div class="panel-head">
-      <div><h2>By mentor</h2><div class="sub">Who's carrying which caseload — click a row to filter the table above to just that mentor</div></div>
+      <div><h2>By mentor</h2><div class="sub">Who's carrying which caseload — click a row to jump to their caseload on the Mentors tab</div></div>
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg progress</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
+        <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th></tr></thead>
         <tbody id="mentorRollup"></tbody>
       </table>
     </div>
@@ -434,19 +383,7 @@
 
   <div class="panel">
     <div class="panel-head">
-      <div><h2>Check-in compliance</h2><div class="sub">From the WeeklyFeedBack sheet — who's actually submitting, and meeting their own commitment</div></div>
-    </div>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>Programme</th><th>Enrolled</th><th>Ever submitted</th><th>Submission rate</th><th>Met commitment (latest)</th></tr></thead>
-        <tbody id="checkinCompliance"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-head">
-      <div><h2>Data quality</h2><div class="sub">Everything worth double-checking in ParticipantDB, in one place</div></div>
+      <div><h2>Data quality</h2><div class="sub">Everything worth double-checking in ParticipantDB, in one place (section 20)</div></div>
     </div>
     <div style="overflow-x:auto;">
       <table>
@@ -474,6 +411,106 @@
 </div>
 
 </div><!-- /dashboardView -->
+
+<div class="main" id="learnersView" style="display:none;">
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Learners</h2>
+        <div class="sub" id="tableSub">—</div>
+      </div>
+      <div class="controls">
+        <input type="text" id="search" placeholder="Search name, ID, email…">
+        <select id="filterProg"><option value="">All programmes</option></select>
+        <select id="filterCohort"><option value="">All cohorts</option></select>
+        <select id="filterMentor"><option value="">All mentors</option></select>
+        <select id="filterEngagement">
+          <option value="">All engagement</option>
+          <option value="Active">Active</option>
+          <option value="Needs Attention">Needs Attention</option>
+          <option value="At Risk">At Risk</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <select id="filterRisk">
+          <option value="">All risk</option>
+          <option value="Green">Green</option>
+          <option value="Yellow">Yellow</option>
+          <option value="Red">Red</option>
+        </select>
+        <select id="filterStatus">
+          <option value="">All status</option>
+          <option value="Active">Active</option>
+          <option value="Needs Follow-up">Needs Follow-up</option>
+          <option value="At Risk">At Risk</option>
+          <option value="Defaulted">Defaulted</option>
+          <option value="Completed">Completed</option>
+        </select>
+        <select id="filterCompletion">
+          <option value="">All completion</option>
+          <option value="completed">Completed</option>
+          <option value="inprogress">In progress</option>
+        </select>
+        <select id="filterProgressRange">
+          <option value="">Any progress</option>
+          <option value="0-25">0–25%</option>
+          <option value="25-50">25–50%</option>
+          <option value="50-75">50–75%</option>
+          <option value="75-100">75–100%</option>
+        </select>
+        <select id="filterPayment">
+          <option value="">All payment status</option>
+          <option value="Verified">Verified</option>
+          <option value="Pending">Pending</option>
+          <option value="Declined">Payment Defaulter</option>
+        </select>
+        <button id="assignMentorsBtn">Assign mentors</button>
+        <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
+        <button id="exportAtRiskPdfBtn" title="Export everyone currently At Risk or Defaulted as a PDF">Export at-risk (PDF)</button>
+        <button class="primary" id="addBtn">+ Add participant</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th data-k="name">Learner</th>
+            <th data-k="programme">Programme</th>
+            <th data-k="cohortId">Cohort</th>
+            <th data-k="mentor">Mentor</th>
+            <th data-k="progress">Progress</th>
+            <th data-k="expected">Expected</th>
+            <th data-k="variance">Variance</th>
+            <th data-k="lastActivity">Last Activity</th>
+            <th data-k="daysSince">Days Since</th>
+            <th data-k="evidence">Evidence</th>
+            <th data-k="engagement">Engagement</th>
+            <th data-k="risk">Risk</th>
+            <th data-k="projected">Projected Completion</th>
+            <th data-k="completion">Completion</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="emptyState" style="display:none;">No learners match these filters.</div>
+    </div>
+  </div>
+  <p class="footnote">Progress = modules completed. Expected progress = where a learner should be today given their cohort's timeline. Projected Completion is an estimate, not a guaranteed date.</p>
+</div>
+
+<div class="main" id="mentorsView" style="display:none;">
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Mentors</h2><div class="sub">Caseload and outcomes per mentor — click a row to see that mentor's learners</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th></tr></thead>
+        <tbody id="mentorsTabBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <p class="footnote">All authorised users can see mentor assignments, progress, risk, activity, evidence, and completion status (section 12).</p>
+</div>
 
 <div class="main" id="checkinsView" style="display:none;">
   <div class="panel">
@@ -504,15 +541,50 @@
       </div>
     </div>
   </div>
-  <p class="footnote" id="checkinsFootnote">Participant self-reports come from the linked check-in form.</p>
+
+  <div class="panel" style="margin-top:18px;">
+    <div class="panel-head">
+      <div><h2>Check-in compliance by programme</h2><div class="sub">Supporting evidence of engagement — not the primary dashboard measure (section 2 &amp; 18)</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Programme</th><th>Enrolled</th><th>Ever submitted</th><th>Submission rate</th><th>Met commitment (latest)</th></tr></thead>
+        <tbody id="checkinCompliance"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="footnote" id="checkinsFootnote">Participant self-reports come from the linked check-in form. Check-in data feeds Last Activity, Engagement, Evidence, Risk and Progress — it is not scored on its own (section 18).</p>
 </div>
 
 <div class="main" id="kpiView" style="display:none;">
 
-  <!-- SELF-PACED CHECK-IN KPI — top-of-page management answer -->
-  <div class="kpi-hero">
+  <!-- EVIDENCE SUMMARY (section 15) — progress & engagement led, for the
+       selected reporting quarter. This is the headline for the tab now,
+       not check-in completion (section 2). -->
+  <div class="panel">
+    <div class="panel-head">
+      <div><h2>Evidence Summary — <span id="evidenceQuarterLabel">this quarter</span></h2><div class="sub">Progress, engagement, and evidence for every learner in the selected reporting period</div></div>
+    </div>
+    <div class="evidence-grid" id="evidenceSummaryGrid"></div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;">
+    <div class="panel-head">
+      <div><h2>Evidence — by learner</h2><div class="sub">Click a learner to see their full activity timeline and supporting evidence (section 16 &amp; 17)</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Learner</th><th>Programme</th><th>Mentor</th><th>Progress</th><th>Expected</th><th>Variance</th><th>Last Activity</th><th>Evidence</th><th>Risk</th><th>Projected Completion</th></tr></thead>
+        <tbody id="evidenceLearnerBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SELF-PACED CHECK-IN KPI — supporting detail, not the primary measure -->
+  <div class="kpi-hero" style="margin-top:20px;">
     <div>
-      <h1>Self-Paced Learner Check-In KPI</h1>
+      <h1>Check-In Completion — supporting metric</h1>
       <div class="actual" id="kpiHeroActual">—<small>Target 80%</small></div>
     </div>
     <div class="stat-blk"><div class="k">Reporting week</div><div class="v" id="kpiHeroWeek" style="font-size:14px;">—</div></div>
@@ -812,6 +884,25 @@ function unlockSuperAdmin(key){
   return false;
 }
 function lockSuperAdmin(){ sessionStorage.removeItem('splms-superadmin-ok'); }
+
+// -----------------------------------------------------------------------
+// EDIT AUTHORISATION (section 13) — everyone with dashboard access can
+// VIEW freely; changing anything (mentor, programme, completion status,
+// tracking fields, etc.) requires this separate passcode. It reuses the
+// same secret as the superadmin/"Restore previous version" unlock
+// (SUPERADMIN_KEY = '10Alytics LearnOps') so there's one passcode to
+// remember, not two. The admin account (ADMIN_EMAIL) always has full
+// access and is never prompted.
+// -----------------------------------------------------------------------
+function hasEditAuth(){ return isAdmin() || isSuperAdmin(); }
+function requireEditAuth(){
+  if(hasEditAuth()) return true;
+  const key = window.prompt('Admin authorisation required\n\nEnter the LearnOps edit passcode to make this change:');
+  if(key === null) return false; // cancelled
+  if(unlockSuperAdmin(key)) return true;
+  alert('Incorrect passcode. The change was not made.');
+  return false;
+}
 
 // Google Apps Script Web App URL that writes Assigned_Mentor directly to
 // the ParticipantDB sheet, so changes show up for every device (not just
@@ -1570,6 +1661,76 @@ function computeEngine(p){
     internshipEligible = (!graceEnd || predictedFinal <= graceEnd) ? 'Yes' : 'No - Missed Deadline';
   }
 
+  // ---- Completion (section 7 / 24): a learner marked Completed — whether
+  // via the manual override or because progress hit 100% — is "done".
+  // Historical completions (no check-in trail because they finished before
+  // this tracker existed) must never be treated as inactive/at-risk.
+  const isCompleted = (p.completionOverride === 'completed') || progressPct >= 1;
+  const isHistoricalCompletion = isCompleted && !p.lastCheckin && !(p.completionMeta && p.completionMeta.date);
+
+  // ---- Progress Engine (section 4): Expected vs Actual progress ----
+  // Expected progress = how far along the learner SHOULD be today, based on
+  // where they are in their overall programme + grace timeline (0% at
+  // cohort start, 100% at the grace-period deadline). Only meaningful when
+  // we have a real cohort window to measure against.
+  let expectedProgressPct = null;
+  if(cohortStart && graceEnd && graceEnd > cohortStart){
+    const span = graceEnd - cohortStart;
+    expectedProgressPct = Math.min(Math.max((t - cohortStart)/span, 0), 1);
+  }
+  const progressVariance = (expectedProgressPct === null) ? null : (progressPct - expectedProgressPct);
+
+  let progressStatus = null;
+  if(isCompleted){ progressStatus = 'Completed'; }
+  else if(progressVariance === null){ progressStatus = null; }
+  else if(progressVariance >= 0.05) progressStatus = 'Ahead';
+  else if(progressVariance >= -0.10) progressStatus = 'On Track';
+  else if(progressVariance >= -0.25) progressStatus = 'Behind';
+  else progressStatus = 'At Risk';
+
+  // ---- Engagement Engine (section 6) ----
+  // ACTIVE: activity within last 7 days. NEEDS ATTENTION: 8-14 days, or a
+  // meaningful negative progress variance. AT RISK: 14+ days without
+  // meaningful activity, or a large progress deficit, or (both). Completed
+  // learners — especially historical ones with no check-in trail — are
+  // exempt from this entirely; their engagement reads "Completed".
+  let engagementStatus, engagementReasons = [];
+  if(isCompleted){
+    engagementStatus = 'Completed';
+    engagementReasons = isHistoricalCompletion
+      ? ['Completed before this tracker existed — no check-in history expected or required.']
+      : ['Learner has been marked Completed.'];
+  } else if(daysSinceActivity === null){
+    engagementStatus = 'At Risk';
+    engagementReasons = ['No recorded activity/check-in on file yet.'];
+  } else {
+    const bigDeficit = progressVariance !== null && progressVariance <= -0.25;
+    const modDeficit = progressVariance !== null && progressVariance <= -0.10;
+    if(daysSinceActivity > 14 || bigDeficit){
+      engagementStatus = 'At Risk';
+      if(daysSinceActivity > 14) engagementReasons.push(`Last activity ${Math.round(daysSinceActivity)} days ago (>14-day threshold).`);
+      if(bigDeficit) engagementReasons.push(`Progress ${(progressPct*100).toFixed(0)}% vs expected ${(expectedProgressPct*100).toFixed(0)}% — variance ${(progressVariance*100).toFixed(0)} pts.`);
+      if(escalation==='Week 2 - Follow-up Call' || escalation==='Week 3 - Escalation' || escalation==='Week 4 - Default Review') engagementReasons.push(`Escalation stage: ${escalation}.`);
+    } else if(daysSinceActivity >= 8 || modDeficit){
+      engagementStatus = 'Needs Attention';
+      if(daysSinceActivity >= 8) engagementReasons.push(`Last activity ${Math.round(daysSinceActivity)} days ago (8-14 day window).`);
+      if(modDeficit) engagementReasons.push(`Progress running behind expected pace by ${Math.abs(progressVariance*100).toFixed(0)} pts.`);
+    } else {
+      engagementStatus = 'Active';
+      engagementReasons.push(`Last activity ${Math.round(daysSinceActivity)} day${Math.round(daysSinceActivity)===1?'':'s'} ago.`);
+      if(progressVariance !== null && progressVariance >= 0) engagementReasons.push('Progress at or ahead of expected pace.');
+    }
+  }
+  if(!isCompleted){
+    const evCount = checkinsFor(p).length;
+    if(evCount === 0) engagementReasons.push('No evidence/check-in submissions on file.');
+  }
+
+  // Projected Completion (section 5) — reuses the predicted-final-completion
+  // date the engine already derives from actual pace, evidence, and the
+  // programme timeline. Always an ESTIMATE — labelled as such in the UI.
+  const projectedCompletion = isCompleted ? (p.completionMeta && p.completionMeta.date ? new Date(p.completionMeta.date) : null) : predictedFinal;
+
   // data-quality flag: does the Cohort_ID's month disagree with the month embedded in Participant_ID?
   let flag = null;
   if(p.idGenerated){
@@ -1586,9 +1747,52 @@ function computeEngine(p){
     cohortStart, cohortEnd, graceEnd, weeksRemaining, activitiesPerWeek,
     predictedModuleCompletion, capstoneStart, predictedFinal, bufferDays,
     risk, daysSinceActivity, escalation, status, internshipEligible, flag,
-    capstoneWeeks, preferredDays
+    capstoneWeeks, preferredDays,
+    // ---- new engagement/retention-dashboard fields ----
+    isCompleted, isHistoricalCompletion,
+    expectedProgressPct, progressVariance, progressStatus,
+    engagementStatus, engagementReasons,
+    projectedCompletion,
+    evidenceCount: checkinsFor(p).length,
   };
 }
+
+// ---------- Quarter engine (section 3) ----------
+// Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec. Never hard-coded — always
+// derived from the real current date (or, for historical data, the date on
+// the record being classified).
+function quarterOf(d){
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if(isNaN(dt)) return null;
+  const q = Math.floor(dt.getMonth()/3) + 1;
+  return { year: dt.getFullYear(), q, label: `Q${q} ${dt.getFullYear()}` };
+}
+function currentQuarter(){ return quarterOf(today()); }
+function quarterKey(qObj){ return qObj ? `${qObj.year}-Q${qObj.q}` : ''; }
+function quarterRange(qObj){
+  if(!qObj) return null;
+  const startMonth = (qObj.q-1)*3;
+  const start = new Date(qObj.year, startMonth, 1);
+  const end = new Date(qObj.year, startMonth+3, 0, 23,59,59);
+  return { start, end };
+}
+// Builds the list of quarters that actually have data (cohort starts,
+// check-ins, or completions), plus the current quarter, newest first —
+// so the selector never shows an empty quarter and never needs editing
+// when a new quarter begins.
+function listAvailableQuarters(){
+  const set = new Map();
+  const add = (d)=>{ const q = quarterOf(d); if(q) set.set(quarterKey(q), q); };
+  add(today());
+  participants.forEach(p=>{
+    const eng = computeEngine(p);
+    if(eng.cohortStart) add(eng.cohortStart);
+    checkinsFor(p).forEach(c=> add(new Date(c.weekEnding||c.timestamp)));
+    if(p.completionMeta && p.completionMeta.date) add(new Date(p.completionMeta.date));
+  });
+  return Array.from(set.values()).sort((a,b)=> (b.year-a.year) || (b.q-a.q));
+}
+let SELECTED_QUARTER = null; // set on load to the current quarter
 
 // ---------- lesson plan / calendar ----------
 // Real, named modules for a programme (from the Modules tab), in week order.
@@ -2179,6 +2383,20 @@ function statusClass(s){
   if(s==='Needs Follow-up') return 'amber';
   return 'slate';
 }
+function engagementClass(s){
+  if(s==='Active') return 'green';
+  if(s==='Needs Attention') return 'amber';
+  if(s==='At Risk') return 'rose';
+  if(s==='Completed') return 'slate';
+  return 'slate';
+}
+function progressStatusClass(s){
+  if(s==='Ahead' || s==='Completed') return 'green';
+  if(s==='On Track') return 'teal';
+  if(s==='Behind') return 'amber';
+  if(s==='At Risk') return 'rose';
+  return 'slate';
+}
 function paymentClass(s){
   const v = (s||'').trim().toLowerCase();
   if(v==='declined') return 'rose'; // payment defaulter — matches the red highlight used on the Sheet
@@ -2187,50 +2405,64 @@ function paymentClass(s){
   return 'slate';
 }
 
+// ---------- Primary Dashboard KPIs (section 8) ----------
+// Engagement & progress toward completion are the primary concepts here —
+// check-in completion is NOT the headline metric (section 2). Completed
+// learners are excluded from the "at risk" / "behind schedule" counts so
+// historical completions never distort current engagement (section 7/24).
 function renderKPIs(computed){
   const n = computed.length;
   const count = f => computed.filter(f).length;
-  const active = count(c=>c.eng.status==='Active');
-  const followup = count(c=>c.eng.status==='Needs Follow-up');
-  const atrisk = count(c=>c.eng.status==='At Risk');
-  const defaulted = count(c=>c.eng.status==='Defaulted');
-  const completed = count(c=>c.eng.status==='Completed');
-  const avgProg = n ? (computed.reduce((s,c)=>s+c.eng.progressPct,0)/n*100) : 0;
+  const active = count(c=>c.eng.engagementStatus==='Active');
+  const attention = count(c=>c.eng.engagementStatus==='Needs Attention');
+  const atrisk = count(c=>c.eng.engagementStatus==='At Risk');
+  const completed = count(c=>c.eng.isCompleted);
+  const inProgress = computed.filter(c=>!c.eng.isCompleted);
+  const nProg = inProgress.length;
+  const avgProg = nProg ? (inProgress.reduce((s,c)=>s+c.eng.progressPct,0)/nProg*100) : 0;
+  const avgEngagementScore = nProg
+    ? (inProgress.reduce((s,c)=>s + (c.eng.engagementStatus==='Active'?1:c.eng.engagementStatus==='Needs Attention'?0.5:0), 0)/nProg*100)
+    : 0;
+  const evidenceRates = inProgress.map(c=> c.eng.evidenceCount>0 ? 1 : 0);
+  const avgEvidenceRate = nProg ? (evidenceRates.reduce((a,b)=>a+b,0)/nProg*100) : 0;
+  const daysList = inProgress.filter(c=>c.eng.daysSinceActivity!==null).map(c=>c.eng.daysSinceActivity);
+  const avgDaysSince = daysList.length ? (daysList.reduce((a,b)=>a+b,0)/daysList.length) : null;
 
   const mentorAssigned = count(c=>!!c.p.mentor);
   const mentorUnassigned = n - mentorAssigned;
   const mentorCoverage = n ? (mentorAssigned/n*100) : 0;
-  const checkedInEver = count(c=> checkinsFor(c.p).length > 0);
-  const checkinRate = n ? (checkedInEver/n*100) : 0;
-  const needsEscalation = count(c=> ['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(c.eng.escalation));
-  const onboardingSentCount = count(c=> !!ONBOARDING_SENT[c.p.id]?.sent);
-  const paymentDefaulters = count(c=> isPaymentDefaulter(c.p));
+  const avgVarianceList = inProgress.filter(c=>c.eng.progressVariance!==null).map(c=>c.eng.progressVariance);
+  const avgVariance = avgVarianceList.length ? (avgVarianceList.reduce((a,b)=>a+b,0)/avgVarianceList.length*100) : null;
+  const behindSchedule = count(c=> !c.eng.isCompleted && c.eng.progressStatus==='Behind' || c.eng.progressStatus==='At Risk' && !c.eng.isCompleted);
+  const projectedCompletions = count(c=> !c.eng.isCompleted && !!c.eng.projectedCompletion);
 
   const cards = [
-    ['Total participants', n, ''],
-    ['Active', active, 'teal'],
-    ['Needs follow-up', followup, 'amber'],
-    ['At risk', atrisk, 'rose'],
-    ['Defaulted', defaulted, 'rose'],
-    ['Payment defaulters', paymentDefaulters, paymentDefaulters>0?'rose':'green', {type:'payment', value:'Declined'}],
-    ['Completed', completed, 'green', {type:'status', value:'Completed'}],
-    ['Avg progress', avgProg.toFixed(0)+'%', 'teal'],
-    ['Mentor coverage', mentorCoverage.toFixed(0)+'%', mentorCoverage>=90?'green':mentorCoverage>=60?'amber':'rose'],
-    ['Unassigned mentor', mentorUnassigned, mentorUnassigned>0?'amber':'green'],
-    ['Ever checked in', checkinRate.toFixed(0)+'%', checkinRate>=75?'green':checkinRate>=40?'amber':'rose'],
-    ['Needs escalation', needsEscalation, needsEscalation>0?'rose':'green'],
-    ['Onboarding sent', `${onboardingSentCount}/${n}`, onboardingSentCount>=n?'green':onboardingSentCount>0?'amber':'rose'],
+    ['Total Learners', n, '', {type:'completion', value:''}],
+    ['Active', active, 'green', {type:'engagement', value:'Active'}],
+    ['Needs Attention', attention, 'amber', {type:'engagement', value:'Needs Attention'}],
+    ['At Risk', atrisk, 'rose', {type:'engagement', value:'At Risk'}],
+    ['Completed', completed, 'slate', {type:'completion', value:'completed'}],
+    ['Avg Progress', avgProg.toFixed(0)+'%', 'teal'],
+    ['Avg Engagement', avgEngagementScore.toFixed(0)+'%', avgEngagementScore>=75?'green':avgEngagementScore>=40?'amber':'rose'],
+    ['Avg Evidence Rate', avgEvidenceRate.toFixed(0)+'%', avgEvidenceRate>=75?'green':avgEvidenceRate>=40?'amber':'rose'],
+    ['Avg Days Since Activity', avgDaysSince===null?'—':avgDaysSince.toFixed(1), ''],
+    ['Mentor Coverage', mentorCoverage.toFixed(0)+'%', mentorCoverage>=90?'green':mentorCoverage>=60?'amber':'rose'],
+    ['Unassigned Learners', mentorUnassigned, mentorUnassigned>0?'amber':'green', {type:'mentor', value:'__unassigned__'}],
+    ['Avg Progress Variance', avgVariance===null?'—':(avgVariance>=0?'+':'')+avgVariance.toFixed(0)+'pt', avgVariance===null?'':avgVariance>=0?'green':'rose'],
+    ['Behind Schedule', behindSchedule, behindSchedule>0?'amber':'green'],
+    ['Projected Completions', projectedCompletions, 'teal'],
   ];
   document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls,jump])=>`
-    <div class="kpi ${cls}" ${jump ? `style="cursor:pointer;" data-jump-type="${jump.type}" data-jump-value="${jump.value}" title="Click to filter the table below"` : ''}><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
+    <div class="kpi ${cls}" ${jump ? `style="cursor:pointer;" data-jump-type="${jump.type}" data-jump-value="${jump.value}" title="Click to filter the Learners table"` : ''}><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
   `).join('');
   document.querySelectorAll('#kpis [data-jump-type]').forEach(card=>{
     card.addEventListener('click', ()=>{
       const type = card.dataset.jumpType, value = card.dataset.jumpValue;
-      if(type==='status') document.getElementById('filterStatus').value = value;
-      if(type==='payment') document.getElementById('filterPayment').value = value;
+      switchTab('learners');
+      if(type==='engagement') document.getElementById('filterEngagement').value = value;
+      if(type==='completion') document.getElementById('filterCompletion').value = value;
+      if(type==='mentor') document.getElementById('filterMentor').value = value;
       renderAll();
-      document.getElementById('tableSub').closest('.panel').scrollIntoView({behavior:'smooth', block:'start'});
     });
   });
 }
@@ -2267,7 +2499,13 @@ function renderTable(computed){
     return;
   }
   document.getElementById('emptyState').style.display='none';
-  tbody.innerHTML = computed.map(({p,eng})=>`
+  tbody.innerHTML = computed.map(({p,eng})=>{
+    const varianceTxt = eng.progressVariance===null ? '—' : `${eng.progressVariance>=0?'+':''}${(eng.progressVariance*100).toFixed(0)}pt`;
+    const varianceColor = eng.progressVariance===null ? '' : eng.progressVariance>=0 ? 'color:var(--green);' : eng.progressVariance<=-0.25 ? 'color:var(--rose);' : 'color:var(--amber);';
+    const projectedTxt = eng.isCompleted
+      ? (eng.projectedCompletion ? fmtShort(eng.projectedCompletion) : '—')
+      : (eng.projectedCompletion ? fmtShort(eng.projectedCompletion) + ' (proj.)' : '—');
+    return `
     <tr data-id="${p.id}">
       <td>
         <div class="name">${p.name}</div>
@@ -2275,87 +2513,133 @@ function renderTable(computed){
       </td>
       <td><span class="prog-code">${p.programme}</span></td>
       <td class="pid">${p.cohortId || '<span class=muted>derived from ID</span>'}</td>
-      <td>
-        <div style="font-size:11.5px;">${fmtShort(eng.cohortStart)} → ${fmtShort(eng.cohortEnd)}</div>
-        ${timelineSvg(eng)}
-      </td>
+      <td>${p.mentor || '<span class="muted">Unassigned</span>'}</td>
       <td>
         <div style="display:flex;align-items:center;gap:6px;">
           <div class="progress-track"><div class="progress-fill" style="width:${(eng.progressPct*100).toFixed(0)}%;"></div></div>
-          <span class="muted" style="font-size:11px;">${eng.completed}/${eng.totalModules}</span>
+          <span class="muted" style="font-size:11px;">${(eng.progressPct*100).toFixed(0)}%</span>
         </div>
       </td>
-      <td class="pid">${eng.weeksRemaining===null?'—':eng.weeksRemaining.toFixed(1)}</td>
-      <td class="pid">${eng.activitiesPerWeek ? eng.activitiesPerWeek.toFixed(1)+'/wk' : '—'}</td>
+      <td class="pid">${eng.expectedProgressPct===null?'—':(eng.expectedProgressPct*100).toFixed(0)+'%'}</td>
+      <td class="pid" style="${varianceColor}">${varianceTxt}</td>
+      <td class="pid">${p.lastCheckin ? fmtShort(new Date(p.lastCheckin)) : '<span class="muted">—</span>'}</td>
+      <td class="pid">${eng.daysSinceActivity===null?'—':Math.round(eng.daysSinceActivity)}</td>
+      <td class="pid">${eng.evidenceCount}</td>
+      <td><span class="badge ${engagementClass(eng.engagementStatus)}" title="${(eng.engagementReasons||[]).join(' ')}">${eng.engagementStatus}</span></td>
       <td><span class="badge ${riskClass(eng.risk)}">${eng.risk || '—'}</span></td>
-      <td><span class="badge ${statusClass(eng.status)}">${eng.status}</span></td>
-      <td><span class="badge ${paymentClass(p.paymentStatus)}">${isPaymentDefaulter(p) ? 'Payment Defaulter' : (p.paymentStatus || '—')}</span></td>
+      <td class="pid">${projectedTxt}</td>
+      <td><span class="badge ${statusClass(eng.isCompleted?'Completed':eng.status)}">${eng.isCompleted ? 'Completed' : 'In Progress'}</span></td>
     </tr>
-  `).join('');
+  `;}).join('');
   tbody.querySelectorAll('tr').forEach(tr=>{
     tr.addEventListener('click', ()=> openDrawer(tr.dataset.id));
   });
+}
+
+// Shared bucketing: engagement-status counts (Active/Attention/AtRisk/Completed)
+// used by the Dashboard's Programme & Mentor tables and the Mentors tab —
+// these reflect the ENGAGEMENT ENGINE now, not just risk buffer colour.
+function bucketByEngagement(list){
+  const b = {n:0, prog:0, active:0, attention:0, atrisk:0, completed:0};
+  list.forEach(({eng})=>{
+    b.n++; b.prog += eng.progressPct;
+    if(eng.engagementStatus==='Active') b.active++;
+    else if(eng.engagementStatus==='Needs Attention') b.attention++;
+    else if(eng.engagementStatus==='At Risk') b.atrisk++;
+    else if(eng.engagementStatus==='Completed') b.completed++;
+  });
+  return b;
+}
+function engagementRowCells(b){
+  return `<td>${b.n}</td>
+    <td>${b.n ? (b.prog/b.n*100).toFixed(0)+'%' : '<span class="muted">—</span>'}</td>
+    <td><span class="badge green">${b.active}</span></td>
+    <td><span class="badge amber">${b.attention}</span></td>
+    <td><span class="badge rose">${b.atrisk}</span></td>
+    <td><span class="badge slate">${b.completed}</span></td>`;
 }
 
 function renderRollup(computed){
   const byProg = {};
   // Seed every known programme first (even ones with 0 enrolled, like a
   // brand-new HTBA or GRC cohort) so they still show up in the table.
-  BUNDLE.programmes.forEach(pr=>{ byProg[pr.code] = {n:0,prog:0,g:0,y:0,r:0}; });
-  computed.forEach(({p,eng})=>{
-    byProg[p.programme] = byProg[p.programme] || {n:0,prog:0,g:0,y:0,r:0};
-    const b = byProg[p.programme];
-    b.n++; b.prog += eng.progressPct;
-    if(eng.risk==='Green') b.g++; else if(eng.risk==='Yellow') b.y++; else if(eng.risk==='Red') b.r++;
+  BUNDLE.programmes.forEach(pr=>{ byProg[pr.code] = []; });
+  computed.forEach(row=>{
+    byProg[row.p.programme] = byProg[row.p.programme] || [];
+    byProg[row.p.programme].push(row);
   });
   const rows = Object.keys(byProg).sort().map(code=>{
-    const b = byProg[code];
+    const b = bucketByEngagement(byProg[code]);
     const name = (PROGRAMMES[code]||{}).name || code;
     return `<tr>
       <td><span class="prog-code">${code}</span> <span class="muted">${name}</span></td>
-      <td>${b.n}</td>
-      <td>${b.n ? (b.prog/b.n*100).toFixed(0)+'%' : '<span class="muted">—</span>'}</td>
-      <td><span class="badge green">${b.g}</span></td>
-      <td><span class="badge amber">${b.y}</span></td>
-      <td><span class="badge rose">${b.r}</span></td>
+      ${engagementRowCells(b)}
     </tr>`;
   }).join('');
-  document.getElementById('progRollup').innerHTML = rows || '<tr><td colspan=6 class="muted">No data</td></tr>';
+  document.getElementById('progRollup').innerHTML = rows || '<tr><td colspan=7 class="muted">No data</td></tr>';
+}
+
+function computeMentorBuckets(computed){
+  const byMentor = {};
+  computed.forEach(row=>{
+    const key = row.p.mentor || '__unassigned__';
+    byMentor[key] = byMentor[key] || [];
+    byMentor[key].push(row);
+  });
+  return byMentor;
 }
 
 function renderMentorRollup(computed){
-  const byMentor = {};
-  computed.forEach(({p,eng})=>{
-    const key = p.mentor || '__unassigned__';
-    byMentor[key] = byMentor[key] || {n:0,prog:0,g:0,y:0,r:0};
-    const b = byMentor[key];
-    b.n++; b.prog += eng.progressPct;
-    if(eng.risk==='Green') b.g++; else if(eng.risk==='Yellow') b.y++; else if(eng.risk==='Red') b.r++;
-  });
+  const byMentor = computeMentorBuckets(computed);
   const keys = Object.keys(byMentor).sort((a,b)=>{
     if(a==='__unassigned__') return 1;
     if(b==='__unassigned__') return -1;
     return a.localeCompare(b);
   });
   const rows = keys.map(key=>{
-    const b = byMentor[key];
+    const b = bucketByEngagement(byMentor[key]);
     const label = key==='__unassigned__' ? 'Unassigned' : key;
     return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;">
       <td>${label}</td>
-      <td>${b.n}</td>
-      <td>${(b.prog/b.n*100).toFixed(0)}%</td>
-      <td><span class="badge green">${b.g}</span></td>
-      <td><span class="badge amber">${b.y}</span></td>
-      <td><span class="badge rose">${b.r}</span></td>
+      ${engagementRowCells(b)}
     </tr>`;
   }).join('');
   const tbody = document.getElementById('mentorRollup');
-  tbody.innerHTML = rows || '<tr><td colspan=6 class="muted">No data</td></tr>';
+  tbody.innerHTML = rows || '<tr><td colspan=7 class="muted">No data</td></tr>';
   tbody.querySelectorAll('.mentor-row').forEach(tr=>{
     tr.addEventListener('click', ()=>{
+      switchTab('learners');
       document.getElementById('filterMentor').value = tr.dataset.mentor;
       renderAll();
-      document.getElementById('filterMentor').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  });
+}
+
+// ---------- Tab 3 — Mentors ----------
+function renderMentorsTab(){
+  const computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  const byMentor = computeMentorBuckets(computed);
+  const keys = Object.keys(byMentor).sort((a,b)=>{
+    if(a==='__unassigned__') return 1;
+    if(b==='__unassigned__') return -1;
+    return a.localeCompare(b);
+  });
+  const rows = keys.map(key=>{
+    const b = bucketByEngagement(byMentor[key]);
+    const label = key==='__unassigned__' ? 'Unassigned' : key;
+    return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;">
+      <td><b>${label}</b></td>
+      ${engagementRowCells(b)}
+    </tr>`;
+  }).join('');
+  const tbody = document.getElementById('mentorsTabBody');
+  if(!tbody) return;
+  tbody.innerHTML = rows || '<tr><td colspan=7 class="muted">No data</td></tr>';
+  tbody.querySelectorAll('.mentor-row').forEach(tr=>{
+    tr.addEventListener('click', ()=>{
+      switchTab('learners');
+      document.getElementById('filterMentor').value = tr.dataset.mentor;
+      renderAll();
     });
   });
 }
@@ -2419,6 +2703,31 @@ function computeDataIssues(){
     }
     if(!p.idGenerated && eng.flag){
       issues.push({p, text: eng.flag});
+    }
+    // ---- section 20 checklist — additional data-quality checks ----
+    if(!p.mentor){
+      issues.push({p, text: 'Missing mentor — not yet assigned.'});
+    }
+    if(!p.programme || !PROGRAMMES[p.programme]){
+      issues.push({p, text: `Missing or unrecognised programme code${p.programme?` ("${p.programme}")`:''}.`});
+    }
+    if(!p.cohortId){
+      issues.push({p, text: 'Missing cohort ID.'});
+    }
+    if(!eng.cohortStart){
+      issues.push({p, text: 'Missing/unparsable start date — could not derive a cohort start.'});
+    }
+    if(p.completionOverride==='completed' && p.completionMeta && p.completionMeta.date){
+      const d = new Date(p.completionMeta.date);
+      if(isNaN(d) || d > today()){
+        issues.push({p, text: 'Invalid completion date (unparsable or in the future).'});
+      }
+    }
+    if(p.modulesCompleted===null || p.modulesCompleted===undefined || isNaN(p.modulesCompleted)){
+      issues.push({p, text: 'Missing progress information (Modules_Completed).'});
+    }
+    if(!eng.isCompleted && !eng.isHistoricalCompletion && eng.evidenceCount===0){
+      issues.push({p, text: 'No evidence/check-in submissions on file for an active learner.'});
     }
   });
   return issues;
@@ -2794,13 +3103,28 @@ function populateProgFilter(){
   msel.appendChild(unassignedOpt);
 }
 
+// Cohort dropdown is data-driven (not a fixed list) since cohort IDs are
+// created on an ongoing basis — never hard-coded.
+function populateCohortFilter(){
+  const sel = document.getElementById('filterCohort');
+  if(!sel) return;
+  const current = sel.value;
+  const cohorts = Array.from(new Set(participants.map(p=>p.cohortId).filter(Boolean))).sort();
+  sel.innerHTML = '<option value="">All cohorts</option>' + cohorts.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(cohorts.includes(current)) sel.value = current;
+}
+
 function getFiltered(){
-  const q = document.getElementById('search').value.trim().toLowerCase();
-  const fp = document.getElementById('filterProg').value;
-  const fr = document.getElementById('filterRisk').value;
-  const fs = document.getElementById('filterStatus').value;
-  const fm = document.getElementById('filterMentor').value;
-  const fpay = document.getElementById('filterPayment').value;
+  const q = (document.getElementById('search')||{}).value?.trim().toLowerCase() || '';
+  const fp = (document.getElementById('filterProg')||{}).value || '';
+  const fc = (document.getElementById('filterCohort')||{}).value || '';
+  const fr = (document.getElementById('filterRisk')||{}).value || '';
+  const fs = (document.getElementById('filterStatus')||{}).value || '';
+  const fm = (document.getElementById('filterMentor')||{}).value || '';
+  const fpay = (document.getElementById('filterPayment')||{}).value || '';
+  const feng = (document.getElementById('filterEngagement')||{}).value || '';
+  const fcomp = (document.getElementById('filterCompletion')||{}).value || '';
+  const fprog = (document.getElementById('filterProgressRange')||{}).value || '';
   let computed = participants.map(p=>({p, eng: computeEngine(p)}));
   if(q){
     computed = computed.filter(({p})=>
@@ -2810,11 +3134,22 @@ function getFiltered(){
     );
   }
   if(fp) computed = computed.filter(({p})=>p.programme===fp);
+  if(fc) computed = computed.filter(({p})=>p.cohortId===fc);
   if(fr) computed = computed.filter(({eng})=>eng.risk===fr);
   if(fs) computed = computed.filter(({eng})=>eng.status===fs);
   if(fm === '__unassigned__') computed = computed.filter(({p})=>!p.mentor);
   else if(fm) computed = computed.filter(({p})=>p.mentor===fm);
   if(fpay) computed = computed.filter(({p})=>(p.paymentStatus||'')===fpay);
+  if(feng) computed = computed.filter(({eng})=>eng.engagementStatus===feng);
+  if(fcomp==='completed') computed = computed.filter(({eng})=>eng.isCompleted);
+  else if(fcomp==='inprogress') computed = computed.filter(({eng})=>!eng.isCompleted);
+  if(fprog){
+    const [lo,hi] = fprog.split('-').map(Number);
+    computed = computed.filter(({eng})=>{
+      const pct = eng.progressPct*100;
+      return pct>=lo && pct<=hi;
+    });
+  }
 
   computed.sort((a,b)=>{
     let av, bv;
@@ -2829,6 +3164,15 @@ function getFiltered(){
       case 'risk': { const order={Red:0,Yellow:1,Green:2,null:3}; av=order[a.eng.risk]; bv=order[b.eng.risk]; break; }
       case 'status': av=a.eng.status; bv=b.eng.status; break;
       case 'payment': av=a.p.paymentStatus||''; bv=b.p.paymentStatus||''; break;
+      case 'mentor': av=a.p.mentor||''; bv=b.p.mentor||''; break;
+      case 'expected': av=a.eng.expectedProgressPct??-1; bv=b.eng.expectedProgressPct??-1; break;
+      case 'variance': av=a.eng.progressVariance??-99; bv=b.eng.progressVariance??-99; break;
+      case 'lastActivity': av=a.p.lastCheckin||''; bv=b.p.lastCheckin||''; break;
+      case 'daysSince': av=a.eng.daysSinceActivity??9999; bv=b.eng.daysSinceActivity??9999; break;
+      case 'evidence': av=a.eng.evidenceCount; bv=b.eng.evidenceCount; break;
+      case 'engagement': { const order={'At Risk':0,'Needs Attention':1,'Active':2,'Completed':3}; av=order[a.eng.engagementStatus]??9; bv=order[b.eng.engagementStatus]??9; break; }
+      case 'projected': av=a.eng.projectedCompletion||0; bv=b.eng.projectedCompletion||0; break;
+      case 'completion': av=a.eng.isCompleted?1:0; bv=b.eng.isCompleted?1:0; break;
       default: av=0; bv=0;
     }
     if(av<bv) return -1*sortDir;
@@ -2913,12 +3257,14 @@ function renderIntakePanel(){
 }
 
 function renderAll(){
+  populateCohortFilter();
   const computed = getFiltered();
   renderKPIs(participants.map(p=>({p,eng:computeEngine(p)}))); // KPIs always reflect ALL participants, unfiltered
   renderFlags(participants.map(p=>({p,eng:computeEngine(p)})));
   renderTable(computed);
   renderRollup(participants.map(p=>({p,eng:computeEngine(p)})));
   renderMentorRollup(participants.map(p=>({p,eng:computeEngine(p)})));
+  renderMentorsTab();
   renderCheckinCompliance();
   renderDataQuality();
   renderOnboardingStatus();
@@ -3628,7 +3974,66 @@ function selectedKpiWeek_(){
   return sel && sel.value ? sel.value : (allReportingWeeks_()[0] || null);
 }
 
+// ---------- Tab 4 — Evidence (section 15-17) ----------
+function renderEvidenceSummary(){
+  const q = SELECTED_QUARTER || currentQuarter();
+  const label = document.getElementById('evidenceQuarterLabel');
+  if(label) label.textContent = q.label;
+  const computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  const n = computed.length;
+  const inProgress = computed.filter(c=>!c.eng.isCompleted);
+  const nIP = inProgress.length;
+  const avgProg = nIP ? (inProgress.reduce((s,c)=>s+c.eng.progressPct,0)/nIP*100) : 0;
+  const active = computed.filter(c=>c.eng.engagementStatus==='Active').length;
+  const attention = computed.filter(c=>c.eng.engagementStatus==='Needs Attention').length;
+  const atrisk = computed.filter(c=>c.eng.engagementStatus==='At Risk').length;
+  const completed = computed.filter(c=>c.eng.isCompleted).length;
+  const range = quarterRange(q);
+  const evidenceThisQuarter = computed.filter(c=> checkinsFor(c.p).some(ci=>{
+    const d = new Date(ci.weekEnding||ci.timestamp);
+    return range && d>=range.start && d<=range.end;
+  })).length;
+  const evidenceRate = n ? (evidenceThisQuarter/n*100) : 0;
+  const daysList = inProgress.filter(c=>c.eng.daysSinceActivity!==null).map(c=>c.eng.daysSinceActivity);
+  const avgDays = daysList.length ? (daysList.reduce((a,b)=>a+b,0)/daysList.length) : null;
+
+  const items = [
+    ['Total Learners', n],
+    ['Avg Progress', avgProg.toFixed(0)+'%'],
+    ['Active', active],
+    ['Needs Attention', attention],
+    ['At Risk', atrisk],
+    ['Completed', completed],
+    [`Submitted Evidence (${q.label})`, `${evidenceThisQuarter}/${n} (${evidenceRate.toFixed(0)}%)`],
+    ['Avg Days Since Last Activity', avgDays===null?'—':avgDays.toFixed(1)],
+  ];
+  const grid = document.getElementById('evidenceSummaryGrid');
+  if(grid){
+    grid.innerHTML = items.map(([k,v])=>`<div class="ev-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  }
+
+  const body = document.getElementById('evidenceLearnerBody');
+  if(body){
+    body.innerHTML = computed.map(({p,eng})=>`
+      <tr data-id="${p.id}" style="cursor:pointer;">
+        <td><div class="name">${p.name}</div><div class="pid">${p.id}</div></td>
+        <td><span class="prog-code">${p.programme}</span></td>
+        <td>${p.mentor || '<span class="muted">Unassigned</span>'}</td>
+        <td>${(eng.progressPct*100).toFixed(0)}%</td>
+        <td>${eng.expectedProgressPct===null?'—':(eng.expectedProgressPct*100).toFixed(0)+'%'}</td>
+        <td>${eng.progressVariance===null?'—':(eng.progressVariance>=0?'+':'')+(eng.progressVariance*100).toFixed(0)+'pt'}</td>
+        <td>${p.lastCheckin ? fmtShort(new Date(p.lastCheckin)) : '<span class="muted">—</span>'}</td>
+        <td>${eng.evidenceCount}</td>
+        <td><span class="badge ${riskClass(eng.risk)}">${eng.risk||'—'}</span></td>
+        <td>${eng.projectedCompletion ? fmtShort(eng.projectedCompletion) : '—'}</td>
+      </tr>
+    `).join('');
+    body.querySelectorAll('tr').forEach(tr=> tr.addEventListener('click', ()=> openDrawer(tr.dataset.id)));
+  }
+}
+
 function renderKpiTab(){
+  renderEvidenceSummary();
   populateKpiFilters_();
   const weekEnding = selectedKpiWeek_();
   const result = weekEnding ? computeCheckinKpiForWeek_(weekEnding) : null;
@@ -3818,15 +4223,45 @@ function renderKpiEvidence_(weekEnding, result){
 
 function switchTab(tab){
   document.getElementById('tabDashboard').classList.toggle('active', tab==='dashboard');
+  document.getElementById('tabLearners').classList.toggle('active', tab==='learners');
+  document.getElementById('tabMentors').classList.toggle('active', tab==='mentors');
   document.getElementById('tabCheckins').classList.toggle('active', tab==='checkins');
   document.getElementById('tabKpi').classList.toggle('active', tab==='kpi');
-  document.getElementById('tabReports').classList.toggle('active', tab==='reports');
   document.getElementById('dashboardView').style.display = tab==='dashboard' ? '' : 'none';
+  document.getElementById('learnersView').style.display = tab==='learners' ? '' : 'none';
+  document.getElementById('mentorsView').style.display = tab==='mentors' ? '' : 'none';
   document.getElementById('checkinsView').style.display = tab==='checkins' ? '' : 'none';
   document.getElementById('kpiView').style.display = tab==='kpi' ? '' : 'none';
   document.getElementById('reportsView').style.display = tab==='reports' ? '' : 'none';
+  if(tab==='learners') renderAll();
+  if(tab==='mentors') renderMentorsTab();
   if(tab==='kpi') renderKpiTab();
   if(tab==='reports') renderReportsTab();
+}
+
+// ---------- quarter selector wiring ----------
+function populateQuarterSelect(){
+  const sel = document.getElementById('quarterSelect');
+  if(!sel) return;
+  const quarters = listAvailableQuarters();
+  const cq = currentQuarter();
+  if(!SELECTED_QUARTER) SELECTED_QUARTER = cq;
+  sel.innerHTML = quarters.map(q=>{
+    const key = quarterKey(q);
+    const isCurrent = q.year===cq.year && q.q===cq.q;
+    return `<option value="${key}" ${key===quarterKey(SELECTED_QUARTER)?'selected':''}>${q.label}${isCurrent?' (current)':''}</option>`;
+  }).join('');
+  const hint = document.getElementById('quarterHint');
+  if(hint){
+    const isCurrent = SELECTED_QUARTER.year===cq.year && SELECTED_QUARTER.q===cq.q;
+    hint.textContent = isCurrent ? 'Showing the current quarter — auto-detected from today\'s date.' : 'Viewing a historical quarter.';
+  }
+  sel.onchange = ()=>{
+    const [y,qs] = sel.value.split('-Q');
+    SELECTED_QUARTER = { year:+y, q:+qs, label: sel.options[sel.selectedIndex].textContent.replace(' (current)','') };
+    populateQuarterSelect();
+    renderAll();
+  };
 }
 
 async function openCheckinDrawer(id){
@@ -4025,11 +4460,23 @@ async function openDrawer(id){
           </div>
           <div class="field-group">
             <label>Assigned mentor</label>
-            <select id="f_mentor" ${isAdmin() ? '' : 'disabled'}>
+            <select id="f_mentor">
               <option value="">— Unassigned —</option>
               ${TEAM_MEMBERS.map(m=>`<option ${m===p.mentor?'selected':''}>${m}</option>`).join('')}
             </select>
-            ${isAdmin() ? '' : '<div class="admin-only-note">Only ubong@10alytics.org can change the assigned mentor. You\'re seeing the current assignment read-only.</div>'}
+            <div class="admin-only-note">Everyone can view this. Changing it will ask for the 10Alytics LearnOps edit passcode (or sign in as ${ADMIN_EMAIL}).</div>
+          </div>
+          <div class="field-group" id="completionMetaGroup" style="${p.completionOverride==='completed' ? '' : 'display:none;'}">
+            <label>Completion details</label>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <input type="date" id="f_completionDate" placeholder="Actual completion date" value="${(p.completionMeta&&p.completionMeta.date)||''}">
+              <select id="f_completionSource">
+                <option value="">Completion source / method…</option>
+                ${['Modules completed in system','Certificate/capstone submitted','Confirmed by mentor','Migrated from previous tracker (pre-dates this system)','Other'].map(s=>`<option ${p.completionMeta&&p.completionMeta.source===s?'selected':''}>${s}</option>`).join('')}
+              </select>
+              <textarea id="f_completionNote" placeholder="Completion note">${(p.completionMeta&&p.completionMeta.note)||''}</textarea>
+              <div class="muted" style="font-size:11px;">Completed by: ${(p.completionMeta&&p.completionMeta.completedBy) || '—'} ${p.completionMeta&&p.completionMeta.recordedAt ? '· Recorded '+fmtShort(new Date(p.completionMeta.recordedAt)) : ''}</div>
+            </div>
           </div>
           <div class="field-group">
             <label>Modules completed (of ${eng.totalModules})</label>
@@ -4061,6 +4508,12 @@ async function openDrawer(id){
   renderDrawerCharts(p, eng);
   document.getElementById('closeBtn').onclick = closeDrawer;
   document.getElementById('saveBtn').onclick = () => saveDrawer(p);
+  const compOverrideEl = document.getElementById('f_completionOverride');
+  if(compOverrideEl){
+    compOverrideEl.onchange = ()=>{
+      document.getElementById('completionMetaGroup').style.display = compOverrideEl.value==='completed' ? '' : 'none';
+    };
+  }
   document.getElementById('planBtn').onclick = () => openLessonPlanDrawer(p.id);
   document.getElementById('removeBtn').onclick = () => removeParticipant(p.id);
   document.getElementById('onboardingDownloadBtn').onclick = () => downloadOnboardingDoc_(p);
@@ -4093,6 +4546,12 @@ function closeDrawer(){
 }
 
 async function saveDrawer(p){
+  // Section 13: every protected edit — mentor, programme, completion,
+  // tracking fields, everything on this drawer — requires the 10Alytics
+  // LearnOps passcode (or being signed in as the admin, who is never
+  // prompted). View-only access never reaches this function.
+  if(!requireEditAuth()) return;
+
   await captureSnapshot_('Edit ' + p.name + ' (' + p.id + ')');
   const before = {
     name:p.name, email:p.email, cohortId:p.cohortId, paymentStatus:p.paymentStatus,
@@ -4106,20 +4565,36 @@ async function saveDrawer(p){
   p.cohortId = document.getElementById('f_cohortId').value.trim();
   p.paymentStatus = document.getElementById('f_payment').value;
   const mentorFromForm = document.getElementById('f_mentor').value || null;
-  const mentorChanged = isAdmin() && mentorFromForm !== p.mentor;
-  if(isAdmin()) p.mentor = mentorFromForm; // non-admins can't change this even if the DOM were tampered with
+  const mentorChanged = mentorFromForm !== p.mentor;
+  p.mentor = mentorFromForm;
   p.modulesCompleted = parseInt(document.getElementById('f_completed').value,10) || 0;
   p.preferredDays = parseInt(document.getElementById('f_days').value,10) || 2;
   p.lastCheckin = document.getElementById('f_checkin').value || null;
   p.comments = document.getElementById('f_comments').value;
   const completionOverrideEl = document.getElementById('f_completionOverride');
   p.completionOverride = completionOverrideEl ? (completionOverrideEl.value || null) : p.completionOverride;
+  // Completion details (section 7 / 26) — only captured while the override
+  // is set to Completed; preserves whoever is signed in as "Completed by".
+  if(p.completionOverride === 'completed'){
+    const dateEl = document.getElementById('f_completionDate');
+    const srcEl = document.getElementById('f_completionSource');
+    const noteEl = document.getElementById('f_completionNote');
+    p.completionMeta = {
+      date: dateEl ? (dateEl.value || (p.completionMeta&&p.completionMeta.date) || fmt(today())) : (p.completionMeta&&p.completionMeta.date),
+      source: srcEl ? srcEl.value : (p.completionMeta&&p.completionMeta.source),
+      note: noteEl ? noteEl.value : (p.completionMeta&&p.completionMeta.note),
+      completedBy: (p.completionMeta&&p.completionMeta.completedBy) || currentUserEmail() || 'unknown',
+      recordedAt: (p.completionMeta&&p.completionMeta.recordedAt) || new Date().toISOString(),
+    };
+  } else {
+    p.completionMeta = null;
+  }
 
   await saveOverride(p.id, {
     name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments,
-    completionOverride:p.completionOverride
+    completionOverride:p.completionOverride, completionMeta:p.completionMeta
   });
 
   // Build a { RealColumnName: newValue } object of only what actually
@@ -4150,6 +4625,7 @@ async function saveDrawer(p){
 }
 
 async function removeParticipant(id){
+  if(!requireEditAuth()) return;
   const p = participants.find(x=>x.id===id);
   if(!confirm('Remove this participant from the tracker? This only affects your local view — it can be undone from "Restore previous version" in the header.')) return;
   await captureSnapshot_('Remove ' + (p ? p.name : id) + ' (' + id + ')');
@@ -4209,10 +4685,7 @@ async function runMentorAssignment(mode){
 }
 
 function openAssignMentorsDrawer(){
-  if(!isAdmin()){
-    showToast('Only ubong@10alytics.org can assign mentors.');
-    return;
-  }
+  if(!requireEditAuth()) return;
   const counts = computeMentorCounts();
   const unassigned = participants.filter(p=>!p.mentor).length;
   const backendReady = !!MENTOR_API_URL;
@@ -4336,6 +4809,7 @@ function openAddDrawer(){
 }
 
 async function createParticipant(){
+  if(!requireEditAuth()) return;
   const id = document.getElementById('n_id').value.trim();
   const name = document.getElementById('n_name').value.trim();
   if(!id || !name){ showToast('ID and name are required.'); return; }
@@ -4522,8 +4996,9 @@ async function boot(){
       renderAll();
     });
   });
-  ['search','filterProg','filterRisk','filterStatus','filterMentor','filterPayment'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', renderAll);
+  ['search','filterProg','filterCohort','filterRisk','filterStatus','filterMentor','filterPayment','filterEngagement','filterCompletion','filterProgressRange'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', renderAll);
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
   document.getElementById('assignMentorsBtn').addEventListener('click', openAssignMentorsDrawer);
@@ -4532,9 +5007,13 @@ async function boot(){
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeDrawer(); });
 
   document.getElementById('tabDashboard').addEventListener('click', ()=>switchTab('dashboard'));
+  document.getElementById('tabLearners').addEventListener('click', ()=>switchTab('learners'));
+  document.getElementById('tabMentors').addEventListener('click', ()=>switchTab('mentors'));
   document.getElementById('tabCheckins').addEventListener('click', ()=>switchTab('checkins'));
   document.getElementById('tabKpi').addEventListener('click', ()=>switchTab('kpi'));
-  document.getElementById('tabReports').addEventListener('click', ()=>switchTab('reports'));
+  const reportsBtnEl = document.getElementById('reportsBtn');
+  if(reportsBtnEl) reportsBtnEl.addEventListener('click', ()=>switchTab('reports'));
+  populateQuarterSelect();
   ['rfWeek','rfProg','rfCohort','rfMentor','rfRisk','rfStatus','rfPayment','rfIncludeComments'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener(id==='rfIncludeComments' ? 'change' : 'input', renderReportsTab);
@@ -4564,17 +5043,13 @@ async function boot(){
 
   renderAll();
 
-  // ---- access control: hide/lock mentor-assignment controls for non-admins ----
+  // ---- access control note (section 13): everyone can VIEW freely.
+  // Editing (including "Assign mentors") is gated per-action by
+  // requireEditAuth() — the LearnOps passcode, or being signed in as the
+  // admin — rather than being hidden/disabled up front.
   const assignBtn = document.getElementById('assignMentorsBtn');
-  if(!isAdmin()){
-    assignBtn.disabled = true;
-    assignBtn.title = 'Only the SPL admin (ubong@10alytics.org) can assign mentors.';
-    assignBtn.style.opacity = '.5';
-    assignBtn.style.cursor = 'not-allowed';
-    assignBtn.onclick = (e)=>{
-      e.preventDefault();
-      showToast('Only ubong@10alytics.org can assign mentors. You can view assignments but not change them.');
-    };
+  if(assignBtn && !hasEditAuth()){
+    assignBtn.title = 'Viewing is open to everyone. Changing assignments will ask for the 10Alytics LearnOps passcode.';
   }
 }
 initLoginGate();
