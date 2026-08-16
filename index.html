@@ -280,7 +280,8 @@
         <p>Self-Paced Learning · live cohort &amp; risk engine</p>
       </div>
     </div>
-    <button class="app-logout" id="restoreVersionBtn" style="margin-left:auto;" onclick="openRestorePanel()">Restore previous version</button>
+    <button class="app-logout" id="whosOnlineBtn" style="margin-left:auto;" onclick="openWhosOnlinePanel()">👀 Who's on now <span id="onlineCountBadge"></span></button>
+    <button class="app-logout" id="restoreVersionBtn" onclick="openRestorePanel()">Restore previous version</button>
     <button class="app-logout" onclick="staffSignOut()">Sign out</button>
     <div class="rule-pill" id="cohortRulePill">
       <b>Deadline rule:</b> each programme runs 6 months from its cohort start month, plus a grace
@@ -825,6 +826,13 @@ const DATA_SOURCE = {
   // actually read from the sheet, and tell 10Alytics support the real
   // column headers so this can be tightened up.
   adminDashboardCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=25325647&single=true&output=csv',
+  // Real staff/mentor access log — who's signed in right now, and who made
+  // which edit. Populated by a new "AccessLog" tab in the same Sheet, fed
+  // by the Apps Script backend (see accesslog-Code.gs.txt for the exact
+  // code to paste into Code.gs). Publish that tab to web as CSV and paste
+  // the link here. Left BLANK until that's set up — the "Who's on now"
+  // button will explain what's missing instead of showing fake numbers.
+  accessLogCsvUrl: '',
 };
 
 // Link to the actual Google Form participants fill in. Shown as a button on
@@ -942,6 +950,7 @@ function staffSignOut(){
 
 function initLoginGate(){
   if(checkAuth()){
+    startPresenceHeartbeat_();
     showApp(); boot();
     return;
   }
@@ -964,6 +973,8 @@ function initLoginGate(){
       sessionStorage.setItem('splms-auth-email', email);
       sessionStorage.setItem('splms-auth-role', 'staff');
       sessionStorage.setItem('splms-auth-ok', '1');
+      logAccess_('login', 'Signed in');
+      startPresenceHeartbeat_();
       showApp();
       boot();
     });
@@ -1002,6 +1013,102 @@ function ensureAdminToken_(){
 // from here). Using no-cors avoids that fetch throwing a false "failed"
 // error, but it also means we genuinely cannot confirm success from the
 // browser — always spot-check the Sheet directly after important changes.
+// -----------------------------------------------------------------------
+// REAL ACCESS LOG — records who is actually signed in and what they
+// actually did, using the email each staff member typed in at login (not
+// a fabricated presence count). Every call here is a genuine event tied
+// to a genuine session. Requires the matching Code.gs addition — see
+// accesslog-Code.gs.txt — to actually persist rows; until that's
+// deployed this silently no-ops (same fallback pattern as the other
+// postXToSheet_ functions), so nothing breaks in the meantime.
+// -----------------------------------------------------------------------
+async function logAccess_(kind, detail){
+  if(!MENTOR_API_URL) return { ok:false, skipped:true };
+  const email = currentUserEmail();
+  if(!email) return { ok:false, skipped:true };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'logAccess', email, role: currentRole() || 'staff', kind, detail: detail || '' })
+    });
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+// Starts the "I'm still here" heartbeat once someone is signed in. Pings
+// every 60s while the tab is actually visible/focused (no point claiming
+// someone's "online" from a backgrounded tab), so the AccessLog sheet —
+// and the "Who's on now" panel below — reflect real, current sessions
+// rather than everyone who's ever logged in.
+let HEARTBEAT_TIMER = null;
+function startPresenceHeartbeat_(){
+  if(HEARTBEAT_TIMER) return;
+  const ping = () => { if(document.visibilityState === 'visible') logAccess_('heartbeat', ''); };
+  ping();
+  HEARTBEAT_TIMER = setInterval(ping, 60000);
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') ping(); });
+}
+
+// Renders the real "Who's on now" + recent activity panel from the
+// AccessLog CSV (if configured). No invented names or counts — if the
+// log isn't wired up yet, this says so plainly instead of showing
+// anything.
+async function openWhosOnlinePanel(){
+  const badge = document.getElementById('onlineCountBadge');
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head"><h3>Who's on now</h3><div class="muted">Real sign-ins and edits only — nothing here is simulated.</div></div>
+    <div id="whosOnlineBody">Loading…</div>
+    <div class="save-row"><button class="ghost" id="closeWhosOnlineBtn" style="flex:1;">Close</button></div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeWhosOnlineBtn').onclick = closeDrawer;
+  const body = document.getElementById('whosOnlineBody');
+
+  if(!DATA_SOURCE.accessLogCsvUrl){
+    body.innerHTML = `<div class="kpi-warning">Access log isn't wired up yet. This needs the AccessLog Sheet tab + Code.gs addition (see accesslog-Code.gs.txt), published to web as CSV, with the link pasted into DATA_SOURCE.accessLogCsvUrl. Until then there's no real data to show here — showing a fake number would defeat the point.</div>`;
+    if(badge) badge.textContent = '';
+    return;
+  }
+
+  try{
+    const rows = await fetchCsv_(DATA_SOURCE.accessLogCsvUrl, 'Timestamp');
+    const now = Date.now();
+    const ONLINE_WINDOW_MS = 3 * 60 * 1000; // "online" = pinged in the last 3 minutes
+
+    const byEmail = {};
+    rows.forEach(r => {
+      const email = (r.Email || '').trim();
+      if(!email) return;
+      const ts = new Date(r.Timestamp).getTime();
+      if(isNaN(ts)) return;
+      if(!byEmail[email] || ts > byEmail[email].ts) byEmail[email] = { email, ts, kind: r.Kind || '', detail: r.Detail || '' };
+    });
+    const online = Object.values(byEmail).filter(e => now - e.ts <= ONLINE_WINDOW_MS).sort((a,b)=>b.ts-a.ts);
+    if(badge) badge.textContent = online.length ? `(${online.length})` : '';
+
+    const recentEdits = rows
+      .filter(r => (r.Kind||'').toLowerCase() !== 'heartbeat' && (r.Kind||'').toLowerCase() !== 'login')
+      .slice(-40).reverse();
+
+    body.innerHTML = `
+      <div class="mc-title" style="margin-top:4px;">Online now (${online.length})</div>
+      ${online.length ? `<table style="margin-top:6px;"><thead><tr><th>Staff</th><th>Last seen</th></tr></thead><tbody>
+        ${online.map(e=>`<tr><td>${e.email}</td><td class="muted" style="font-size:11.5px;">${Math.round((now-e.ts)/1000)}s ago</td></tr>`).join('')}
+      </tbody></table>` : '<div class="muted" style="margin-top:6px;">Nobody else has pinged in the last 3 minutes.</div>'}
+      <hr class="sep">
+      <div class="mc-title">Recent activity</div>
+      ${recentEdits.length ? `<table style="margin-top:6px;"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>
+        ${recentEdits.map(r=>`<tr><td style="font-size:11.5px;">${new Date(r.Timestamp).toLocaleString()}</td><td>${r.Email||''}</td><td>${r.Kind||''}${r.Detail?': '+r.Detail:''}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="muted" style="margin-top:6px;">No logged edits yet.</div>'}
+    `;
+  }catch(err){
+    body.innerHTML = `<div class="kpi-warning">Couldn't load the access log: ${err.message}</div>`;
+  }
+}
+
 async function postMentorToSheet_(participantId, mentor){
   if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
   const token = ensureAdminToken_();
@@ -1012,6 +1119,7 @@ async function postMentorToSheet_(participantId, mentor){
       mode:'no-cors',
       body: JSON.stringify({ action:'assignMentor', token, participantId, mentor })
     });
+    logAccess_('edit', `Assigned mentor for ${participantId} → ${mentor || '(none)'}`);
     // no-cors responses are opaque — we can't read ok/error from them, so
     // treat "the request didn't throw" as "sent successfully".
     return { ok:true, sent:true };
@@ -1036,6 +1144,7 @@ async function updateParticipantInSheet_(participantId, fields){
       mode:'no-cors',
       body: JSON.stringify({ action:'updateParticipant', token, participantId, fields })
     });
+    logAccess_('edit', `Updated ${participantId}: ${Object.keys(fields).join(', ')}`);
     return { ok:true, sent:true };
   }catch(e){
     return { ok:false, error: e.message };
@@ -1075,6 +1184,7 @@ async function addParticipantToSheet_(p){
         }
       })
     });
+    logAccess_('edit', `Added participant ${p.id} (${p.name || ''})`);
     // no-cors again means we can't read success/failure back — see the note
     // above postMentorToSheet_ for why.
     return { ok:true, sent:true };
@@ -4669,6 +4779,7 @@ async function removeParticipant(id){
   const removed = await loadRemoved();
   removed.push(id);
   await saveRemoved(removed);
+  logAccess_('edit', `Removed ${id} (${p ? p.name : ''}) — local view only`);
   closeDrawer();
   renderAll();
   showToast('Participant removed. Use "Restore previous version" in the header if this was a mistake.');
