@@ -1003,7 +1003,7 @@ function ensureAdminToken_(){
 // error, but it also means we genuinely cannot confirm success from the
 // browser — always spot-check the Sheet directly after important changes.
 async function postMentorToSheet_(participantId, mentor){
-  if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
+  if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
   const token = ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — change was NOT synced to the Sheet.' };
   try{
@@ -1026,7 +1026,7 @@ async function postMentorToSheet_(participantId, mentor){
 // column name — see FIELD_TO_COLUMN_ below for the mapping used when
 // saving the drawer.
 async function updateParticipantInSheet_(participantId, fields){
-  if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
+  if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
   if(!Object.keys(fields).length) return { ok:true, skipped:true };
   const token = ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — changes were NOT synced to the Sheet.' };
@@ -1049,7 +1049,7 @@ async function updateParticipantInSheet_(participantId, fields){
 // that's deployed, this will no-op and the participant stays local-only
 // (same as before this patch).
 async function addParticipantToSheet_(p){
-  if(!MENTOR_API_URL || !isAdmin()) return { ok:false, skipped:true };
+  if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
   const token = ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — participant was NOT synced to the Sheet.' };
   try{
@@ -1062,8 +1062,10 @@ async function addParticipantToSheet_(p){
         participantId: p.id,
         fields: {
           Participant_ID: p.id,
+          Serial_No: p.serial || '',
           Full_Name: p.name,
           Email: p.email,
+          Phone_Number: p.phone || '',
           Programme_Code: p.programme,
           Cohort_ID: p.cohortId,
           Payment_Status: p.paymentStatus,
@@ -1093,6 +1095,8 @@ const FIELD_TO_COLUMN_ = {
   comments: 'Comments',
   name: 'Full_Name',
   email: 'Email',
+  phone: 'Phone_Number',
+  serial: 'Serial_No',
 };
 
 
@@ -3083,23 +3087,23 @@ function renderDrawerCharts(p, eng){
 // every page load) — this note is only about where in-app EDITS land.
 function updateSyncFootnotes_(){
   const backendReady = !!MENTOR_API_URL;
-  const admin = isAdmin();
+  const authed = hasEditAuth();
   const dEl = document.getElementById('dashboardFootnote');
   const cEl = document.getElementById('checkinsFootnote');
   if(dEl){
     let msg = 'Computed entirely in your browser from the SPLMS data model — everyone sees the same live sheet data on every page load. ';
-    if(backendReady && admin){
-      msg += 'As the admin, your edits here (mentor, cohort, payment, modules, comments…) save straight to the ParticipantDB sheet, so every other staff member sees them after the sheet\'s next CSV refresh (usually a few minutes).';
+    if(backendReady && authed){
+      msg += 'You\'re authorised to edit — changes here (mentor, cohort, payment, modules, comments…) save straight to the ParticipantDB sheet, so every other staff member sees them after the sheet\'s next CSV refresh (usually a few minutes).';
     } else if(backendReady){
-      msg += 'Your quick edits here stay as a local draft on this device; only the admin\'s changes write back to the shared sheet that everyone loads from.';
+      msg += 'Editing needs the LearnOps passcode (or the admin account) so changes sync to the shared sheet everyone loads from — otherwise nothing you change here reaches other devices.';
     } else {
-      msg += 'Edits currently save only to this browser — connect the Code.gs backend (see README) so admin edits sync to everyone.';
+      msg += 'Edits currently save only to this browser — connect the Code.gs backend (see README) so authorised edits sync to everyone.';
     }
     dEl.textContent = msg;
   }
   if(cEl){
     let msg = 'Participant self-reports come from the linked check-in form — everyone sees the same submissions. ';
-    msg += (backendReady && admin)
+    msg += (backendReady && authed)
       ? 'Staff notes and "apply to profile" actions here save as a personal draft on this device and don\'t change the shared sheet.'
       : 'Staff notes and "apply to profile" actions here save as a personal draft on this device.';
     cEl.textContent = msg;
@@ -4459,6 +4463,14 @@ async function openDrawer(id){
             <input type="text" id="f_email" value="${p.email||''}">
           </div>
           <div class="field-group">
+            <label>Phone number</label>
+            <input type="text" id="f_phone" value="${p.phone||''}" placeholder="+44...">
+          </div>
+          <div class="field-group">
+            <label>Serial No</label>
+            <input type="text" id="f_serial" value="${p.serial||''}" placeholder="10ALY/C26-05-EU/001">
+          </div>
+          <div class="field-group">
             <label>Programme</label>
             <select id="f_programme">${progOptions}</select>
           </div>
@@ -4577,13 +4589,15 @@ async function saveDrawer(p){
 
   await captureSnapshot_('Edit ' + p.name + ' (' + p.id + ')');
   const before = {
-    name:p.name, email:p.email, cohortId:p.cohortId, paymentStatus:p.paymentStatus,
+    name:p.name, email:p.email, phone:p.phone, serial:p.serial, cohortId:p.cohortId, paymentStatus:p.paymentStatus,
     modulesCompleted:p.modulesCompleted, preferredDays:p.preferredDays,
     lastCheckin:p.lastCheckin, comments:p.comments,
   };
 
   p.name = document.getElementById('f_name').value.trim() || p.name;
   p.email = document.getElementById('f_email').value.trim();
+  p.phone = document.getElementById('f_phone').value.trim();
+  p.serial = document.getElementById('f_serial').value.trim();
   p.programme = document.getElementById('f_programme').value;
   p.cohortId = document.getElementById('f_cohortId').value.trim();
   p.paymentStatus = document.getElementById('f_payment').value;
@@ -4614,16 +4628,15 @@ async function saveDrawer(p){
   }
 
   await saveOverride(p.id, {
-    name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
+    name:p.name, email:p.email, phone:p.phone, serial:p.serial, programme:p.programme, cohortId:p.cohortId,
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments,
     completionOverride:p.completionOverride, completionMeta:p.completionMeta
   });
 
   // Build a { RealColumnName: newValue } object of only what actually
-  // changed, so admin edits sync to the Sheet for everyone — not just the
-  // mentor field. (Non-admins never reach this block with any changes
-  // synced, since MENTOR_API_URL calls are gated by isAdmin() downstream.)
+  // changed, so any authorised edit (passcode-unlocked staff, or the
+  // admin account) syncs straight to the Sheet for everyone.
   const changedFields = {};
   Object.keys(FIELD_TO_COLUMN_).forEach((key)=>{
     if(before[key] !== undefined && before[key] !== p[key]){
@@ -4813,8 +4826,10 @@ function openAddDrawer(){
     <div class="drawer-head"><h3>Add participant</h3><div class="muted">Cohort_End_Date computes automatically from the Cohort ID.</div></div>
     <div class="drawer-body">
       <div class="field-group"><label>Participant ID</label><input type="text" id="n_id" placeholder="e.g. DAC26-05-EU-42"></div>
+      <div class="field-group"><label>Serial No</label><input type="text" id="n_serial" placeholder="10ALY/C26-05-EU/001"></div>
       <div class="field-group"><label>Full name</label><input type="text" id="n_name"></div>
       <div class="field-group"><label>Email</label><input type="text" id="n_email"></div>
+      <div class="field-group"><label>Phone number</label><input type="text" id="n_phone" placeholder="+44..."></div>
       <div class="field-group"><label>Programme</label><select id="n_programme">${progOptions}</select></div>
       <div class="field-group"><label>Cohort ID (e.g. C26-05 EU)</label><input type="text" id="n_cohortId" placeholder="C26-05 EU"></div>
       <div class="field-group"><label>Payment status</label>
@@ -4840,7 +4855,9 @@ async function createParticipant(){
   await captureSnapshot_('Add ' + name + ' (' + id + ')');
   const p = {
     id, name,
+    serial: document.getElementById('n_serial').value.trim(),
     email: document.getElementById('n_email').value.trim(),
+    phone: document.getElementById('n_phone').value.trim(),
     programme: document.getElementById('n_programme').value,
     cohortId: document.getElementById('n_cohortId').value.trim(),
     paymentStatus: document.getElementById('n_payment').value,
