@@ -4455,6 +4455,10 @@ async function openDrawer(id){
         <hr class="sep">
         <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
           <div class="field-group">
+            <label>Serial No</label>
+            <input type="text" id="f_serial" value="${p.serial||''}" placeholder="10ALY/C26-05-EU/001">
+          </div>
+          <div class="field-group">
             <label>Full name</label>
             <input type="text" id="f_name" value="${p.name||''}">
           </div>
@@ -4465,10 +4469,6 @@ async function openDrawer(id){
           <div class="field-group">
             <label>Phone number</label>
             <input type="text" id="f_phone" value="${p.phone||''}" placeholder="+44...">
-          </div>
-          <div class="field-group">
-            <label>Serial No</label>
-            <input type="text" id="f_serial" value="${p.serial||''}" placeholder="10ALY/C26-05-EU/001">
           </div>
           <div class="field-group">
             <label>Programme</label>
@@ -4825,8 +4825,8 @@ function openAddDrawer(){
   document.getElementById('drawer').innerHTML = `
     <div class="drawer-head"><h3>Add participant</h3><div class="muted">Cohort_End_Date computes automatically from the Cohort ID.</div></div>
     <div class="drawer-body">
-      <div class="field-group"><label>Participant ID</label><input type="text" id="n_id" placeholder="e.g. DAC26-05-EU-42"></div>
       <div class="field-group"><label>Serial No</label><input type="text" id="n_serial" placeholder="10ALY/C26-05-EU/001"></div>
+      <div class="field-group"><label>Participant ID</label><input type="text" id="n_id" placeholder="e.g. DAC26-05-EU-42"></div>
       <div class="field-group"><label>Full name</label><input type="text" id="n_name"></div>
       <div class="field-group"><label>Email</label><input type="text" id="n_email"></div>
       <div class="field-group"><label>Phone number</label><input type="text" id="n_phone" placeholder="+44..."></div>
