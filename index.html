@@ -458,6 +458,12 @@
           <option value="Pending">Pending</option>
           <option value="Declined">Payment Defaulter</option>
         </select>
+        <select id="filterLifecycle" title="Deferred/Completed participants keep their full record — this just controls who shows up in the list below">
+          <option value="active">Active roster</option>
+          <option value="deferred">Deferred</option>
+          <option value="completed">Completed (archived)</option>
+          <option value="all">All (incl. Deferred/Completed)</option>
+        </select>
         <button id="assignMentorsBtn">Assign mentors</button>
         <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
         <button id="exportAtRiskPdfBtn" title="Export everyone currently At Risk or Defaulted as a PDF">Export at-risk (PDF)</button>
@@ -468,6 +474,7 @@
       <table>
         <thead>
           <tr>
+            <th>Actions</th>
             <th data-k="name">Learner</th>
             <th data-k="programme">Programme</th>
             <th data-k="cohortId">Cohort</th>
@@ -493,13 +500,17 @@
 </div>
 
 <div class="main" id="mentorsView" style="display:none;">
+  <div id="mondayNudgeBanner"></div>
   <div class="panel">
     <div class="panel-head">
       <div><h2>Mentors</h2><div class="sub">Caseload and outcomes per mentor — click a row to see that mentor's learners</div></div>
+      <div class="controls">
+        <button id="mondayNudgeAllBtn" title="Open a pre-filled, BCC'd Monday check-in reminder for every mentor">🔔 Send Monday reminders</button>
+      </div>
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th></tr></thead>
+        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th><th>Last check-up</th><th>Actions</th></tr></thead>
         <tbody id="mentorsTabBody"></tbody>
       </table>
     </div>
@@ -844,6 +855,23 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // to match your real team, then use the "Assign mentors" button on the
 // Dashboard tab to distribute participants evenly and round-robin.
 const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
+
+// Best-guess mentor inboxes (firstname@10alytics.org — the same pattern
+// ADMIN_EMAIL uses below). There's no live staff directory wired into this
+// tracker, so double-check/correct these before relying on the "Nudge
+// mentor" / Monday-reminder mailto links further down — worst case, staff
+// just fix the "To" field in their mail client before hitting send.
+const MENTOR_EMAILS = {
+  'Aanu Oke': 'aanu@10alytics.org',
+  'Stephen Adeleye': 'stephen@10alytics.org',
+  'Dolapo Olaboshinde': 'dolapo@10alytics.org',
+  'Amos Foluke': 'amos@10alytics.org',
+};
+
+// Standing BCC list for every Monday reminder / mentor-nudge email sent
+// from this tracker, so LearnOps leadership is automatically looped in
+// without anyone having to remember to add them by hand.
+const MONDAY_REMINDER_BCC = ['Aisosa@10alytics.org', 'lola@10alytics.org', 'joshua@10alytics.org'];
 
 // -----------------------------------------------------------------------
 // ACCESS CONTROL
@@ -1532,6 +1560,31 @@ async function loadOverrides(id){
 async function saveOverride(id, data){
   await window.storage.set(STORE_PREFIX+':edit:'+id, JSON.stringify(data), false);
 }
+
+// ---------- lifecycle (Defer / Complete quick actions) ----------
+// Deliberately a SEPARATE store from the generic ":edit:" overrides above —
+// saveOverride() overwrites its whole blob on every save, so folding
+// lifecycle into it would risk a routine drawer edit silently wiping out a
+// Defer/Complete flag (or vice versa). This keeps "the participant's data"
+// and "is this participant still on the active roster" independent: a
+// Deferred/Completed participant keeps every field, chart, and edit
+// history exactly as-is — they're just filtered out of the default
+// Learners view via the "Roster view" dropdown until reactivated.
+async function loadLifecycle(id){
+  try{
+    const r = await window.storage.get(STORE_PREFIX+':lifecycle:'+id, false);
+    return r ? JSON.parse(r.value) : null;
+  }catch(e){ return null; }
+}
+async function saveLifecycle(id, status, reason){
+  const data = { status, reason: reason || '', at: new Date().toISOString(), by: currentUserEmail() || 'unknown' };
+  await window.storage.set(STORE_PREFIX+':lifecycle:'+id, JSON.stringify(data), false);
+  return data;
+}
+async function clearLifecycle(id){
+  try{ await window.storage.delete(STORE_PREFIX+':lifecycle:'+id, false); }catch(e){}
+}
+
 async function loadExtraParticipants(){
   try{
     const r = await window.storage.get(STORE_PREFIX+':extra', false);
@@ -2628,11 +2681,26 @@ function renderTable(computed){
     const varianceColor = eng.progressVariance===null ? '' : eng.progressVariance>=0 ? 'color:var(--green);' : eng.progressVariance<=-0.25 ? 'color:var(--rose);' : 'color:var(--amber);';
     const projectedTxt = projectedCompletionLabel(eng);
     const rd = riskDisplay(eng);
+    const lcStatus = p.lifecycleStatus || 'active';
+    const lcTip = [
+      lcStatus==='deferred' ? 'Deferred' : lcStatus==='completed' ? 'Completed' : '',
+      p.lifecycleAt ? ('on ' + fmtShort(new Date(p.lifecycleAt))) : '',
+      p.lifecycleBy ? ('by ' + p.lifecycleBy) : '',
+      p.lifecycleReason ? ('— ' + p.lifecycleReason) : '',
+    ].filter(Boolean).join(' ');
+    const actionsHtml = lcStatus === 'active'
+      ? `<div class="row-actions" style="display:flex;gap:4px;">
+           <button class="ghost lifecycle-btn" data-action="deferred" data-id="${p.id}" title="Defer — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Defer</button>
+           <button class="ghost lifecycle-btn" data-action="completed" data-id="${p.id}" title="Mark Completed — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Complete</button>
+         </div>`
+      : `<button class="ghost reactivate-btn" data-id="${p.id}" title="${lcTip}" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">↩ Reactivate</button>`;
     return `
     <tr data-id="${p.id}">
+      <td>${actionsHtml}</td>
       <td>
         <div class="name">${p.name}</div>
         <div class="pid">${p.id}</div>
+        ${lcStatus!=='active' ? `<span class="badge ${lcStatus==='deferred'?'amber':'green'}" style="margin-top:3px;" title="${lcTip}">${lcStatus==='deferred'?'Deferred':'Completed'}</span>` : ''}
       </td>
       <td><span class="prog-code">${p.programme}</span></td>
       <td class="pid">${p.cohortId || '<span class=muted>derived from ID</span>'}</td>
@@ -2656,6 +2724,12 @@ function renderTable(computed){
   `;}).join('');
   tbody.querySelectorAll('tr').forEach(tr=>{
     tr.addEventListener('click', ()=> openDrawer(tr.dataset.id));
+  });
+  tbody.querySelectorAll('.lifecycle-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); markLifecycle(btn.dataset.id, btn.dataset.action); });
+  });
+  tbody.querySelectorAll('.reactivate-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); reactivateParticipant(btn.dataset.id); });
   });
 }
 
@@ -2724,9 +2798,189 @@ function computeMentorBuckets(computed){
   return byMentor;
 }
 
+// ---------- Monday reminders / mentor nudges ----------
+// Learners who genuinely need a mentor's attention this week — anyone
+// flagged At Risk, Needs Follow-up, or Defaulted, and not already done.
+function mentorNeedsFollowUp_(rows){
+  return (rows||[]).filter(({eng}) => !eng.isCompleted && (
+    eng.engagementStatus === 'At Risk' || eng.engagementStatus === 'Needs Attention' ||
+    eng.status === 'At Risk' || eng.status === 'Defaulted' || eng.status === 'Needs Follow-up'
+  ));
+}
+
+// Builds the email content for one mentor's Monday check-in nudge.
+function buildMondayNudgeContent_(mentorKey, rows){
+  const label = mentorKey === '__unassigned__' ? 'Unassigned' : mentorKey;
+  const toEmail = MENTOR_EMAILS[mentorKey] || '';
+  const flagged = mentorNeedsFollowUp_(rows);
+  const dateLabel = fmtShort(today());
+  const first = (label.split(' ')[0]) || label;
+  let bodyHtml = `Hi ${first},<br><br>Quick Monday check-in on your learners at 10Alytics (as of ${dateLabel}):<br><br>`;
+  if(flagged.length){
+    bodyHtml += '<ul>' + flagged.map(({p,eng})=>{
+      const days = eng.daysSinceActivity===null ? 'no recorded activity yet' : `${Math.round(eng.daysSinceActivity)} days since last activity`;
+      return `<li>${p.name} (${p.id}) — ${eng.status}, ${Math.round(eng.progressPct*100)}% complete, ${days}</li>`;
+    }).join('') + '</ul>';
+    bodyHtml += 'Could you reach out to these learners this week and log a check-in once you do? Flag or defer anyone who needs it.<br><br>';
+  } else {
+    bodyHtml += "Nobody on your list is currently flagged At Risk or Needs Follow-up — nice work. Just a friendly nudge to keep the weekly check-ins going.<br><br>";
+  }
+  bodyHtml += 'Once you\'ve checked in with them, hit "✅ I checked up on my learners" in the Mentors tab so LearnOps can see it\'s done.<br><br>Thanks,<br>10Alytics LearnOps';
+  const subject = `Monday Check-in — Your Learners (${dateLabel})`;
+  return { to: toEmail, subject, htmlBody: bodyHtml, flaggedCount: flagged.length, total: rows.length };
+}
+
+// Sends the Monday nudge as a REAL email through the Code.gs backend
+// (MailApp.sendEmail, BCC'd to MONDAY_REMINDER_BCC) — same admin-token
+// pattern as postMentorToSheet_ above. Deliberately does NOT fall back to
+// a mailto: draft if the token/URL are missing, so staff get an honest
+// signal about whether the email actually went out rather than a silent
+// no-op.
+async function sendMentorNudgeEmail_(mentorKey, rows){
+  if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
+  const token = ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — reminder was NOT sent.' };
+  const content = buildMondayNudgeContent_(mentorKey, rows);
+  if(!content.to){
+    return { ok:false, error:`No email on file for ${mentorKey==='__unassigned__'?'Unassigned':mentorKey} — add one to MENTOR_EMAILS near the top of the script.` };
+  }
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({
+        action:'sendMentorNudge', token,
+        to: content.to, bcc: MONDAY_REMINDER_BCC,
+        subject: content.subject, htmlBody: content.htmlBody,
+        mentor: mentorKey,
+      })
+    });
+    logAccess_('nudge', `Sent Monday reminder to ${mentorKey==='__unassigned__'?'Unassigned':mentorKey} <${content.to}> (${content.flaggedCount} flagged) BCC: ${MONDAY_REMINDER_BCC.join(', ')}`);
+    // no-cors hides the real HTTP response (see postMentorToSheet_'s note
+    // above) — "the fetch didn't throw" is the best signal available here.
+    return { ok:true, sent:true, to:content.to };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+// Quick single-mentor nudge (the small 🔔 button on each Mentors-tab row).
+async function sendMondayNudge(mentorKey){
+  const computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  const byMentor = computeMentorBuckets(computed);
+  const rows = byMentor[mentorKey] || [];
+  const label = mentorKey==='__unassigned__' ? 'Unassigned' : mentorKey;
+  if(!confirm(`Send this week's check-in reminder to ${label}? BCC'd to ${MONDAY_REMINDER_BCC.join(', ')}.`)) return;
+  const res = await sendMentorNudgeEmail_(mentorKey, rows);
+  showToast(res.ok ? `Reminder sent to ${label}.` : `Could not send: ${res.error}`);
+}
+
+// The bulk "Send Monday reminders" flow — a review drawer listing every
+// mentor with their flagged-learner count, each with its own "Send" button
+// that fires the real email above (one deliberate click per mentor rather
+// than a silent mass-send, so staff can see exactly who's getting one).
+function openMondayNudgeDrawer(){
+  const computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  const byMentor = computeMentorBuckets(computed);
+  const mentors = Object.keys(byMentor).filter(k=>k!=='__unassigned__').sort();
+  const dateLabel = fmtShort(today());
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>Monday reminders</h3>
+      <div class="muted">${dateLabel} · Each "Send" fires a real email (MailApp), BCC'd to LearnOps automatically.</div>
+    </div>
+    <div class="drawer-body">
+      <div>
+        <div class="section-title">Mentors</div>
+        <hr class="sep">
+        ${mentors.length ? `
+          <table style="margin-top:8px;">
+            <thead><tr><th>Mentor</th><th>Flagged</th><th>Email on file</th><th></th></tr></thead>
+            <tbody>
+              ${mentors.map(m=>{
+                const rows = byMentor[m];
+                const flagged = mentorNeedsFollowUp_(rows).length;
+                const email = MENTOR_EMAILS[m] || '';
+                return `<tr data-mentor-row="${m}">
+                  <td>${m}</td>
+                  <td class="pid">${flagged} of ${rows.length}</td>
+                  <td class="muted" style="font-size:11px;">${email || '⚠ not set — add to MENTOR_EMAILS'}</td>
+                  <td><button class="mentorNudgeSendBtn" data-mentor="${m}">Send</button></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="muted" style="margin-top:8px;">No mentors with assigned learners yet.</div>'}
+        <div class="admin-only-note" style="margin-top:14px;">
+          Sending uses the same admin write token as "Assign mentors" — you'll be asked for it once per browser session. Mentor addresses are guessed from the firstname@10alytics.org pattern (MENTOR_EMAILS near the top of the script) — correct any that are wrong.
+        </div>
+      </div>
+    </div>
+    <div class="save-row">
+      <button class="ghost" id="closeBtnNudge" style="flex:1;">Close</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeBtnNudge').onclick = closeDrawer;
+  document.querySelectorAll('.mentorNudgeSendBtn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const m = btn.dataset.mentor;
+      btn.disabled = true; btn.textContent = 'Sending…';
+      const rows = byMentor[m] || [];
+      const res = await sendMentorNudgeEmail_(m, rows);
+      if(res.ok){ btn.textContent = 'Sent ✓'; }
+      else { btn.disabled = false; btn.textContent = 'Send'; showToast(`Could not send to ${m}: ${res.error}`); }
+    });
+  });
+}
+
+// ---------- Mentor "I checked up on my learners" confirmation ----------
+// The other half of the nudge loop: rather than only reminding mentors to
+// check in, this lets a mentor (or a staff member on their behalf) log
+// that they actually did — a plain AccessLog row (kind:'checkup'), using
+// the same no-token 'logAccess' path as presence pings, so any signed-in
+// @10alytics.* staff member can log one without needing the admin token.
+async function confirmMentorCheckup(mentorKey){
+  if(mentorKey === '__unassigned__') return;
+  const computed = participants.map(p=>({p, eng: computeEngine(p)}));
+  const byMentor = computeMentorBuckets(computed);
+  const rows = byMentor[mentorKey] || [];
+  const flagged = mentorNeedsFollowUp_(rows).length;
+  const note = (prompt(`Log a check-up for ${mentorKey}'s learners — anything worth noting? (optional)`, '') || '').trim();
+  const res = await logAccess_('checkup', `${mentorKey} checked up on their learners (${flagged} were flagged)${note ? ' — ' + note : ''}`);
+  if(res.ok) showToast(`Logged: ${mentorKey} checked up on their learners.`);
+  else showToast(`Could not log check-up: ${res.error || res.skipped ? 'Access log is not configured, or you\'re not signed in with an @10alytics email.' : 'unknown error'}`);
+  renderMentorsTab();
+}
+
+// Reads the AccessLog CSV (if configured — same source as "Who's on now")
+// and returns, per mentor, when they last logged a check-up. Silently
+// returns {} if the log isn't wired up yet, matching the fallback pattern
+// used elsewhere in this file.
+async function loadLastCheckups_(){
+  if(!DATA_SOURCE.accessLogCsvUrl) return {};
+  try{
+    const rows = await fetchCsv_(DATA_SOURCE.accessLogCsvUrl, 'Timestamp');
+    const last = {};
+    rows.forEach(r=>{
+      if((r.Kind||'').toLowerCase() !== 'checkup') return;
+      const detail = r.Detail || '';
+      const ts = new Date(r.Timestamp).getTime();
+      if(isNaN(ts)) return;
+      TEAM_MEMBERS.forEach(m=>{
+        if(detail.startsWith(m) && (!last[m] || ts > last[m].ts)){
+          last[m] = { ts, detail };
+        }
+      });
+    });
+    return last;
+  }catch(e){ return {}; }
+}
+
 function renderMentorRollup(computed){
   const byMentor = computeMentorBuckets(computed);
   const keys = Object.keys(byMentor).sort((a,b)=>{
+
     if(a==='__unassigned__') return 1;
     if(b==='__unassigned__') return -1;
     return a.localeCompare(b);
@@ -2762,14 +3016,21 @@ function renderMentorsTab(){
   const rows = keys.map(key=>{
     const b = bucketByEngagement(byMentor[key]);
     const label = key==='__unassigned__' ? 'Unassigned' : key;
+    const actionsCell = key==='__unassigned__' ? '<span class="muted">—</span>'
+      : `<div style="display:flex;gap:4px;">
+           <button class="ghost nudge-row-btn" data-mentor="${key}" title="Send this week's Monday reminder to ${label}" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">🔔 Nudge</button>
+           <button class="ghost checkup-row-btn" data-mentor="${key}" title="Log that ${label} checked up on their learners" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">✅ Log</button>
+         </div>`;
     return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;">
       <td><b>${label}</b></td>
       ${engagementRowCells(b)}
+      <td class="muted last-checkup-cell" data-mentor-cell="${key}" style="font-size:11px;">—</td>
+      <td>${actionsCell}</td>
     </tr>`;
   }).join('');
   const tbody = document.getElementById('mentorsTabBody');
   if(!tbody) return;
-  tbody.innerHTML = rows || '<tr><td colspan=7 class="muted">No data</td></tr>';
+  tbody.innerHTML = rows || '<tr><td colspan=9 class="muted">No data</td></tr>';
   tbody.querySelectorAll('.mentor-row').forEach(tr=>{
     tr.addEventListener('click', ()=>{
       switchTab('learners');
@@ -2777,6 +3038,51 @@ function renderMentorsTab(){
       renderAll();
     });
   });
+  tbody.querySelectorAll('.nudge-row-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); sendMondayNudge(btn.dataset.mentor); });
+  });
+  tbody.querySelectorAll('.checkup-row-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); confirmMentorCheckup(btn.dataset.mentor); });
+  });
+
+  renderMondayNudgeBanner_();
+
+  // Progressive enhancement: fills in "Last check-up" once the AccessLog
+  // CSV loads, without blocking the rest of the table from rendering —
+  // same pattern as the rest of this app's slower, optional data sources.
+  loadLastCheckups_().then(last=>{
+    tbody.querySelectorAll('.last-checkup-cell').forEach(td=>{
+      const m = td.dataset.mentorCell;
+      const rec = last[m];
+      if(!rec){ td.textContent = 'No check-up logged'; return; }
+      const days = Math.round((Date.now()-rec.ts)/86400000);
+      td.textContent = days<=0 ? 'Today' : days===1 ? '1 day ago' : `${days} days ago`;
+      td.title = rec.detail;
+    });
+  }).catch(()=>{});
+}
+
+// A gentle, dismissible-for-the-week prompt shown on the Mentors tab every
+// Monday, nudging staff to actually send that week's mentor reminders
+// instead of relying on them to remember. Dismissal is remembered per ISO
+// week so it comes back fresh next Monday.
+function renderMondayNudgeBanner_(){
+  const el = document.getElementById('mondayNudgeBanner');
+  if(!el) return;
+  const now = today();
+  if(now.getDay() !== 1){ el.innerHTML=''; return; } // 1 = Monday
+  const weekKey = STORE_PREFIX + ':mondayNudgeDismissed:' + mondayOf_(now).toISOString().slice(0,10);
+  if(sessionStorage.getItem(weekKey) === '1'){ el.innerHTML=''; return; }
+  el.innerHTML = `
+    <div class="kpi-warning" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;background:var(--teal-soft);color:var(--amber);border-color:rgba(180,83,9,.35);">
+      <span>🔔 It's Monday — send this week's mentor check-in reminders (BCC'd to LearnOps automatically).</span>
+      <span style="display:flex;gap:8px;flex:none;">
+        <button id="mondayBannerSendBtn" class="primary" style="padding:6px 12px;">Send reminders</button>
+        <button id="mondayBannerDismissBtn" class="ghost">Dismiss for this week</button>
+      </span>
+    </div>`;
+  document.getElementById('mondayBannerSendBtn').onclick = openMondayNudgeDrawer;
+  document.getElementById('mondayBannerDismissBtn').onclick = () => { sessionStorage.setItem(weekKey,'1'); el.innerHTML=''; };
 }
 
 // ---------- check-in compliance rollup ----------
@@ -3260,6 +3566,7 @@ function getFiltered(){
   const feng = (document.getElementById('filterEngagement')||{}).value || '';
   const fcomp = (document.getElementById('filterCompletion')||{}).value || '';
   const fprog = (document.getElementById('filterProgressRange')||{}).value || '';
+  const flc = (document.getElementById('filterLifecycle')||{}).value || 'active';
   let computed = participants.map(p=>({p, eng: computeEngine(p)}));
   if(q){
     computed = computed.filter(({p})=>
@@ -3285,6 +3592,14 @@ function getFiltered(){
       return pct>=lo && pct<=hi;
     });
   }
+  // Defer/Complete quick actions (section: lifecycle) — hide anyone who's
+  // been Deferred or Completed from the default "Active roster" view, but
+  // never delete them: their full record is still in `participants`, just
+  // filtered out here unless the dropdown is switched to see them again.
+  if(flc === 'active') computed = computed.filter(({p})=> (p.lifecycleStatus||'active') === 'active');
+  else if(flc === 'deferred') computed = computed.filter(({p})=> p.lifecycleStatus === 'deferred');
+  else if(flc === 'completed') computed = computed.filter(({p})=> p.lifecycleStatus === 'completed');
+  // flc === 'all' -> no filtering by lifecycle
 
   computed.sort((a,b)=>{
     let av, bv;
@@ -4508,11 +4823,17 @@ async function openDrawer(id){
   const eng = computeEngine(p);
   const progOptions = BUNDLE.programmes.map(pr=>`<option value="${pr.code}" ${pr.code===p.programme?'selected':''}>${pr.code} — ${pr.name}</option>`).join('');
 
+  const lcStatus = p.lifecycleStatus || 'active';
   document.getElementById('drawer').innerHTML = `
     <div class="drawer-head">
       <h3>${p.name}</h3>
       <div class="muted pid">${p.id} · <a href="#" id="jumpToCheckins" style="color:var(--teal);">View weekly check-ins →</a></div>
     </div>
+    ${lcStatus !== 'active' ? `<div class="flag-banner" style="margin:0 20px 12px;">
+        This participant is currently <b>${lcStatus==='deferred'?'Deferred':'Completed'}</b> and hidden from the active Learners list
+        ${p.lifecycleAt ? ' (since ' + fmtShort(new Date(p.lifecycleAt)) + (p.lifecycleBy ? ' by ' + p.lifecycleBy : '') + ')' : ''}${p.lifecycleReason ? ' — ' + p.lifecycleReason : ''}.
+        Their record is untouched — use "↩ Reactivate" below to bring them back onto the active roster.
+      </div>` : ''}
     <div class="drawer-body">
 
       <div>
@@ -4645,6 +4966,10 @@ async function openDrawer(id){
     <div class="save-row" style="flex-wrap:wrap;">
       <button class="primary" id="saveBtn" style="flex:1;">Save changes</button>
       <button id="planBtn" style="flex:1;">📄 Learning plan (PDF)</button>
+      ${lcStatus === 'active' ? `
+        <button id="deferBtn">Defer</button>
+        <button id="completeBtn">Complete</button>
+      ` : `<button id="reactivateBtn">↩ Reactivate</button>`}
       <button class="danger-ghost" id="removeBtn">Remove</button>
       <button class="ghost" id="closeBtn">Close</button>
     </div>
@@ -4653,6 +4978,12 @@ async function openDrawer(id){
   renderDrawerCharts(p, eng);
   document.getElementById('closeBtn').onclick = closeDrawer;
   document.getElementById('saveBtn').onclick = () => saveDrawer(p);
+  const deferBtnEl = document.getElementById('deferBtn');
+  if(deferBtnEl) deferBtnEl.onclick = () => markLifecycle(p.id, 'deferred');
+  const completeBtnEl = document.getElementById('completeBtn');
+  if(completeBtnEl) completeBtnEl.onclick = () => markLifecycle(p.id, 'completed');
+  const reactivateBtnEl = document.getElementById('reactivateBtn');
+  if(reactivateBtnEl) reactivateBtnEl.onclick = () => reactivateParticipant(p.id);
   const compOverrideEl = document.getElementById('f_completionOverride');
   if(compOverrideEl){
     compOverrideEl.onchange = ()=>{
@@ -4768,6 +5099,64 @@ async function saveDrawer(p){
   } else {
     showToast('Saved — recalculated live.');
   }
+}
+
+// ---------- lifecycle quick actions: Defer / Complete / Reactivate ----------
+// Unlike removeParticipant() below (which is meant for "I added this by
+// mistake"), Defer and Complete are everyday roster-management actions:
+// the participant's full record — profile, edits, check-ins, charts — is
+// left completely untouched. All this does is set a status flag that the
+// "Roster view" filter uses to hide them from the default Active list.
+// Nothing is deleted, and it's fully reversible via "↩ Reactivate".
+async function markLifecycle(id, status){
+  if(!requireEditAuth()) return;
+  const p = participants.find(x=>x.id===id);
+  if(!p) return;
+  const label = status === 'deferred' ? 'Defer' : 'mark Completed';
+  const reasonInput = prompt(`Reason to ${label} ${p.name}? (optional — shown to staff later, cancel to abort)`, '');
+  if(reasonInput === null) return; // user hit Cancel
+  const reason = reasonInput.trim();
+  if(!confirm(`${status==='deferred' ? 'Defer' : 'Mark Completed:'} ${p.name}? They'll disappear from the active Learners list — their full record stays intact and can be brought back any time via "Roster view" → ${status==='deferred'?'Deferred':'Completed'} → Reactivate.`)) return;
+
+  await captureSnapshot_(`${status==='deferred'?'Defer':'Complete'} ${p.name} (${p.id})`);
+  const rec = await saveLifecycle(id, status, reason);
+  p.lifecycleStatus = rec.status; p.lifecycleReason = rec.reason; p.lifecycleAt = rec.at; p.lifecycleBy = rec.by;
+
+  // Marking Completed via the quick action also flips the existing
+  // completion-override machinery (section 7/26) so risk badges, KPIs, and
+  // the engagement engine all agree this learner is done, not just hidden.
+  if(status === 'completed'){
+    p.completionOverride = 'completed';
+    p.completionMeta = p.completionMeta || {
+      date: fmt(today()), source: 'Marked complete (quick action)', note: reason,
+      completedBy: currentUserEmail() || 'unknown', recordedAt: new Date().toISOString(),
+    };
+    await saveOverride(p.id, {
+      name:p.name, email:p.email, phone:p.phone, serial:p.serial, programme:p.programme, cohortId:p.cohortId,
+      paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
+      preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments,
+      completionOverride:p.completionOverride, completionMeta:p.completionMeta
+    });
+  }
+
+  logAccess_('lifecycle', `${status==='deferred'?'Deferred':'Completed'} ${p.name} (${p.id})${reason ? ' — ' + reason : ''}`);
+  closeDrawer();
+  renderAll();
+  showToast(`${p.name} marked ${status==='deferred'?'Deferred':'Completed'} and removed from the active roster. Switch "Roster view" to see them again.`);
+}
+
+async function reactivateParticipant(id){
+  if(!requireEditAuth()) return;
+  const p = participants.find(x=>x.id===id);
+  if(!p) return;
+  if(!confirm(`Move ${p.name} back onto the active roster?`)) return;
+  await captureSnapshot_(`Reactivate ${p.name} (${p.id})`);
+  await clearLifecycle(id);
+  p.lifecycleStatus = 'active'; p.lifecycleReason = ''; p.lifecycleAt = null; p.lifecycleBy = null;
+  logAccess_('lifecycle', `Reactivated ${p.name} (${p.id})`);
+  closeDrawer();
+  renderAll();
+  showToast(`${p.name} moved back to the active roster.`);
 }
 
 async function removeParticipant(id){
@@ -5137,6 +5526,11 @@ async function boot(){
   for(const p of all){
     const ov = await loadOverrides(p.id);
     Object.assign(p, ov);
+    const lc = await loadLifecycle(p.id);
+    p.lifecycleStatus = lc ? lc.status : 'active';
+    p.lifecycleReason = lc ? lc.reason : '';
+    p.lifecycleAt = lc ? lc.at : null;
+    p.lifecycleBy = lc ? lc.by : null;
   }
   participants = all;
 
@@ -5147,12 +5541,14 @@ async function boot(){
       renderAll();
     });
   });
-  ['search','filterProg','filterCohort','filterRisk','filterStatus','filterMentor','filterPayment','filterEngagement','filterCompletion','filterProgressRange'].forEach(id=>{
+  ['search','filterProg','filterCohort','filterRisk','filterStatus','filterMentor','filterPayment','filterEngagement','filterCompletion','filterProgressRange','filterLifecycle'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', renderAll);
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
   document.getElementById('assignMentorsBtn').addEventListener('click', openAssignMentorsDrawer);
+  const mondayNudgeAllBtnEl = document.getElementById('mondayNudgeAllBtn');
+  if(mondayNudgeAllBtnEl) mondayNudgeAllBtnEl.addEventListener('click', openMondayNudgeDrawer);
   document.getElementById('exportAtRiskCsvBtn').addEventListener('click', exportAtRiskCsv);
   document.getElementById('exportAtRiskPdfBtn').addEventListener('click', exportAtRiskPdf);
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeDrawer(); });
