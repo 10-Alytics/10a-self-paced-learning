@@ -958,7 +958,7 @@ async function loadMentorsFromSheet_(){
 // MENTOR_API_URL isn't configured or Code.gs hasn't been redeployed with
 // this action yet — every caller below already handles an empty result
 // the same way it handles "no data yet".
-let MENTOR_CHECKIN_STATUS = { configured: !!MENTOR_API_URL, error: null };
+let MENTOR_CHECKIN_STATUS = { configured: false, error: null };
 async function loadMentorCheckins_(){
   if(!MENTOR_API_URL) return {};
   try{
