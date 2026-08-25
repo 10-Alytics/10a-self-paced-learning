@@ -1599,9 +1599,30 @@ async function refreshLiveData_() {
     return;
   }
   try {
-    if (DATA_SOURCE.programmesCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.programmesCsvUrl, 'Programme_Code');
-      BUNDLE.programmes = rows.filter((r) => r.Programme_Code).map((r) => ({
+    // All Sheet tabs are fetched CONCURRENTLY (Promise.all) instead of one
+    // after another. Google's publish-to-web CSV endpoint is slow per
+    // request (it's regenerated on demand, not served from a fast cache),
+    // so awaiting each tab in sequence meant the page waited for the SUM
+    // of every tab's fetch time. Firing them all at once means the page
+    // only waits as long as the single slowest tab — usually cutting
+    // total "Checking data source…" time by more than half. Behavior on
+    // failure is unchanged: if any configured tab fails to fetch, the
+    // whole refresh is treated as failed and the last-known snapshot is
+    // kept (same as before), it just fails/succeeds faster now.
+    const [progRows, settingsRows, partRows, checkinRows, moduleRows] = await Promise.all([
+      DATA_SOURCE.programmesCsvUrl ? fetchCsv_(DATA_SOURCE.programmesCsvUrl, 'Programme_Code') : Promise.resolve(null),
+      DATA_SOURCE.settingsCsvUrl ? fetchCsv_(DATA_SOURCE.settingsCsvUrl, 'Parameter') : Promise.resolve(null),
+      DATA_SOURCE.participantsCsvUrl ? fetchCsv_(DATA_SOURCE.participantsCsvUrl, 'Participant_ID') : Promise.resolve(null),
+      DATA_SOURCE.checkinsCsvUrl ? fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID') : Promise.resolve(null),
+      DATA_SOURCE.modulesCsvUrl ? fetchCsv_(DATA_SOURCE.modulesCsvUrl, 'Programme_Code') : Promise.resolve(null),
+      // fetchAdminDashboardSheet_ already has its own internal try/catch and
+      // never rejects, so it can safely run alongside the rest and just
+      // write straight into BUNDLE.adminDashboardSheet when it resolves.
+      DATA_SOURCE.adminDashboardCsvUrl ? fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl) : Promise.resolve(null),
+    ]);
+
+    if (progRows) {
+      BUNDLE.programmes = progRows.filter((r) => r.Programme_Code).map((r) => ({
         code: r.Programme_Code,
         name: r.Programme_Name,
         totalModules: toNum_(r.Total_Modules, 0),
@@ -1609,28 +1630,26 @@ async function refreshLiveData_() {
         standardWeeks: toNum_(r.Standard_Programme_Duration_Weeks, 16),
       }));
     }
-    if (DATA_SOURCE.settingsCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.settingsCsvUrl, 'Parameter');
+    if (settingsRows) {
       BUNDLE.settings = {
-        gracePeriodDays: findSetting_(rows, 'grace period', SETTINGS_DEFAULTS.gracePeriodDays),
-        defaultStudyDays: findSetting_(rows, 'preferred study days', SETTINGS_DEFAULTS.defaultStudyDays),
-        defaultHours: findSetting_(rows, 'hours available', SETTINGS_DEFAULTS.defaultHours),
-        esc1: findSetting_(rows, 'week 1 threshold', SETTINGS_DEFAULTS.esc1),
-        esc2: findSetting_(rows, 'week 2 threshold', SETTINGS_DEFAULTS.esc2),
-        esc3: findSetting_(rows, 'week 3 threshold', SETTINGS_DEFAULTS.esc3),
-        esc4: findSetting_(rows, 'week 4 threshold', SETTINGS_DEFAULTS.esc4),
-        riskGreen: findSetting_(rows, 'green buffer', SETTINGS_DEFAULTS.riskGreen),
-        riskYellow: findSetting_(rows, 'yellow buffer', SETTINGS_DEFAULTS.riskYellow),
+        gracePeriodDays: findSetting_(settingsRows, 'grace period', SETTINGS_DEFAULTS.gracePeriodDays),
+        defaultStudyDays: findSetting_(settingsRows, 'preferred study days', SETTINGS_DEFAULTS.defaultStudyDays),
+        defaultHours: findSetting_(settingsRows, 'hours available', SETTINGS_DEFAULTS.defaultHours),
+        esc1: findSetting_(settingsRows, 'week 1 threshold', SETTINGS_DEFAULTS.esc1),
+        esc2: findSetting_(settingsRows, 'week 2 threshold', SETTINGS_DEFAULTS.esc2),
+        esc3: findSetting_(settingsRows, 'week 3 threshold', SETTINGS_DEFAULTS.esc3),
+        esc4: findSetting_(settingsRows, 'week 4 threshold', SETTINGS_DEFAULTS.esc4),
+        riskGreen: findSetting_(settingsRows, 'green buffer', SETTINGS_DEFAULTS.riskGreen),
+        riskYellow: findSetting_(settingsRows, 'yellow buffer', SETTINGS_DEFAULTS.riskYellow),
       };
     }
-    if (DATA_SOURCE.participantsCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.participantsCsvUrl, 'Participant_ID');
+    if (partRows) {
       // Keep anyone with a name, even if Serial_No / Participant_ID haven't
       // been filled in yet on the sheet — generate a stable temporary ID
       // instead of silently dropping them. Real IDs (once added) always
       // take over automatically on the next refresh. idGenerated marks
       // these so the dashboard's data-quality banner can flag them.
-      BUNDLE.participants = rows.filter((r) => r.Full_Name).map((r) => {
+      BUNDLE.participants = partRows.filter((r) => r.Full_Name).map((r) => {
         const hasRealId = !!r.Participant_ID;
         const fallbackId = 'TEMP-' + (r.Full_Name || '').trim().toUpperCase()
           .replace(/[^A-Z0-9]+/g, '-').replace(/(^-+|-+$)/g, '').slice(0, 24)
@@ -1659,7 +1678,7 @@ async function refreshLiveData_() {
         };
       });
     }
-    if (DATA_SOURCE.checkinsCsvUrl) {
+    if (checkinRows) {
       // Like ParticipantDB, your Weekly Check-ins tab has a title row and
       // description row above the real header row — so we scan for the
       // row containing 'Participant_ID', same as the other tabs, instead
@@ -1669,9 +1688,8 @@ async function refreshLiveData_() {
       // Study_Days_Completed, Challenges, Plan_Next_Week) and the raw
       // question wording Google Forms falls back to, plus a couple of
       // legacy/optional numeric fields some forms also ask.
-      const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID');
-      CHECKIN_STATUS.rawCount = rows.length;
-      BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID']) || pick_(r, ['Full_Name','Full Name'])).map((r) => ({
+      CHECKIN_STATUS.rawCount = checkinRows.length;
+      BUNDLE.checkins = checkinRows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID']) || pick_(r, ['Full_Name','Full Name'])).map((r) => ({
         participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
         fullName: pick_(r, ['Full_Name','Full Name']) || '',
         timestamp: pick_(r, ['Timestamp']) || null,
@@ -1693,9 +1711,8 @@ async function refreshLiveData_() {
       CHECKIN_STATUS.matchedCount = BUNDLE.checkins.length;
       CHECKIN_STATUS.error = null;
     }
-    if (DATA_SOURCE.modulesCsvUrl) {
-      const rows = await fetchCsv_(DATA_SOURCE.modulesCsvUrl, 'Programme_Code');
-      BUNDLE.modules = rows
+    if (moduleRows) {
+      BUNDLE.modules = moduleRows
         .filter((r)=> pick_(r, ['Programme_Code','Programme code']) && toNum_(pick_(r, ['Week_Number','Week number']), null) !== null)
         .map((r)=>({
           programme: (pick_(r, ['Programme_Code','Programme code']) || '').trim(),
@@ -1704,9 +1721,6 @@ async function refreshLiveData_() {
           topic: pick_(r, ['Topic']) || '',
           outlineLabel: pick_(r, ['Course_Outline_Label','Course outline label']) || '',
         })).sort((a,b)=> a.weekNumber - b.weekNumber);
-    }
-    if (DATA_SOURCE.adminDashboardCsvUrl) {
-      await fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl);
     }
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -5990,8 +6004,10 @@ async function openRestorePanel(){
 
 // ---------- boot ----------
 async function boot(){
-  await refreshLiveData_();
-  await loadMentorsFromSheet_();
+  // These two don't depend on each other's results, so run them
+  // concurrently instead of one after another — shaves another network
+  // round trip off the initial load.
+  await Promise.all([refreshLiveData_(), loadMentorsFromSheet_()]);
   KPI_LAST_REFRESH = new Date();
   updateCohortRulePill();
   populateProgFilter();
