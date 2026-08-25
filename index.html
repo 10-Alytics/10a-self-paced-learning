@@ -458,11 +458,12 @@
           <option value="Pending">Pending</option>
           <option value="Declined">Payment Defaulter</option>
         </select>
-        <select id="filterLifecycle" title="Deferred/Completed participants keep their full record — this just controls who shows up in the list below">
+        <select id="filterLifecycle" title="Deferred/Completed/Drop Off participants keep their full record — this just controls who shows up in the list below">
           <option value="active">Active roster</option>
           <option value="deferred">Deferred</option>
           <option value="completed">Completed (archived)</option>
-          <option value="all">All (incl. Deferred/Completed)</option>
+          <option value="dropoff">Drop Off (archived)</option>
+          <option value="all">All (incl. Deferred/Completed/Drop Off)</option>
         </select>
         <button id="assignMentorsBtn">Assign mentors</button>
         <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Defaulted as a CSV">Export at-risk (CSV)</button>
@@ -501,16 +502,18 @@
 
 <div class="main" id="mentorsView" style="display:none;">
   <div id="mondayNudgeBanner"></div>
+  <div id="mentorWorkRateBanner"></div>
   <div class="panel">
     <div class="panel-head">
       <div><h2>Mentors</h2><div class="sub">Caseload and outcomes per mentor — click a row to see that mentor's learners</div></div>
       <div class="controls">
+        <button id="editMentorsBtn" title="Add, rename, or fix a mentor's email address">✏️ Edit mentors</button>
         <button id="mondayNudgeAllBtn" title="Open a pre-filled, BCC'd Monday check-in reminder for every mentor">🔔 Send Monday reminders</button>
       </div>
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th><th>Last check-up</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th><th>Follow-up Rate</th><th>Last check-up</th><th>Actions</th></tr></thead>
         <tbody id="mentorsTabBody"></tbody>
       </table>
     </div>
@@ -584,6 +587,36 @@
         <thead><tr><th>Learner</th><th>Programme</th><th>Mentor</th><th>Progress</th><th>Expected</th><th>Variance</th><th>Last Activity</th><th>Evidence</th><th>Risk</th><th>Projected Completion</th></tr></thead>
         <tbody id="evidenceLearnerBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- RETENTION KPI — primary quarterly business goal. Self-paced check-ins
+       (below) are the supporting/leading indicator that drives this: the
+       theory of change is "more mentors following up on check-ins ⇒ fewer
+       learners disengage silently ⇒ fewer drop offs." This block is
+       computed live from every participant's lifecycle status, not
+       week-scoped like the check-in KPI below it. -->
+  <div class="kpi-hero" style="margin-top:20px;">
+    <div>
+      <h1>Retention Rate — Category: Retention</h1>
+      <div class="actual" id="retentionHeroActual">—<small>Target 80%</small></div>
+    </div>
+    <div class="stat-blk"><div class="k">Total self-paced learners</div><div class="v" id="retentionHeroTotal">—</div></div>
+    <div class="stat-blk"><div class="k">Retained</div><div class="v" id="retentionHeroRetained">—</div></div>
+    <div class="stat-blk"><div class="k">Dropped off / cancelled</div><div class="v" id="retentionHeroDropped">—</div></div>
+    <div class="stat-blk"><div class="k">Variance to target</div><div class="v" id="retentionHeroVariance">—</div></div>
+    <div id="retentionHeroStatus" class="status-pill achieved">—</div>
+  </div>
+  <div class="panel" style="margin-top:14px;">
+    <div class="panel-head">
+      <div><h2>Drop off / cancellation evidence</h2><div class="sub">Every learner currently marked Drop Off, with who recorded it, when, and why — this is the underlying evidence for the Retention KPI above</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Learner</th><th>Programme</th><th>Mentor</th><th>Date recorded</th><th>Recorded by</th><th>Reason</th></tr></thead>
+        <tbody id="retentionEvidenceBody"></tbody>
+      </table>
+      <div class="checkin-empty" id="retentionEvidenceEmpty" style="display:none;">No drop offs recorded — 100% retained so far. ✓</div>
     </div>
   </div>
 
@@ -851,22 +884,185 @@ const DATA_SOURCE = {
 const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1kbn8H38ypaUmuLfudIxHSUGaQkqHoUOhP-EA/viewform';
 
 // The Self-Paced Learning Team members who each get an even share of
-// participants for weekly follow-up (Assigned_Mentor). Edit these 4 names
-// to match your real team, then use the "Assign mentors" button on the
-// Dashboard tab to distribute participants evenly and round-robin.
-const TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
+// participants for weekly follow-up (Assigned_Mentor). These are FALLBACK
+// defaults, used only until the live list loads from the Sheet's "Mentors"
+// tab (see loadMentorsFromSheet_ / applyMentorsFromApi_ below) — the real
+// source of truth is now the "✏️ Edit mentors" panel on the Mentors tab,
+// which writes to that Sheet tab. `let`, not `const`, because
+// applyMentorsFromApi_ replaces these contents in place once the live data
+// arrives, and every place in this file that reads TEAM_MEMBERS/
+// MENTOR_EMAILS picks that up automatically without needing to be changed
+// individually.
+let TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
 
-// Best-guess mentor inboxes (firstname@10alytics.org — the same pattern
-// ADMIN_EMAIL uses below). There's no live staff directory wired into this
-// tracker, so double-check/correct these before relying on the "Nudge
-// mentor" / Monday-reminder mailto links further down — worst case, staff
-// just fix the "To" field in their mail client before hitting send.
-const MENTOR_EMAILS = {
+// Fallback mentor inboxes, used until the live Mentors-tab data loads (see
+// note above). Kept here so the app still works even before the Mentors
+// sheet tab exists / Code.gs has been redeployed with the mentor
+// read/write actions.
+let MENTOR_EMAILS = {
   'Aanu Oke': 'aanu@10alytics.org',
   'Stephen Adeleye': 'stephen@10alytics.org',
   'Dolapo Olaboshinde': 'dolapo@10alytics.org',
   'Amos Foluke': 'amos@10alytics.org',
 };
+
+// True once the live Mentors-tab list has successfully loaded at least
+// once this session — used to decide whether "Edit mentors" is editing
+// real synced data or just the local fallback defaults above.
+let MENTORS_LIVE_LOADED = false;
+
+// Replaces the CONTENTS of TEAM_MEMBERS/MENTOR_EMAILS in place (rather than
+// reassigning the variables) so every existing usage throughout this file
+// automatically reflects the live Sheet data once it loads, with no other
+// code needing to change. `mentors` is an array of {name, email}.
+function applyMentorsFromApi_(mentors){
+  if(!Array.isArray(mentors) || !mentors.length) return;
+  const names = mentors.map(m=>m.name).filter(Boolean);
+  TEAM_MEMBERS.length = 0;
+  TEAM_MEMBERS.push(...names);
+  Object.keys(MENTOR_EMAILS).forEach(k=>delete MENTOR_EMAILS[k]);
+  mentors.forEach(m=>{ if(m.name) MENTOR_EMAILS[m.name] = m.email || ''; });
+  MENTORS_LIVE_LOADED = true;
+}
+
+// Fetches the current mentor roster (name + email) from the Apps Script
+// backend's "Mentors" sheet tab via a plain GET (no admin token needed —
+// reading the roster is not a write). Silently no-ops if MENTOR_API_URL
+// isn't configured, or if Code.gs hasn't been redeployed with the
+// 'getMentors' action yet, or if the Mentors tab is empty — in every case
+// the hardcoded fallback defaults above keep the app working.
+async function loadMentorsFromSheet_(){
+  if(!MENTOR_API_URL) return;
+  try{
+    const res = await fetch(MENTOR_API_URL + '?action=getMentors');
+    const data = await res.json();
+    if(data && data.ok && Array.isArray(data.mentors) && data.mentors.length){
+      applyMentorsFromApi_(data.mentors);
+    }
+  }catch(e){
+    // Leave the fallback defaults in place — nothing to do here.
+  }
+}
+
+// Fetches the REAL Wed/Fri check-in tracker for every mentor (from the
+// separate "Self_Paced Check-ins Documentation" spreadsheet, via Code.gs's
+// getMentorCheckins action) and reduces it to a per-mentor work-rate
+// summary: how many of their listed learners were actually checked in on
+// this Wed/Fri, plus the mentor's own comments as evidence. This is a
+// plain GET (no admin token — it's a read), and silently returns {} if
+// MENTOR_API_URL isn't configured or Code.gs hasn't been redeployed with
+// this action yet — every caller below already handles an empty result
+// the same way it handles "no data yet".
+let MENTOR_CHECKIN_STATUS = { configured: !!MENTOR_API_URL, error: null };
+async function loadMentorCheckins_(){
+  if(!MENTOR_API_URL) return {};
+  try{
+    const res = await fetch(MENTOR_API_URL + '?action=getMentorCheckins');
+    const data = await res.json();
+    if(!data || !data.ok || !data.mentors) return {};
+    MENTOR_CHECKIN_STATUS.error = null;
+    const summary = {};
+    Object.keys(data.mentors).forEach(mentor=>{
+      const rows = data.mentors[mentor].rows || [];
+      const isChecked = s => (s||'').trim().toLowerCase() === 'checked in';
+      const isExcused = s => (s||'').trim().toLowerCase() === 'excused';
+      const wedEligible = rows.filter(r=>r.wed); // has any status entered
+      const friEligible = rows.filter(r=>r.fri);
+      const wedDone = rows.filter(r=>isChecked(r.wed) || isExcused(r.wed));
+      const friDone = rows.filter(r=>isChecked(r.fri) || isExcused(r.fri));
+      const evidence = rows
+        .filter(r=> (r.wedComment && r.wedComment.trim()) || (r.friComment && r.friComment.trim()))
+        .map(r=>({ participantId:r.participantId, name:r.name, wed:r.wed, wedComment:r.wedComment, fri:r.fri, friComment:r.friComment }));
+      summary[mentor] = {
+        assigned: rows.length,
+        wedTotal: wedEligible.length, wedDone: wedDone.length,
+        friTotal: friEligible.length, friDone: friDone.length,
+        wedRate: wedEligible.length ? Math.round(wedDone.length/wedEligible.length*100) : null,
+        friRate: friEligible.length ? Math.round(friDone.length/friEligible.length*100) : null,
+        evidence,
+      };
+    });
+    return summary;
+  }catch(e){
+    MENTOR_CHECKIN_STATUS.error = e.message;
+    return {};
+  }
+}
+
+// Opens a drawer showing one mentor's real Wed/Fri check-in evidence —
+// their own logged comments per learner, straight from the check-in
+// tracker spreadsheet. This is the "evidence" behind the Follow-up % column
+// on the Mentors tab.
+async function openMentorEvidenceDrawer(mentorKey){
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head"><h3>${mentorKey} — follow-up evidence</h3><div class="muted">Straight from the Wed/Fri check-in tracker — mentor's own comments, unedited.</div></div>
+    <div id="mentorEvidenceBody" class="drawer-body">Loading…</div>
+    <div class="save-row"><button class="ghost" id="closeMentorEvidenceBtn" style="flex:1;">Close</button></div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeMentorEvidenceBtn').onclick = closeDrawer;
+  const body = document.getElementById('mentorEvidenceBody');
+  const checkins = await loadMentorCheckins_();
+  const s = checkins[mentorKey];
+  if(!s){
+    body.innerHTML = `<div class="kpi-warning">No check-in tracker data found for ${mentorKey} yet — either Code.gs hasn't been redeployed with the getMentorCheckins action, or this mentor doesn't have a matching tab in the check-ins spreadsheet (see CHECKIN_TAB_TO_MENTOR in Code.gs).</div>`;
+    return;
+  }
+  const rows = s.evidence;
+  body.innerHTML = `
+    <div class="metric-grid" style="margin-bottom:14px;">
+      <div class="metric"><div class="k">Wed check-in rate</div><div class="v">${s.wedRate===null?'—':s.wedRate+'%'} <span class="muted" style="font-weight:400;">(${s.wedDone}/${s.wedTotal})</span></div></div>
+      <div class="metric"><div class="k">Fri check-in rate</div><div class="v">${s.friRate===null?'—':s.friRate+'%'} <span class="muted" style="font-weight:400;">(${s.friDone}/${s.friTotal})</span></div></div>
+      <div class="metric"><div class="k">Learners on tracker</div><div class="v">${s.assigned}</div></div>
+    </div>
+    ${rows.length ? `<table><thead><tr><th>Learner</th><th>Wed</th><th>Fri</th><th>Comments</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr>
+        <td>${r.name || r.participantId}</td>
+        <td><span class="muted" style="font-size:11px;">${r.wed||'—'}</span></td>
+        <td><span class="muted" style="font-size:11px;">${r.fri||'—'}</span></td>
+        <td style="font-size:12px;">${[r.wedComment,r.friComment].filter(Boolean).join(' · ')}</td>
+      </tr>`).join('')}
+    </tbody></table>` : '<div class="muted">No comments logged yet.</div>'}
+  `;
+}
+// `mentor` = {name, email}. Pass `originalName` when renaming an existing
+// mentor (so the backend updates that row instead of appending a new one).
+// Requires the same admin write token as every other sheet write.
+async function upsertMentorInSheet_(mentor, originalName){
+  if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
+  const token = ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — mentor was NOT saved to the Sheet.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'upsertMentor', token, name: mentor.name, email: mentor.email || '', originalName: originalName || '' })
+    });
+    logAccess_('edit', `Mentor saved: ${mentor.name} <${mentor.email||''}>${originalName && originalName!==mentor.name ? ' (renamed from '+originalName+')' : ''}`);
+    // no-cors responses are opaque — same limitation noted on the other
+    // postXToSheet_ functions above — so "didn't throw" is treated as sent.
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+async function deleteMentorInSheet_(name){
+  if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
+  const token = ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — mentor was NOT removed from the Sheet.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'deleteMentor', token, name })
+    });
+    logAccess_('edit', `Mentor removed: ${name}`);
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
 
 // Standing BCC list for every Monday reminder / mentor-nudge email sent
 // from this tracker, so LearnOps leadership is automatically looped in
@@ -1583,6 +1779,17 @@ async function saveLifecycle(id, status, reason){
 }
 async function clearLifecycle(id){
   try{ await window.storage.delete(STORE_PREFIX+':lifecycle:'+id, false); }catch(e){}
+}
+
+// Shared label/badge-color helpers for the three archived lifecycle
+// statuses (deferred / completed / dropoff), so every place that renders
+// one of these — the Learners table badge, the profile drawer banner, and
+// the confirm()/toast copy in markLifecycle — stays in sync automatically.
+function lifecycleLabel_(status){
+  return status==='deferred' ? 'Deferred' : status==='dropoff' ? 'Drop Off' : status==='completed' ? 'Completed' : 'Active';
+}
+function lifecycleBadgeClass_(status){
+  return status==='deferred' ? 'amber' : status==='dropoff' ? 'rose' : 'green';
 }
 
 async function loadExtraParticipants(){
@@ -2594,6 +2801,8 @@ function renderKPIs(computed){
   const attention = count(c=>c.eng.engagementStatus==='Needs Attention');
   const atrisk = count(c=>c.eng.engagementStatus==='At Risk');
   const completed = count(c=>c.eng.isCompleted);
+  const deferredCount = count(c=>(c.p.lifecycleStatus||'active')==='deferred');
+  const dropoffCount = count(c=>(c.p.lifecycleStatus||'active')==='dropoff');
   const inProgress = computed.filter(c=>!c.eng.isCompleted);
   const nProg = inProgress.length;
   const avgProg = nProg ? (inProgress.reduce((s,c)=>s+c.eng.progressPct,0)/nProg*100) : 0;
@@ -2619,6 +2828,8 @@ function renderKPIs(computed){
     ['Needs Attention', attention, 'amber', {type:'engagement', value:'Needs Attention'}],
     ['At Risk', atrisk, 'rose', {type:'engagement', value:'At Risk'}],
     ['Completed', completed, 'slate', {type:'completion', value:'completed'}],
+    ['Deferred', deferredCount, deferredCount>0?'amber':'slate', {type:'lifecycle', value:'deferred'}],
+    ['Drop Off', dropoffCount, dropoffCount>0?'rose':'slate', {type:'lifecycle', value:'dropoff'}],
     ['Avg Progress', avgProg.toFixed(0)+'%', 'teal'],
     ['Avg Engagement', avgEngagementScore.toFixed(0)+'%', avgEngagementScore>=75?'green':avgEngagementScore>=40?'amber':'rose'],
     ['Avg Evidence Rate', avgEvidenceRate.toFixed(0)+'%', avgEvidenceRate>=75?'green':avgEvidenceRate>=40?'amber':'rose'],
@@ -2639,6 +2850,7 @@ function renderKPIs(computed){
       if(type==='engagement') document.getElementById('filterEngagement').value = value;
       if(type==='completion') document.getElementById('filterCompletion').value = value;
       if(type==='mentor') document.getElementById('filterMentor').value = value;
+      if(type==='lifecycle') document.getElementById('filterLifecycle').value = value;
       renderAll();
     });
   });
@@ -2683,15 +2895,16 @@ function renderTable(computed){
     const rd = riskDisplay(eng);
     const lcStatus = p.lifecycleStatus || 'active';
     const lcTip = [
-      lcStatus==='deferred' ? 'Deferred' : lcStatus==='completed' ? 'Completed' : '',
+      lifecycleLabel_(lcStatus) !== 'Active' ? lifecycleLabel_(lcStatus) : '',
       p.lifecycleAt ? ('on ' + fmtShort(new Date(p.lifecycleAt))) : '',
       p.lifecycleBy ? ('by ' + p.lifecycleBy) : '',
       p.lifecycleReason ? ('— ' + p.lifecycleReason) : '',
     ].filter(Boolean).join(' ');
     const actionsHtml = lcStatus === 'active'
-      ? `<div class="row-actions" style="display:flex;gap:4px;">
+      ? `<div class="row-actions" style="display:flex;gap:4px;flex-wrap:wrap;">
            <button class="ghost lifecycle-btn" data-action="deferred" data-id="${p.id}" title="Defer — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Defer</button>
            <button class="ghost lifecycle-btn" data-action="completed" data-id="${p.id}" title="Mark Completed — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Complete</button>
+           <button class="ghost lifecycle-btn" data-action="dropoff" data-id="${p.id}" title="Mark Drop Off — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Drop Off</button>
          </div>`
       : `<button class="ghost reactivate-btn" data-id="${p.id}" title="${lcTip}" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">↩ Reactivate</button>`;
     return `
@@ -2700,7 +2913,7 @@ function renderTable(computed){
       <td>
         <div class="name">${p.name}</div>
         <div class="pid">${p.id}</div>
-        ${lcStatus!=='active' ? `<span class="badge ${lcStatus==='deferred'?'amber':'green'}" style="margin-top:3px;" title="${lcTip}">${lcStatus==='deferred'?'Deferred':'Completed'}</span>` : ''}
+        ${lcStatus!=='active' ? `<span class="badge ${lifecycleBadgeClass_(lcStatus)}" style="margin-top:3px;" title="${lcTip}">${lifecycleLabel_(lcStatus)}</span>` : ''}
       </td>
       <td><span class="prog-code">${p.programme}</span></td>
       <td class="pid">${p.cohortId || '<span class=muted>derived from ID</span>'}</td>
@@ -2842,7 +3055,7 @@ async function sendMentorNudgeEmail_(mentorKey, rows){
   if(!token) return { ok:false, error:'No admin token entered — reminder was NOT sent.' };
   const content = buildMondayNudgeContent_(mentorKey, rows);
   if(!content.to){
-    return { ok:false, error:`No email on file for ${mentorKey==='__unassigned__'?'Unassigned':mentorKey} — add one to MENTOR_EMAILS near the top of the script.` };
+    return { ok:false, error:`No email on file for ${mentorKey==='__unassigned__'?'Unassigned':mentorKey} — add one via the Mentors tab's "✏️ Edit mentors" panel.` };
   }
   try{
     await fetch(MENTOR_API_URL, {
@@ -2904,7 +3117,7 @@ function openMondayNudgeDrawer(){
                 return `<tr data-mentor-row="${m}">
                   <td>${m}</td>
                   <td class="pid">${flagged} of ${rows.length}</td>
-                  <td class="muted" style="font-size:11px;">${email || '⚠ not set — add to MENTOR_EMAILS'}</td>
+                  <td class="muted" style="font-size:11px;">${email || '⚠ not set — add via Edit mentors'}</td>
                   <td><button class="mentorNudgeSendBtn" data-mentor="${m}">Send</button></td>
                 </tr>`;
               }).join('')}
@@ -2912,7 +3125,7 @@ function openMondayNudgeDrawer(){
           </table>
         ` : '<div class="muted" style="margin-top:8px;">No mentors with assigned learners yet.</div>'}
         <div class="admin-only-note" style="margin-top:14px;">
-          Sending uses the same admin write token as "Assign mentors" — you'll be asked for it once per browser session. Mentor addresses are guessed from the firstname@10alytics.org pattern (MENTOR_EMAILS near the top of the script) — correct any that are wrong.
+          Sending uses the same admin write token as "Assign mentors" — you'll be asked for it once per browser session. Fix any wrong or missing addresses via the Mentors tab's "✏️ Edit mentors" panel.
         </div>
       </div>
     </div>
@@ -3017,20 +3230,22 @@ function renderMentorsTab(){
     const b = bucketByEngagement(byMentor[key]);
     const label = key==='__unassigned__' ? 'Unassigned' : key;
     const actionsCell = key==='__unassigned__' ? '<span class="muted">—</span>'
-      : `<div style="display:flex;gap:4px;">
+      : `<div style="display:flex;gap:4px;flex-wrap:wrap;">
            <button class="ghost nudge-row-btn" data-mentor="${key}" title="Send this week's Monday reminder to ${label}" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">🔔 Nudge</button>
            <button class="ghost checkup-row-btn" data-mentor="${key}" title="Log that ${label} checked up on their learners" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">✅ Log</button>
+           <button class="ghost evidence-row-btn" data-mentor="${key}" title="See ${label}'s real Wed/Fri check-in evidence and comments" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">📋 Evidence</button>
          </div>`;
     return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;">
       <td><b>${label}</b></td>
       ${engagementRowCells(b)}
+      <td class="muted followup-rate-cell" data-mentor-cell="${key}" style="font-size:11px;">—</td>
       <td class="muted last-checkup-cell" data-mentor-cell="${key}" style="font-size:11px;">—</td>
       <td>${actionsCell}</td>
     </tr>`;
   }).join('');
   const tbody = document.getElementById('mentorsTabBody');
   if(!tbody) return;
-  tbody.innerHTML = rows || '<tr><td colspan=9 class="muted">No data</td></tr>';
+  tbody.innerHTML = rows || '<tr><td colspan=10 class="muted">No data</td></tr>';
   tbody.querySelectorAll('.mentor-row').forEach(tr=>{
     tr.addEventListener('click', ()=>{
       switchTab('learners');
@@ -3043,6 +3258,9 @@ function renderMentorsTab(){
   });
   tbody.querySelectorAll('.checkup-row-btn').forEach(btn=>{
     btn.addEventListener('click', (e)=>{ e.stopPropagation(); confirmMentorCheckup(btn.dataset.mentor); });
+  });
+  tbody.querySelectorAll('.evidence-row-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); openMentorEvidenceDrawer(btn.dataset.mentor); });
   });
 
   renderMondayNudgeBanner_();
@@ -3060,6 +3278,52 @@ function renderMentorsTab(){
       td.title = rec.detail;
     });
   }).catch(()=>{});
+
+  // Progressive enhancement: fills in the real Wed/Fri "Follow-up Rate"
+  // once the check-ins tracker loads — see loadMentorCheckins_. Also
+  // rolls the same data up into a one-line team summary banner above the
+  // table (the "how are mentors actually doing on follow-ups" headline
+  // number, straight from their own logged check-ins).
+  loadMentorCheckins_().then(summary=>{
+    tbody.querySelectorAll('.followup-rate-cell').forEach(td=>{
+      const m = td.dataset.mentorCell;
+      const s = summary[m];
+      if(!s || (s.wedRate===null && s.friRate===null)){ td.textContent = 'No tracker data'; return; }
+      const wed = s.wedRate===null ? '—' : s.wedRate+'%';
+      const fri = s.friRate===null ? '—' : s.friRate+'%';
+      td.innerHTML = `Wed ${wed} · Fri ${fri}`;
+      td.title = `${s.wedDone}/${s.wedTotal} checked in Wed · ${s.friDone}/${s.friTotal} checked in Fri · ${s.assigned} learners on tracker`;
+    });
+    renderMentorWorkRateBanner_(summary);
+  }).catch(()=>{});
+}
+
+// One-line team rollup of the real Wed/Fri check-in tracker: total
+// learners on the tracker across all mentors, and the combined check-in
+// rate (Wed+Fri done ÷ Wed+Fri eligible). Says plainly when there's no
+// data yet instead of showing a misleading 0%.
+function renderMentorWorkRateBanner_(summary){
+  const el = document.getElementById('mentorWorkRateBanner');
+  if(!el) return;
+  const mentors = Object.keys(summary);
+  if(!mentors.length){
+    el.innerHTML = MENTOR_CHECKIN_STATUS.error
+      ? `<div class="kpi-warning">⚠ Couldn't load the mentor check-in tracker (${MENTOR_CHECKIN_STATUS.error}).</div>`
+      : `<div class="kpi-warning">Mentor follow-up tracking isn't wired up yet — redeploy Code.gs with the getMentorCheckins action (see the README/setup notes) to pull real Wed/Fri check-in evidence per mentor.</div>`;
+    return;
+  }
+  let totalAssigned=0, doneSum=0, eligibleSum=0;
+  mentors.forEach(m=>{
+    const s = summary[m];
+    totalAssigned += s.assigned;
+    doneSum += s.wedDone + s.friDone;
+    eligibleSum += s.wedTotal + s.friTotal;
+  });
+  const rate = eligibleSum ? Math.round(doneSum/eligibleSum*100) : null;
+  el.innerHTML = `<div class="kpi-warning" style="background:var(--teal-soft);color:var(--ink);border-color:var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;">
+    <span>📋 <b>Mentor follow-up rate this cycle:</b> ${rate===null?'—':rate+'%'} of check-ins actually completed, across ${totalAssigned} learner${totalAssigned===1?'':'s'} on the tracker.</span>
+    <span class="muted" style="font-size:11.5px;">Click "📋 Evidence" on a mentor's row for their real comments.</span>
+  </div>`;
 }
 
 // A gentle, dismissible-for-the-week prompt shown on the Mentors tab every
@@ -3599,6 +3863,7 @@ function getFiltered(){
   if(flc === 'active') computed = computed.filter(({p})=> (p.lifecycleStatus||'active') === 'active');
   else if(flc === 'deferred') computed = computed.filter(({p})=> p.lifecycleStatus === 'deferred');
   else if(flc === 'completed') computed = computed.filter(({p})=> p.lifecycleStatus === 'completed');
+  else if(flc === 'dropoff') computed = computed.filter(({p})=> p.lifecycleStatus === 'dropoff');
   // flc === 'all' -> no filtering by lifecycle
 
   computed.sort((a,b)=>{
@@ -4217,6 +4482,11 @@ function exportReportPdf(){
 // see METRIC A/B/C split below, which the tab keeps visually distinct.
 // =========================================================================
 const KPI_TARGET = 80;
+// The quarterly business goal (Category: Retention): at least this % of
+// all self-paced learners must NOT end up marked Drop Off. Kept separate
+// from KPI_TARGET (the check-in completion target) even though they're
+// both 80 today — they measure different things and may diverge later.
+const RETENTION_TARGET = 80;
 let KPI_LAST_REFRESH = null;
 
 // -----------------------------------------------------------------------
@@ -4484,8 +4754,63 @@ function renderEvidenceSummary(){
   }
 }
 
+// ---- Retention KPI (Category: Retention, Target 80%) ----
+// "80% of total self-paced learners don't cancel or drop off the
+// program." Computed live from every participant currently loaded (not
+// week-scoped, unlike the check-in KPI below) — Drop Off is the one
+// lifecycle status that counts against retention; Active, Deferred, and
+// Completed all count as retained (Deferred is a pause, not an exit;
+// Completed is the successful outcome). "Cancel" and "drop off" are
+// treated as the same underlying event here — if you later need to tell
+// them apart, the reason text captured when marking Drop Off (see the
+// evidence table below) is the place to note which one it was.
+function renderRetentionKpi_(){
+  const total = participants.length;
+  const dropped = participants.filter(p=>(p.lifecycleStatus||'active')==='dropoff');
+  const droppedCount = dropped.length;
+  const retained = total - droppedCount;
+  const rate = total ? (retained/total*100) : null;
+  const rateTxt = rate===null ? '—' : rate.toFixed(0)+'%';
+  const achieved = rate!==null && rate >= RETENTION_TARGET;
+  const variance = rate===null ? null : rate - RETENTION_TARGET;
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  document.getElementById('retentionHeroActual').innerHTML = `${rateTxt}<small>Target ${RETENTION_TARGET}%</small>`;
+  set('retentionHeroTotal', total);
+  set('retentionHeroRetained', retained);
+  set('retentionHeroDropped', droppedCount);
+  set('retentionHeroVariance', variance===null ? '—' : `${variance>=0?'+':''}${variance.toFixed(0)} pts`);
+  const statusEl = document.getElementById('retentionHeroStatus');
+  if(statusEl){
+    statusEl.textContent = rate===null ? 'NO DATA' : (achieved ? 'ACHIEVED' : 'BELOW TARGET');
+    statusEl.className = 'status-pill ' + (achieved ? 'achieved' : 'below');
+  }
+
+  const body = document.getElementById('retentionEvidenceBody');
+  const empty = document.getElementById('retentionEvidenceEmpty');
+  if(!body) return;
+  if(!dropped.length){
+    body.innerHTML = '';
+    if(empty) empty.style.display = 'block';
+  } else {
+    if(empty) empty.style.display = 'none';
+    body.innerHTML = dropped
+      .slice()
+      .sort((a,b)=> new Date(b.lifecycleAt||0) - new Date(a.lifecycleAt||0))
+      .map(p=>`<tr>
+        <td>${p.name} <span class="muted" style="font-size:11px;">(${p.id})</span></td>
+        <td><span class="prog-code">${p.programme}</span></td>
+        <td>${p.mentor || '<span class="muted">Unassigned</span>'}</td>
+        <td>${p.lifecycleAt ? fmtShort(new Date(p.lifecycleAt)) : '—'}</td>
+        <td>${p.lifecycleBy || '—'}</td>
+        <td>${p.lifecycleReason || '<span class="muted">No reason given</span>'}</td>
+      </tr>`).join('');
+  }
+}
+
 function renderKpiTab(){
   renderEvidenceSummary();
+  renderRetentionKpi_();
   populateKpiFilters_();
   const weekEnding = selectedKpiWeek_();
   const result = weekEnding ? computeCheckinKpiForWeek_(weekEnding) : null;
@@ -4830,7 +5155,7 @@ async function openDrawer(id){
       <div class="muted pid">${p.id} · <a href="#" id="jumpToCheckins" style="color:var(--teal);">View weekly check-ins →</a></div>
     </div>
     ${lcStatus !== 'active' ? `<div class="flag-banner" style="margin:0 20px 12px;">
-        This participant is currently <b>${lcStatus==='deferred'?'Deferred':'Completed'}</b> and hidden from the active Learners list
+        This participant is currently <b>${lifecycleLabel_(lcStatus)}</b> and hidden from the active Learners list
         ${p.lifecycleAt ? ' (since ' + fmtShort(new Date(p.lifecycleAt)) + (p.lifecycleBy ? ' by ' + p.lifecycleBy : '') + ')' : ''}${p.lifecycleReason ? ' — ' + p.lifecycleReason : ''}.
         Their record is untouched — use "↩ Reactivate" below to bring them back onto the active roster.
       </div>` : ''}
@@ -4969,6 +5294,7 @@ async function openDrawer(id){
       ${lcStatus === 'active' ? `
         <button id="deferBtn">Defer</button>
         <button id="completeBtn">Complete</button>
+        <button id="dropoffBtn">Drop Off</button>
       ` : `<button id="reactivateBtn">↩ Reactivate</button>`}
       <button class="danger-ghost" id="removeBtn">Remove</button>
       <button class="ghost" id="closeBtn">Close</button>
@@ -4982,6 +5308,8 @@ async function openDrawer(id){
   if(deferBtnEl) deferBtnEl.onclick = () => markLifecycle(p.id, 'deferred');
   const completeBtnEl = document.getElementById('completeBtn');
   if(completeBtnEl) completeBtnEl.onclick = () => markLifecycle(p.id, 'completed');
+  const dropoffBtnEl = document.getElementById('dropoffBtn');
+  if(dropoffBtnEl) dropoffBtnEl.onclick = () => markLifecycle(p.id, 'dropoff');
   const reactivateBtnEl = document.getElementById('reactivateBtn');
   if(reactivateBtnEl) reactivateBtnEl.onclick = () => reactivateParticipant(p.id);
   const compOverrideEl = document.getElementById('f_completionOverride');
@@ -5112,13 +5440,13 @@ async function markLifecycle(id, status){
   if(!requireEditAuth()) return;
   const p = participants.find(x=>x.id===id);
   if(!p) return;
-  const label = status === 'deferred' ? 'Defer' : 'mark Completed';
+  const label = status === 'deferred' ? 'Defer' : status === 'dropoff' ? 'mark Drop Off' : 'mark Completed';
   const reasonInput = prompt(`Reason to ${label} ${p.name}? (optional — shown to staff later, cancel to abort)`, '');
   if(reasonInput === null) return; // user hit Cancel
   const reason = reasonInput.trim();
-  if(!confirm(`${status==='deferred' ? 'Defer' : 'Mark Completed:'} ${p.name}? They'll disappear from the active Learners list — their full record stays intact and can be brought back any time via "Roster view" → ${status==='deferred'?'Deferred':'Completed'} → Reactivate.`)) return;
+  if(!confirm(`${lifecycleLabel_(status)}: ${p.name}? They'll disappear from the active Learners list — their full record stays intact and can be brought back any time via "Roster view" → ${lifecycleLabel_(status)} → Reactivate.`)) return;
 
-  await captureSnapshot_(`${status==='deferred'?'Defer':'Complete'} ${p.name} (${p.id})`);
+  await captureSnapshot_(`${lifecycleLabel_(status)} ${p.name} (${p.id})`);
   const rec = await saveLifecycle(id, status, reason);
   p.lifecycleStatus = rec.status; p.lifecycleReason = rec.reason; p.lifecycleAt = rec.at; p.lifecycleBy = rec.by;
 
@@ -5139,10 +5467,10 @@ async function markLifecycle(id, status){
     });
   }
 
-  logAccess_('lifecycle', `${status==='deferred'?'Deferred':'Completed'} ${p.name} (${p.id})${reason ? ' — ' + reason : ''}`);
+  logAccess_('lifecycle', `${lifecycleLabel_(status)} ${p.name} (${p.id})${reason ? ' — ' + reason : ''}`);
   closeDrawer();
   renderAll();
-  showToast(`${p.name} marked ${status==='deferred'?'Deferred':'Completed'} and removed from the active roster. Switch "Roster view" to see them again.`);
+  showToast(`${p.name} marked ${lifecycleLabel_(status)} and removed from the active roster. Switch "Roster view" to see them again.`);
 }
 
 async function reactivateParticipant(id){
@@ -5317,6 +5645,137 @@ function showAssignResults(changes, backendReady){
   };
   renderAll();
   showToast(backendReady ? 'Mentors assigned and synced to the sheet.' : 'Mentors assigned — recalculated live.');
+}
+
+// ---------- edit mentors (name + email roster) ----------
+// Lets an admin add a new mentor, fix an existing mentor's email address,
+// rename a mentor, or remove one — writing straight to the Sheet's
+// "Mentors" tab via upsertMentorInSheet_ / deleteMentorInSheet_ so the
+// change is visible to every device once the CSV/GET refreshes. Falls back
+// to a "not synced yet" notice (same pattern as openAssignMentorsDrawer)
+// if MENTOR_API_URL/Code.gs's mentor actions aren't deployed yet.
+function openEditMentorsDrawer(){
+  if(!requireEditAuth()) return;
+  const backendReady = !!MENTOR_API_URL;
+  const hasToken = !!sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
+  const rowHtml = (name, email) => `
+    <div class="mentor-edit-row" data-orig-name="${name.replace(/"/g,'&quot;')}" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <input type="text" class="mentorNameInput" value="${name.replace(/"/g,'&quot;')}" placeholder="Mentor name" style="flex:1;min-width:0;">
+      <input type="email" class="mentorEmailInput" value="${(email||'').replace(/"/g,'&quot;')}" placeholder="name@10alytics.org" style="flex:1;min-width:0;">
+      <button class="ghost mentorSaveRowBtn" title="Save" style="padding:6px 9px;">💾</button>
+      <button class="danger-ghost mentorDeleteRowBtn" title="Remove ${name.replace(/"/g,'&quot;')}" style="padding:6px 9px;">🗑</button>
+    </div>`;
+  document.getElementById('drawer').innerHTML = `
+    <div class="drawer-head">
+      <h3>Edit mentors</h3>
+      <div class="muted">Add, rename, or fix a mentor's email — saved straight to the Sheet's "Mentors" tab.</div>
+    </div>
+    <div class="drawer-body">
+      ${backendReady ? `
+        <div class="field-group">
+          <label>Admin write token ${hasToken ? '(saved for this session)' : '(paste once per browser session)'}</label>
+          <input type="password" id="adminTokenInputMentors" placeholder="Paste the ADMIN_TOKEN from Code.gs" value="${hasToken ? sessionStorage.getItem(MENTOR_API_TOKEN_KEY) : ''}">
+        </div>
+        ${!MENTORS_LIVE_LOADED ? `<div class="kpi-warning">Couldn't confirm a live "Mentors" sheet tab yet — showing the fallback list from index.html. Saving below will still work once Code.gs is redeployed with the mentor actions (see README); until then changes stay in this browser only.</div>` : ''}
+      ` : `
+        <div class="admin-only-note">
+          MENTOR_API_URL isn't configured yet, so mentor changes only save to this browser's local draft
+          and won't appear on other devices until you deploy Code.gs and set MENTOR_API_URL.
+        </div>
+      `}
+      <div class="field-group">
+        <label>Current mentors</label>
+        <div id="mentorEditRows">
+          ${TEAM_MEMBERS.map(m=>rowHtml(m, MENTOR_EMAILS[m])).join('') || '<div class="muted">No mentors yet — add one below.</div>'}
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Add a mentor</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="text" id="newMentorName" placeholder="Full name" style="flex:1;min-width:0;">
+          <input type="email" id="newMentorEmail" placeholder="name@10alytics.org" style="flex:1;min-width:0;">
+          <button class="primary" id="addMentorRowBtn" style="padding:6px 10px;">+ Add</button>
+        </div>
+      </div>
+      <div id="mentorEditStatus"></div>
+    </div>
+    <div class="save-row" style="flex-direction:column;gap:8px;">
+      <button class="ghost" id="closeBtnEditMentors" style="width:100%;">Close</button>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('closeBtnEditMentors').onclick = closeDrawer;
+  if(backendReady){
+    document.getElementById('adminTokenInputMentors').addEventListener('change', (e)=>{
+      sessionStorage.setItem(MENTOR_API_TOKEN_KEY, e.target.value.trim());
+    });
+  }
+  wireMentorEditRows_();
+  document.getElementById('addMentorRowBtn').onclick = async ()=>{
+    const name = document.getElementById('newMentorName').value.trim();
+    const email = document.getElementById('newMentorEmail').value.trim();
+    if(!name){ showToast('Enter a name first.'); return; }
+    if(TEAM_MEMBERS.includes(name)){ showToast(`${name} is already in the list — edit their row instead.`); return; }
+    const res = await upsertMentorInSheet_({ name, email });
+    if(res.skipped || res.ok){
+      TEAM_MEMBERS.push(name);
+      MENTOR_EMAILS[name] = email;
+      showToast(res.skipped ? `${name} added locally (not synced — see note above).` : `${name} added and synced.`);
+      openEditMentorsDrawer();
+      renderMentorsTab(); renderAll();
+    }else{
+      document.getElementById('mentorEditStatus').innerHTML = `<div class="kpi-warning">Couldn't save: ${res.error}</div>`;
+    }
+  };
+}
+
+function wireMentorEditRows_(){
+  document.querySelectorAll('.mentorSaveRowBtn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const row = btn.closest('.mentor-edit-row');
+      const originalName = row.dataset.origName;
+      const name = row.querySelector('.mentorNameInput').value.trim();
+      const email = row.querySelector('.mentorEmailInput').value.trim();
+      if(!name){ showToast('Mentor name cannot be blank.'); return; }
+      const renaming = name !== originalName;
+      if(renaming){
+        const affected = participants.filter(p=>p.mentor===originalName).length;
+        if(affected && !confirm(`Renaming "${originalName}" to "${name}" — ${affected} participant${affected===1?'':'s'} currently assigned to them will need reassigning separately (this rename only updates the mentor roster, not each participant's record). Continue?`)) return;
+      }
+      const res = await upsertMentorInSheet_({ name, email }, originalName);
+      if(res.skipped || res.ok){
+        const idx = TEAM_MEMBERS.indexOf(originalName);
+        if(idx > -1) TEAM_MEMBERS[idx] = name; else TEAM_MEMBERS.push(name);
+        if(originalName !== name) delete MENTOR_EMAILS[originalName];
+        MENTOR_EMAILS[name] = email;
+        showToast(res.skipped ? 'Saved locally (not synced — see note above).' : 'Saved and synced.');
+        openEditMentorsDrawer();
+        renderMentorsTab(); renderAll();
+      }else{
+        document.getElementById('mentorEditStatus').innerHTML = `<div class="kpi-warning">Couldn't save: ${res.error}</div>`;
+      }
+    };
+  });
+  document.querySelectorAll('.mentorDeleteRowBtn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const row = btn.closest('.mentor-edit-row');
+      const name = row.dataset.origName;
+      const affected = participants.filter(p=>p.mentor===name).length;
+      const warn = affected ? ` ${affected} participant${affected===1?'':'s'} currently assigned to them will show as "Unassigned" until reassigned.` : '';
+      if(!confirm(`Remove ${name} from the mentor list?${warn}`)) return;
+      const res = await deleteMentorInSheet_(name);
+      if(res.skipped || res.ok){
+        const idx = TEAM_MEMBERS.indexOf(name);
+        if(idx > -1) TEAM_MEMBERS.splice(idx,1);
+        delete MENTOR_EMAILS[name];
+        showToast(res.skipped ? 'Removed locally (not synced — see note above).' : 'Removed and synced.');
+        openEditMentorsDrawer();
+        renderMentorsTab(); renderAll();
+      }else{
+        document.getElementById('mentorEditStatus').innerHTML = `<div class="kpi-warning">Couldn't remove: ${res.error}</div>`;
+      }
+    };
+  });
 }
 
 // ---------- add participant ----------
@@ -5501,6 +5960,7 @@ async function openRestorePanel(){
 // ---------- boot ----------
 async function boot(){
   await refreshLiveData_();
+  await loadMentorsFromSheet_();
   KPI_LAST_REFRESH = new Date();
   updateCohortRulePill();
   populateProgFilter();
@@ -5547,6 +6007,8 @@ async function boot(){
   });
   document.getElementById('addBtn').addEventListener('click', openAddDrawer);
   document.getElementById('assignMentorsBtn').addEventListener('click', openAssignMentorsDrawer);
+  const editMentorsBtnEl = document.getElementById('editMentorsBtn');
+  if(editMentorsBtnEl) editMentorsBtnEl.addEventListener('click', openEditMentorsDrawer);
   const mondayNudgeAllBtnEl = document.getElementById('mondayNudgeAllBtn');
   if(mondayNudgeAllBtnEl) mondayNudgeAllBtnEl.addEventListener('click', openMondayNudgeDrawer);
   document.getElementById('exportAtRiskCsvBtn').addEventListener('click', exportAtRiskCsv);
