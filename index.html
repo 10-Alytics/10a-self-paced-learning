@@ -2428,27 +2428,41 @@ function buildTailoredPlan(p, opts){
   // ---- how many weeks should the module section actually span? ----
   // Left purely to pace (remainingModules / perWeek), a learner who's far
   // ahead of schedule or on a light remaining load finishes their modules
-  // in far fewer weeks than the programme is designed to run for — the
-  // plan would show a big unexplained gap before the true deadline. So:
-  // work out how many weeks are actually available until the programme's
-  // supposed completion (its standard duration from cohort start, or from
-  // today if there's no cohort start on file), reserve the capstone weeks
-  // plus a minimum 2-week round-up/wrap-up buffer at the very end, and use
-  // WHICHEVER IS LARGER of that and the pace-only week count. That way the
-  // plan never gets compressed past what the person's chosen pace needs
-  // (someone behind schedule still moves as fast as their pace requires),
-  // but a plan that would otherwise finish early gets spread out — some
-  // topics taking more than one week — so it actually fills the time and
-  // still completes every module.
+  // in far fewer weeks than they actually have — the plan would show a big
+  // unexplained gap before the real deadline. The real deadline is the same
+  // one the rest of the app already uses (computeEngine's graceEnd: cohort
+  // start + 6 months + the settings-defined grace period) — NOT the
+  // shorter "standardWeeks" figure, which only covers the live-class
+  // cadence and undershoots the actual grace deadline by months. Work out
+  // how many weeks are available from the plan's start date to graceEnd,
+  // reserve the capstone weeks plus a minimum 2-week round-up/wrap-up
+  // buffer at the very end, and use WHICHEVER IS LARGER of that and the
+  // pace-only week count. That way the plan never gets compressed past what
+  // the person's chosen pace needs (someone behind schedule still moves as
+  // fast as their pace requires), but a plan that would otherwise finish
+  // early gets spread out — some topics taking more than one week — so it
+  // actually fills the real time available and still completes every
+  // module.
   const paceOnlyModuleWeeks = remainingModules > 0 ? Math.ceil(remainingModules / perWeek) : 0;
   const ROUND_UP_BUFFER_WEEKS = 2;
   let targetModuleWeeks = paceOnlyModuleWeeks;
-  if(remainingModules > 0 && prog.standardWeeks){
-    const weeksToPlannedEnd = eng.cohortStart
-      ? daysBetween(new Date(opts.startDateStr + 'T00:00:00'), addDays(eng.cohortStart, prog.standardWeeks * 7)) / 7
-      : prog.standardWeeks; // no cohort date on file — assume the plan is starting fresh
-    const availableModuleWeeks = Math.max(weeksToPlannedEnd - capstoneWeeksTotal - ROUND_UP_BUFFER_WEEKS, 1);
-    targetModuleWeeks = Math.max(paceOnlyModuleWeeks, Math.round(availableModuleWeeks));
+  let planDeadline = null; // exposed on the returned plan for the "why stretched" note
+  if(remainingModules > 0){
+    const planStart = new Date(opts.startDateStr + 'T00:00:00');
+    if(eng.graceEnd){
+      planDeadline = eng.graceEnd;
+    } else if(prog.standardWeeks){
+      // No cohort date on file to derive a real grace deadline from — fall
+      // back to the programme's standard duration counted from the plan's
+      // own start date, which is better than nothing but will run shorter
+      // than a real cohort's grace deadline would.
+      planDeadline = addDays(planStart, prog.standardWeeks * 7);
+    }
+    if(planDeadline){
+      const weeksToDeadline = daysBetween(planStart, planDeadline) / 7;
+      const availableModuleWeeks = Math.max(weeksToDeadline - capstoneWeeksTotal - ROUND_UP_BUFFER_WEEKS, 1);
+      targetModuleWeeks = Math.max(paceOnlyModuleWeeks, Math.round(availableModuleWeeks));
+    }
   }
   const moduleWeekCount = remainingModules > 0 ? Math.max(targetModuleWeeks, 1) : 0;
   const wasStretched = moduleWeekCount > paceOnlyModuleWeeks;
@@ -2509,11 +2523,11 @@ function buildTailoredPlan(p, opts){
     capstoneCount, remainingModules, totalModules: eng.totalModules, completed: eng.completed,
     weeksAvailable, targetDate, recommendedPace, onTrackForTarget, monthsLeft: opts.monthsLeft || null,
     startDateStr: opts.startDateStr, useNamedModules, programme: p.programme,
-    // ---- new: was the module section stretched to fill the programme's
-    // standard duration instead of finishing early? Surfaced so the drawer
-    // can tell the admin/participant why some topics span more than one
-    // week, rather than that just silently appearing.
-    moduleWeekCount, paceOnlyModuleWeeks, wasStretched, standardWeeks: prog.standardWeeks || null,
+    // ---- new: was the module section stretched to fill the time actually
+    // available until the real deadline instead of finishing early?
+    // Surfaced so the drawer can tell the admin/participant why some topics
+    // span more than one week, rather than that just silently appearing.
+    moduleWeekCount, paceOnlyModuleWeeks, wasStretched, planDeadline,
   };
 }
 
@@ -2972,7 +2986,7 @@ function openLessonPlanDrawer(id){
       </div>
       <button id="planPrintBtn" class="ghost" style="width:100%;margin-top:8px;">Open printable version instead</button>
       <div class="admin-only-note" style="margin-top:8px;">${moduleSourceNote} Plan assumes ${plan.capstoneCount} capstone project(s) for ${p.programme}, splitting the programme's capstone weeks between them (minimum 1 week each).</div>
-      ${plan.wasStretched ? `<div class="admin-only-note" style="margin-top:8px;">At this pace the modules alone would've finished in ${plan.paceOnlyModuleWeeks} week${plan.paceOnlyModuleWeeks===1?'':'s'} — well before the programme's usual ${plan.standardWeeks}-week run. This plan spreads the same modules across ${plan.moduleWeekCount} weeks instead (some topics get more than one week to go deeper), leaving at least a 2-week buffer before the deadline to round everything up.</div>` : ''}
+      ${plan.wasStretched ? `<div class="admin-only-note" style="margin-top:8px;">At this pace the modules alone would've finished in ${plan.paceOnlyModuleWeeks} week${plan.paceOnlyModuleWeeks===1?'':'s'} — well before the ${plan.planDeadline ? fmt(plan.planDeadline) : 'programme'} deadline. This plan spreads the same modules across ${plan.moduleWeekCount} weeks instead (some topics get more than one week to go deeper), leaving at least a 2-week buffer before the deadline to round everything up.</div>` : ''}
     `;
     document.getElementById('planDownloadPdfBtn').onclick = ()=> downloadTailoredPlanPdf_(p, plan);
     document.getElementById('planPrintBtn').onclick = ()=> downloadPlanAsPdf_(p, plan);
