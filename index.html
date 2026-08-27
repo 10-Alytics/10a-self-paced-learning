@@ -3,9 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <title>SPLMS — Self-Paced Tracker</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- defer: none of these are needed to show the login gate or parse the
+     rest of the page — they're only used later (PDF/XLSX export on a
+     button click, charts after boot()). Without defer, the browser was
+     blocking on ~250KB+ of JS before it could even render the login
+     form, which was a big part of the slow initial load. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <style>
   :root{
     --ink:#0F172A;
@@ -958,7 +963,7 @@ async function loadMentorsFromSheet_(){
 // MENTOR_API_URL isn't configured or Code.gs hasn't been redeployed with
 // this action yet — every caller below already handles an empty result
 // the same way it handles "no data yet".
-let MENTOR_CHECKIN_STATUS = { configured: false, error: null };
+let MENTOR_CHECKIN_STATUS = { configured: !!MENTOR_API_URL, error: null };
 async function loadMentorCheckins_(){
   if(!MENTOR_API_URL) return {};
   try{
@@ -1599,129 +1604,130 @@ async function refreshLiveData_() {
     return;
   }
   try {
-    // All Sheet tabs are fetched CONCURRENTLY (Promise.all) instead of one
-    // after another. Google's publish-to-web CSV endpoint is slow per
-    // request (it's regenerated on demand, not served from a fast cache),
-    // so awaiting each tab in sequence meant the page waited for the SUM
-    // of every tab's fetch time. Firing them all at once means the page
-    // only waits as long as the single slowest tab — usually cutting
-    // total "Checking data source…" time by more than half. Behavior on
-    // failure is unchanged: if any configured tab fails to fetch, the
-    // whole refresh is treated as failed and the last-known snapshot is
-    // kept (same as before), it just fails/succeeds faster now.
-    const [progRows, settingsRows, partRows, checkinRows, moduleRows] = await Promise.all([
-      DATA_SOURCE.programmesCsvUrl ? fetchCsv_(DATA_SOURCE.programmesCsvUrl, 'Programme_Code') : Promise.resolve(null),
-      DATA_SOURCE.settingsCsvUrl ? fetchCsv_(DATA_SOURCE.settingsCsvUrl, 'Parameter') : Promise.resolve(null),
-      DATA_SOURCE.participantsCsvUrl ? fetchCsv_(DATA_SOURCE.participantsCsvUrl, 'Participant_ID') : Promise.resolve(null),
-      DATA_SOURCE.checkinsCsvUrl ? fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID') : Promise.resolve(null),
-      DATA_SOURCE.modulesCsvUrl ? fetchCsv_(DATA_SOURCE.modulesCsvUrl, 'Programme_Code') : Promise.resolve(null),
-      // fetchAdminDashboardSheet_ already has its own internal try/catch and
-      // never rejects, so it can safely run alongside the rest and just
-      // write straight into BUNDLE.adminDashboardSheet when it resolves.
-      DATA_SOURCE.adminDashboardCsvUrl ? fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl) : Promise.resolve(null),
-    ]);
-
-    if (progRows) {
-      BUNDLE.programmes = progRows.filter((r) => r.Programme_Code).map((r) => ({
-        code: r.Programme_Code,
-        name: r.Programme_Name,
-        totalModules: toNum_(r.Total_Modules, 0),
-        capstoneWeeks: toNum_(r.Default_Capstone_Duration_Weeks, 2),
-        standardWeeks: toNum_(r.Standard_Programme_Duration_Weeks, 16),
-      }));
-    }
-    if (settingsRows) {
-      BUNDLE.settings = {
-        gracePeriodDays: findSetting_(settingsRows, 'grace period', SETTINGS_DEFAULTS.gracePeriodDays),
-        defaultStudyDays: findSetting_(settingsRows, 'preferred study days', SETTINGS_DEFAULTS.defaultStudyDays),
-        defaultHours: findSetting_(settingsRows, 'hours available', SETTINGS_DEFAULTS.defaultHours),
-        esc1: findSetting_(settingsRows, 'week 1 threshold', SETTINGS_DEFAULTS.esc1),
-        esc2: findSetting_(settingsRows, 'week 2 threshold', SETTINGS_DEFAULTS.esc2),
-        esc3: findSetting_(settingsRows, 'week 3 threshold', SETTINGS_DEFAULTS.esc3),
-        esc4: findSetting_(settingsRows, 'week 4 threshold', SETTINGS_DEFAULTS.esc4),
-        riskGreen: findSetting_(settingsRows, 'green buffer', SETTINGS_DEFAULTS.riskGreen),
-        riskYellow: findSetting_(settingsRows, 'yellow buffer', SETTINGS_DEFAULTS.riskYellow),
-      };
-    }
-    if (partRows) {
-      // Keep anyone with a name, even if Serial_No / Participant_ID haven't
-      // been filled in yet on the sheet — generate a stable temporary ID
-      // instead of silently dropping them. Real IDs (once added) always
-      // take over automatically on the next refresh. idGenerated marks
-      // these so the dashboard's data-quality banner can flag them.
-      BUNDLE.participants = partRows.filter((r) => r.Full_Name).map((r) => {
-        const hasRealId = !!r.Participant_ID;
-        const fallbackId = 'TEMP-' + (r.Full_Name || '').trim().toUpperCase()
-          .replace(/[^A-Z0-9]+/g, '-').replace(/(^-+|-+$)/g, '').slice(0, 24)
-          + (r.Programme_Code ? '-' + r.Programme_Code.trim() : '');
-        return {
-          serial: r.Serial_No || null,
-          id: hasRealId ? r.Participant_ID : fallbackId,
-          idGenerated: !hasRealId,
-          name: r.Full_Name,
-          email: r.Email,
-          phone: r.Phone_Number || null,
-          programme: r.Programme_Code,
-          cohortId: r.Cohort_ID,
-          paymentStatus: r.Payment_Status,
-          requestDate: r.SelfPaced_Request_Date || null,
-          approvalDate: r.SelfPaced_Approval_Date || null,
-          mentor: r.Assigned_Mentor || null,
-          preferredDays: toNum_(r.Preferred_Study_Days_Per_Week, 2),
-          hoursPerDay: toNum_(r.Hours_Available_Per_Day, 2),
-          modulesCompleted: toNum_(r.Modules_Completed, 0),
-          currentModuleWeek: r.Current_Module_Week || null,
-          currentTopic: r.Current_Topic || null,
-          lastCheckin: r.Last_Checkin_Date || null,
-          lastTopicCompleted: r.Last_Topic_Completed || null,
-          comments: r.Comments || null,
+    // Each of these hits a different published-CSV URL and none of them
+    // depend on another's result (PROGRAMMES_LIVE_REBUILD_ below only
+    // needs them all to be DONE, not done in any particular order) — so
+    // they run in parallel instead of one after another. With up to 6
+    // separate Google Sheets round-trips previously happening in series,
+    // this alone can cut refresh time roughly to the slowest single fetch
+    // instead of the sum of all of them.
+    await Promise.all([
+      (async () => {
+        if (!DATA_SOURCE.programmesCsvUrl) return;
+        const rows = await fetchCsv_(DATA_SOURCE.programmesCsvUrl, 'Programme_Code');
+        BUNDLE.programmes = rows.filter((r) => r.Programme_Code).map((r) => ({
+          code: r.Programme_Code,
+          name: r.Programme_Name,
+          totalModules: toNum_(r.Total_Modules, 0),
+          capstoneWeeks: toNum_(r.Default_Capstone_Duration_Weeks, 2),
+          standardWeeks: toNum_(r.Standard_Programme_Duration_Weeks, 16),
+        }));
+      })(),
+      (async () => {
+        if (!DATA_SOURCE.settingsCsvUrl) return;
+        const rows = await fetchCsv_(DATA_SOURCE.settingsCsvUrl, 'Parameter');
+        BUNDLE.settings = {
+          gracePeriodDays: findSetting_(rows, 'grace period', SETTINGS_DEFAULTS.gracePeriodDays),
+          defaultStudyDays: findSetting_(rows, 'preferred study days', SETTINGS_DEFAULTS.defaultStudyDays),
+          defaultHours: findSetting_(rows, 'hours available', SETTINGS_DEFAULTS.defaultHours),
+          esc1: findSetting_(rows, 'week 1 threshold', SETTINGS_DEFAULTS.esc1),
+          esc2: findSetting_(rows, 'week 2 threshold', SETTINGS_DEFAULTS.esc2),
+          esc3: findSetting_(rows, 'week 3 threshold', SETTINGS_DEFAULTS.esc3),
+          esc4: findSetting_(rows, 'week 4 threshold', SETTINGS_DEFAULTS.esc4),
+          riskGreen: findSetting_(rows, 'green buffer', SETTINGS_DEFAULTS.riskGreen),
+          riskYellow: findSetting_(rows, 'yellow buffer', SETTINGS_DEFAULTS.riskYellow),
         };
-      });
-    }
-    if (checkinRows) {
-      // Like ParticipantDB, your Weekly Check-ins tab has a title row and
-      // description row above the real header row — so we scan for the
-      // row containing 'Participant_ID', same as the other tabs, instead
-      // of assuming row 1 is the header. Candidate lists below cover both
-      // your WeeklyFeedback tab's actual column names
-      // (Topics_Studied_This_Week, Current_Module, Met_Study_Commitment,
-      // Study_Days_Completed, Challenges, Plan_Next_Week) and the raw
-      // question wording Google Forms falls back to, plus a couple of
-      // legacy/optional numeric fields some forms also ask.
-      CHECKIN_STATUS.rawCount = checkinRows.length;
-      BUNDLE.checkins = checkinRows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID']) || pick_(r, ['Full_Name','Full Name'])).map((r) => ({
-        participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
-        fullName: pick_(r, ['Full_Name','Full Name']) || '',
-        timestamp: pick_(r, ['Timestamp']) || null,
-        weekEnding: pick_(r, ['Week_Ending','Week ending','Which week is this check-in for?']) || pick_(r, ['Timestamp']) || null,
-        email: pick_(r, ['Email_Address','Email Address','Email']) || '',
-        cohortId: pick_(r, ['Cohort_ID','Cohort ID']) || '',
-        topicsThisWeek: pick_(r, ['Topics_Studied_This_Week','Topics studied this week','What topics did you study this week?']) || '',
-        currentModule: pick_(r, ['Current_Module','Current module','What module are you currently on?']) || '',
-        metCommitment: pick_(r, ['Met_Study_Commitment','Did you meet your study commitment this week?']) || '',
-        daysKept: toNum_(pick_(r, ['Study_Days_Completed','Days_Kept_To_Schedule','Days kept to schedule','How many days did you study this week?']), null),
-        challenges: pick_(r, ['Challenges','Any challenges this week?']) || '',
-        planNextWeek: pick_(r, ['Plan_Next_Week','Plan for next week','What is your plan for next week?']) || '',
-        // Legacy/optional fields — populated only if your form happens to ask them.
-        modulesThisWeek: toNum_(pick_(r, ['Modules_Completed_This_Week','Modules completed this week','How many modules did you complete this week?']), null),
-        hoursThisWeek: toNum_(pick_(r, ['Hours_Studied_This_Week','Hours studied this week','How many hours did you study this week?']), null),
-        confidence: toNum_(pick_(r, ['Confidence_Rating','Confidence rating','How confident do you feel about staying on track? (1-5)']), null),
-        comments: pick_(r, ['Comments','Blockers_Comments','Any blockers, questions, or comments?']) || '',
-      }));
-      CHECKIN_STATUS.matchedCount = BUNDLE.checkins.length;
-      CHECKIN_STATUS.error = null;
-    }
-    if (moduleRows) {
-      BUNDLE.modules = moduleRows
-        .filter((r)=> pick_(r, ['Programme_Code','Programme code']) && toNum_(pick_(r, ['Week_Number','Week number']), null) !== null)
-        .map((r)=>({
-          programme: (pick_(r, ['Programme_Code','Programme code']) || '').trim(),
-          weekNumber: toNum_(pick_(r, ['Week_Number','Week number']), null),
-          sessionId: pick_(r, ['Session_ID','Session ID']) || '',
-          topic: pick_(r, ['Topic']) || '',
-          outlineLabel: pick_(r, ['Course_Outline_Label','Course outline label']) || '',
-        })).sort((a,b)=> a.weekNumber - b.weekNumber);
-    }
+      })(),
+      (async () => {
+        if (!DATA_SOURCE.participantsCsvUrl) return;
+        const rows = await fetchCsv_(DATA_SOURCE.participantsCsvUrl, 'Participant_ID');
+        // Keep anyone with a name, even if Serial_No / Participant_ID haven't
+        // been filled in yet on the sheet — generate a stable temporary ID
+        // instead of silently dropping them. Real IDs (once added) always
+        // take over automatically on the next refresh. idGenerated marks
+        // these so the dashboard's data-quality banner can flag them.
+        BUNDLE.participants = rows.filter((r) => r.Full_Name).map((r) => {
+          const hasRealId = !!r.Participant_ID;
+          const fallbackId = 'TEMP-' + (r.Full_Name || '').trim().toUpperCase()
+            .replace(/[^A-Z0-9]+/g, '-').replace(/(^-+|-+$)/g, '').slice(0, 24)
+            + (r.Programme_Code ? '-' + r.Programme_Code.trim() : '');
+          return {
+            serial: r.Serial_No || null,
+            id: hasRealId ? r.Participant_ID : fallbackId,
+            idGenerated: !hasRealId,
+            name: r.Full_Name,
+            email: r.Email,
+            phone: r.Phone_Number || null,
+            programme: r.Programme_Code,
+            cohortId: r.Cohort_ID,
+            paymentStatus: r.Payment_Status,
+            requestDate: r.SelfPaced_Request_Date || null,
+            approvalDate: r.SelfPaced_Approval_Date || null,
+            mentor: r.Assigned_Mentor || null,
+            preferredDays: toNum_(r.Preferred_Study_Days_Per_Week, 2),
+            hoursPerDay: toNum_(r.Hours_Available_Per_Day, 2),
+            modulesCompleted: toNum_(r.Modules_Completed, 0),
+            currentModuleWeek: r.Current_Module_Week || null,
+            currentTopic: r.Current_Topic || null,
+            lastCheckin: r.Last_Checkin_Date || null,
+            lastTopicCompleted: r.Last_Topic_Completed || null,
+            comments: r.Comments || null,
+          };
+        });
+      })(),
+      (async () => {
+        if (!DATA_SOURCE.checkinsCsvUrl) return;
+        // Like ParticipantDB, your Weekly Check-ins tab has a title row and
+        // description row above the real header row — so we scan for the
+        // row containing 'Participant_ID', same as the other tabs, instead
+        // of assuming row 1 is the header. Candidate lists below cover both
+        // your WeeklyFeedback tab's actual column names
+        // (Topics_Studied_This_Week, Current_Module, Met_Study_Commitment,
+        // Study_Days_Completed, Challenges, Plan_Next_Week) and the raw
+        // question wording Google Forms falls back to, plus a couple of
+        // legacy/optional numeric fields some forms also ask.
+        const rows = await fetchCsv_(DATA_SOURCE.checkinsCsvUrl, 'Participant_ID');
+        CHECKIN_STATUS.rawCount = rows.length;
+        BUNDLE.checkins = rows.filter((r) => pick_(r, ['Participant_ID','Participant ID','ParticipantID']) || pick_(r, ['Full_Name','Full Name'])).map((r) => ({
+          participantId: pick_(r, ['Participant_ID','Participant ID','ParticipantID']).trim(),
+          fullName: pick_(r, ['Full_Name','Full Name']) || '',
+          timestamp: pick_(r, ['Timestamp']) || null,
+          weekEnding: pick_(r, ['Week_Ending','Week ending','Which week is this check-in for?']) || pick_(r, ['Timestamp']) || null,
+          email: pick_(r, ['Email_Address','Email Address','Email']) || '',
+          cohortId: pick_(r, ['Cohort_ID','Cohort ID']) || '',
+          topicsThisWeek: pick_(r, ['Topics_Studied_This_Week','Topics studied this week','What topics did you study this week?']) || '',
+          currentModule: pick_(r, ['Current_Module','Current module','What module are you currently on?']) || '',
+          metCommitment: pick_(r, ['Met_Study_Commitment','Did you meet your study commitment this week?']) || '',
+          daysKept: toNum_(pick_(r, ['Study_Days_Completed','Days_Kept_To_Schedule','Days kept to schedule','How many days did you study this week?']), null),
+          challenges: pick_(r, ['Challenges','Any challenges this week?']) || '',
+          planNextWeek: pick_(r, ['Plan_Next_Week','Plan for next week','What is your plan for next week?']) || '',
+          // Legacy/optional fields — populated only if your form happens to ask them.
+          modulesThisWeek: toNum_(pick_(r, ['Modules_Completed_This_Week','Modules completed this week','How many modules did you complete this week?']), null),
+          hoursThisWeek: toNum_(pick_(r, ['Hours_Studied_This_Week','Hours studied this week','How many hours did you study this week?']), null),
+          confidence: toNum_(pick_(r, ['Confidence_Rating','Confidence rating','How confident do you feel about staying on track? (1-5)']), null),
+          comments: pick_(r, ['Comments','Blockers_Comments','Any blockers, questions, or comments?']) || '',
+        }));
+        CHECKIN_STATUS.matchedCount = BUNDLE.checkins.length;
+        CHECKIN_STATUS.error = null;
+      })(),
+      (async () => {
+        if (!DATA_SOURCE.modulesCsvUrl) return;
+        const rows = await fetchCsv_(DATA_SOURCE.modulesCsvUrl, 'Programme_Code');
+        BUNDLE.modules = rows
+          .filter((r)=> pick_(r, ['Programme_Code','Programme code']) && toNum_(pick_(r, ['Week_Number','Week number']), null) !== null)
+          .map((r)=>({
+            programme: (pick_(r, ['Programme_Code','Programme code']) || '').trim(),
+            weekNumber: toNum_(pick_(r, ['Week_Number','Week number']), null),
+            sessionId: pick_(r, ['Session_ID','Session ID']) || '',
+            topic: pick_(r, ['Topic']) || '',
+            outlineLabel: pick_(r, ['Course_Outline_Label','Course outline label']) || '',
+          })).sort((a,b)=> a.weekNumber - b.weekNumber);
+      })(),
+      (async () => {
+        if (!DATA_SOURCE.adminDashboardCsvUrl) return;
+        await fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl);
+      })(),
+    ]);
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
@@ -1766,38 +1772,117 @@ function mondayOf_(d){
 }
 
 // ---------- persistence ----------
-async function loadOverrides(id){
+// Overrides used to be stored one key PER PARTICIPANT
+// (STORE_PREFIX+':edit:'+id), which meant boot() was making one
+// window.storage round-trip for every single participant just to check
+// for edits — with ~800+ participants that's hundreds of sequential
+// awaits before the page could even render, which is the main reason the
+// site was slow to load. All overrides now live in ONE blob
+// (STORE_PREFIX+':edits-all'), loaded once and cached in memory; every
+// loadOverrides/saveOverride call below reads/writes that same in-memory
+// object, so boot() only pays for one storage read total. Old
+// per-participant keys (from before this change) are migrated into the
+// blob automatically, once, the first time this loads on a given browser.
+let _editsBlobCache = null;
+async function _loadEditsBlob_(){
+  if(_editsBlobCache) return _editsBlobCache;
   try{
-    const r = await window.storage.get(STORE_PREFIX+':edit:'+id, false);
-    return r ? JSON.parse(r.value) : {};
-  }catch(e){ return {}; }
+    const r = await window.storage.get(STORE_PREFIX+':edits-all', false);
+    _editsBlobCache = r ? JSON.parse(r.value) : {};
+  }catch(e){ _editsBlobCache = {}; }
+  if(!Object.keys(_editsBlobCache).length){
+    await _migrateLegacyBlob_(STORE_PREFIX+':edit:', _editsBlobCache, v=>JSON.parse(v));
+    if(Object.keys(_editsBlobCache).length) await _saveEditsBlob_();
+  }
+  return _editsBlobCache;
+}
+async function _saveEditsBlob_(){
+  await window.storage.set(STORE_PREFIX+':edits-all', JSON.stringify(_editsBlobCache||{}), false);
+}
+async function loadOverrides(id){
+  const blob = await _loadEditsBlob_();
+  return blob[id] || {};
 }
 async function saveOverride(id, data){
-  await window.storage.set(STORE_PREFIX+':edit:'+id, JSON.stringify(data), false);
+  const blob = await _loadEditsBlob_();
+  blob[id] = data;
+  await _saveEditsBlob_();
+}
+// Same as saveOverride, but for updating many participants at once (e.g.
+// "Assign mentors" touching hundreds of records) — writes the blob ONCE
+// at the end instead of once per participant, which matters once the
+// blob itself is large.
+async function saveOverridesBulk(idDataPairs){
+  const blob = await _loadEditsBlob_();
+  idDataPairs.forEach(([id, data]) => { blob[id] = data; });
+  await _saveEditsBlob_();
 }
 
-// ---------- lifecycle (Defer / Complete quick actions) ----------
-// Deliberately a SEPARATE store from the generic ":edit:" overrides above —
-// saveOverride() overwrites its whole blob on every save, so folding
-// lifecycle into it would risk a routine drawer edit silently wiping out a
-// Defer/Complete flag (or vice versa). This keeps "the participant's data"
-// and "is this participant still on the active roster" independent: a
-// Deferred/Completed participant keeps every field, chart, and edit
-// history exactly as-is — they're just filtered out of the default
-// Learners view via the "Roster view" dropdown until reactivated.
-async function loadLifecycle(id){
+// One-time migration helper: pulls any keys still sitting under an old
+// per-participant prefix into the new consolidated blob. No-ops instantly
+// (one list() call, no matches) for anyone who never had the old format,
+// and only ever runs once per browser since the callers above skip it
+// once the new blob has content.
+async function _migrateLegacyBlob_(oldPrefix, targetBlob, parseFn){
   try{
-    const r = await window.storage.get(STORE_PREFIX+':lifecycle:'+id, false);
-    return r ? JSON.parse(r.value) : null;
-  }catch(e){ return null; }
+    const listed = await window.storage.list(oldPrefix, false);
+    if(!listed || !listed.keys || !listed.keys.length) return;
+    for(const k of listed.keys){
+      try{
+        const r = await window.storage.get(k, false);
+        if(r){
+          const id = k.slice(oldPrefix.length);
+          targetBlob[id] = parseFn(r.value);
+        }
+      }catch(e){ /* skip unreadable legacy key */ }
+    }
+  }catch(e){ /* list() unsupported/failed — nothing to migrate */ }
+}
+
+// ---------- lifecycle (Defer / Complete / Drop Off quick actions) ----------
+// Deliberately a SEPARATE blob from the generic ":edits-all" overrides
+// above — saveOverride() overwrites its whole blob on every save, so
+// folding lifecycle into it would risk a routine drawer edit silently
+// wiping out a Defer/Complete/Drop-Off flag (or vice versa). This keeps
+// "the participant's data" and "is this participant still on the active
+// roster" independent: a Deferred/Completed/Drop-Off participant keeps
+// every field, chart, and edit history exactly as-is — they're just
+// filtered out of the default Learners view via the "Roster view"
+// dropdown until reactivated. Same one-blob-not-one-key-per-participant
+// fix as above, for the same load-time reason.
+let _lifecycleBlobCache = null;
+async function _loadLifecycleBlob_(){
+  if(_lifecycleBlobCache) return _lifecycleBlobCache;
+  try{
+    const r = await window.storage.get(STORE_PREFIX+':lifecycle-all', false);
+    _lifecycleBlobCache = r ? JSON.parse(r.value) : {};
+  }catch(e){ _lifecycleBlobCache = {}; }
+  if(!Object.keys(_lifecycleBlobCache).length){
+    await _migrateLegacyBlob_(STORE_PREFIX+':lifecycle:', _lifecycleBlobCache, v=>JSON.parse(v));
+    if(Object.keys(_lifecycleBlobCache).length) await _saveLifecycleBlob_();
+  }
+  return _lifecycleBlobCache;
+}
+async function _saveLifecycleBlob_(){
+  await window.storage.set(STORE_PREFIX+':lifecycle-all', JSON.stringify(_lifecycleBlobCache||{}), false);
+}
+async function loadLifecycle(id){
+  const blob = await _loadLifecycleBlob_();
+  return blob[id] || null;
 }
 async function saveLifecycle(id, status, reason){
+  const blob = await _loadLifecycleBlob_();
   const data = { status, reason: reason || '', at: new Date().toISOString(), by: currentUserEmail() || 'unknown' };
-  await window.storage.set(STORE_PREFIX+':lifecycle:'+id, JSON.stringify(data), false);
+  blob[id] = data;
+  await _saveLifecycleBlob_();
   return data;
 }
 async function clearLifecycle(id){
-  try{ await window.storage.delete(STORE_PREFIX+':lifecycle:'+id, false); }catch(e){}
+  try{
+    const blob = await _loadLifecycleBlob_();
+    delete blob[id];
+    await _saveLifecycleBlob_();
+  }catch(e){}
 }
 
 // Shared label/badge-color helpers for the three archived lifecycle
@@ -1889,9 +1974,7 @@ async function restoreSnapshot_(snapshotId){
   if(!snap) return { ok:false, error:'Snapshot not found.' };
   await saveRemoved(snap.removed || []);
   await saveExtraParticipants(snap.extra || []);
-  for(const id of Object.keys(snap.overrides || {})){
-    await saveOverride(id, snap.overrides[id]);
-  }
+  await saveOverridesBulk(Object.entries(snap.overrides || {}));
   await boot();
   return { ok:true };
 }
@@ -4687,9 +4770,9 @@ async function loadKpiSnapshots_(){
   const out = {};
   try{
     const {keys} = await window.storage.list('kpi-snapshot:');
-    for(const k of keys){
+    await Promise.all(keys.map(async k=>{
       try{ const {value} = await window.storage.get(k); const parsed = JSON.parse(value); out[parsed.weekEnding] = parsed; }catch(e){}
-    }
+    }));
   }catch(e){}
   return out;
 }
@@ -5582,12 +5665,12 @@ async function runMentorAssignment(mode){
     counts[best] = (counts[best]||0) + 1;
     changes.push(p);
   }
+  await saveOverridesBulk(changes.map(p => [p.id, {
+    name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
+    paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
+    preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
+  }]));
   for(const p of changes){
-    await saveOverride(p.id, {
-      name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
-      paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
-      preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
-    });
     await postMentorToSheet_(p.id, p.mentor);
   }
   return changes;
@@ -5655,17 +5738,15 @@ function openAssignMentorsDrawer(){
 
 async function clearLocalMentorAssignments(){
   if(!confirm("This clears the draft mentor assignments saved in THIS browser only — it does not touch your Google Sheet, which is unaffected either way. Continue?")) return;
-  for(const p of participants){
-    const ov = await loadOverrides(p.id);
-    if('mentor' in ov){
+  const blob = await _loadEditsBlob_();
+  participants.forEach(p=>{
+    const ov = blob[p.id];
+    if(ov && 'mentor' in ov){
       delete ov.mentor;
-      if(Object.keys(ov).length){
-        await saveOverride(p.id, ov);
-      }else{
-        try{ await window.storage.delete(STORE_PREFIX+':edit:'+p.id, false); }catch(e){}
-      }
+      if(!Object.keys(ov).length) delete blob[p.id];
     }
-  }
+  });
+  await _saveEditsBlob_();
   showToast('Cleared — reloading…');
   setTimeout(()=>location.reload(), 700);
 }
@@ -6004,20 +6085,24 @@ async function openRestorePanel(){
 
 // ---------- boot ----------
 async function boot(){
-  // These two don't depend on each other's results, so run them
-  // concurrently instead of one after another — shaves another network
-  // round trip off the initial load.
+  // refreshLiveData_ (network CSV fetch) and loadMentorsFromSheet_ (a
+  // separate network GET) don't depend on each other — running them in
+  // parallel instead of one-after-another shaves a full round-trip off
+  // every page load.
   await Promise.all([refreshLiveData_(), loadMentorsFromSheet_()]);
   KPI_LAST_REFRESH = new Date();
   updateCohortRulePill();
   populateProgFilter();
   populateCheckinWeekFilter();
   updateSyncFootnotes_();
-  ONBOARDING_SENT = await loadOnboardingSentMap();
+  // These three are independent local-storage reads — parallelize them
+  // too rather than awaiting one at a time.
+  const [onboardingSent, removed, extra] = await Promise.all([
+    loadOnboardingSentMap(), loadRemoved(), loadExtraParticipants(),
+  ]);
+  ONBOARDING_SENT = onboardingSent;
 
   const base = JSON.parse(JSON.stringify(BUNDLE.participants));
-  const removed = await loadRemoved();
-  const extra = await loadExtraParticipants();
   const baseIds = new Set(base.map(p=>p.id));
   // Once a locally-added participant shows up in the live Sheet data, the
   // Sheet copy (base) wins and the local copy is dropped from the merged
@@ -6029,11 +6114,14 @@ async function boot(){
   UNSYNCED_EXTRA = extra.filter(p => !baseIds.has(p.id) && !removed.includes(p.id));
   let all = base.filter(p => !removed.includes(p.id)).concat(UNSYNCED_EXTRA);
 
-  // apply any saved edits on top of base data
+  // apply any saved edits on top of base data — both blobs are fetched
+  // ONCE here (not once per participant, see _loadEditsBlob_/
+  // _loadLifecycleBlob_ above for why that used to be the load-time
+  // bottleneck), then applied synchronously.
+  const [editsBlob, lifecycleBlob] = await Promise.all([_loadEditsBlob_(), _loadLifecycleBlob_()]);
   for(const p of all){
-    const ov = await loadOverrides(p.id);
-    Object.assign(p, ov);
-    const lc = await loadLifecycle(p.id);
+    Object.assign(p, editsBlob[p.id] || {});
+    const lc = lifecycleBlob[p.id] || null;
     p.lifecycleStatus = lc ? lc.status : 'active';
     p.lifecycleReason = lc ? lc.reason : '';
     p.lifecycleAt = lc ? lc.at : null;
