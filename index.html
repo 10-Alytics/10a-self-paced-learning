@@ -947,6 +947,18 @@ let MENTOR_EMAILS = {
   'Amos Foluke': 'amos@10alytics.org',
 };
 
+// Fallback mentor phone numbers, used until the live Mentors-tab data loads
+// (same pattern as MENTOR_EMAILS above). Shown on each participant's
+// onboarding pack so they have a direct line to their mentor from day one.
+// "Ann" in the numbers supplied by LearnOps is Amos Foluke's tab — see the
+// CHECKIN_TAB_TO_MENTOR note in Code.gs.
+let MENTOR_PHONES = {
+  'Aanu Oke': '+447411254602',
+  'Stephen Adeleye': '+447450635674',
+  'Dolapo Olaboshinde': '+447491588784',
+  'Amos Foluke': '+447877408128',
+};
+
 // True once the live Mentors-tab list has successfully loaded at least
 // once this session — used to decide whether "Edit mentors" is editing
 // real synced data or just the local fallback defaults above.
@@ -962,7 +974,16 @@ function applyMentorsFromApi_(mentors){
   TEAM_MEMBERS.length = 0;
   TEAM_MEMBERS.push(...names);
   Object.keys(MENTOR_EMAILS).forEach(k=>delete MENTOR_EMAILS[k]);
-  mentors.forEach(m=>{ if(m.name) MENTOR_EMAILS[m.name] = m.email || ''; });
+  Object.keys(MENTOR_PHONES).forEach(k=>delete MENTOR_PHONES[k]);
+  mentors.forEach(m=>{
+    if(!m.name) return;
+    MENTOR_EMAILS[m.name] = m.email || '';
+    // Keep the hardcoded fallback phone number if the Sheet's Mentors tab
+    // doesn't have a Phone column/value yet for this mentor (e.g. Code.gs
+    // hasn't been redeployed with the Phone column, or the row predates it)
+    // — rather than blanking out a known-good number on every page load.
+    if(m.phone) MENTOR_PHONES[m.name] = m.phone;
+  });
   MENTORS_LIVE_LOADED = true;
 }
 
@@ -1097,9 +1118,9 @@ async function upsertMentorInSheet_(mentor, originalName){
     await fetch(MENTOR_API_URL, {
       method:'POST',
       mode:'no-cors',
-      body: JSON.stringify({ action:'upsertMentor', token, name: mentor.name, email: mentor.email || '', originalName: originalName || '' })
+      body: JSON.stringify({ action:'upsertMentor', token, name: mentor.name, email: mentor.email || '', phone: mentor.phone || '', originalName: originalName || '' })
     });
-    logAccess_('edit', `Mentor saved: ${mentor.name} <${mentor.email||''}>${originalName && originalName!==mentor.name ? ' (renamed from '+originalName+')' : ''}`);
+    logAccess_('edit', `Mentor saved: ${mentor.name} <${mentor.email||''}>${mentor.phone ? ' '+mentor.phone : ''}${originalName && originalName!==mentor.name ? ' (renamed from '+originalName+')' : ''}`);
     // no-cors responses are opaque — same limitation noted on the other
     // postXToSheet_ functions above — so "didn't throw" is treated as sent.
     return { ok:true, sent:true };
@@ -2325,6 +2346,52 @@ function getProgrammeModules_(programmeCode){
     .sort((a,b)=>a.weekNumber-b.weekNumber);
 }
 
+// Lays `numTopics` topics out across exactly `totalWeeks` weeks, in order.
+// Returns an array of length totalWeeks, each entry a list of the
+// (0-based, within-remaining) topic indices covered that week:
+//  - If there are MORE weeks than topics, some topics get stretched across
+//    more than one consecutive week (the extra weeks are spread evenly
+//    across the topic list, not all dumped on the last topic) — this is
+//    what lets a plan that would otherwise finish early actually fill the
+//    programme's intended duration.
+//  - If there are FEWER weeks than topics (or the same number), some weeks
+//    cover more than one topic instead (packed as evenly as possible),
+//    same as the original pace-only behaviour.
+function scheduleTopics_(numTopics, totalWeeks){
+  totalWeeks = Math.max(Math.round(totalWeeks) || 1, 1);
+  if(numTopics <= 0) return [];
+  if(totalWeeks <= numTopics){
+    const weeks = [];
+    let idx = 0;
+    for(let w=0; w<totalWeeks; w++){
+      const weeksLeft = totalWeeks - w;
+      const topicsLeft = numTopics - idx;
+      const take = Math.ceil(topicsLeft / weeksLeft);
+      const slice = [];
+      for(let k=0; k<take && idx<numTopics; k++){ slice.push(idx++); }
+      weeks.push(slice);
+    }
+    return weeks;
+  }
+  // More weeks than topics — stretch. Every topic gets at least `base`
+  // weeks; the `extra` leftover weeks are spread evenly (Bresenham-style)
+  // across the topic list so slower weeks are distributed throughout the
+  // plan rather than bunched at the start or end.
+  const base = Math.floor(totalWeeks / numTopics);
+  const extra = totalWeeks - base * numTopics;
+  const extraDist = new Array(numTopics).fill(0);
+  if(extra > 0){
+    const step = numTopics / extra;
+    for(let i=0; i<extra; i++){ extraDist[Math.min(Math.floor(i*step), numTopics-1)] += 1; }
+  }
+  const weeks = [];
+  for(let i=0; i<numTopics; i++){
+    const dur = base + extraDist[i];
+    for(let d=0; d<dur; d++){ weeks.push([i]); }
+  }
+  return weeks;
+}
+
 // Builds a tailored week-by-week plan using the participant's programme,
 // how much time they actually have available (days/week + hours/day, both
 // editable at generation time — not just whatever is saved on file), and
@@ -2358,29 +2425,75 @@ function buildTailoredPlan(p, opts){
     onTrackForTarget = perWeek >= recommendedPace;
   }
 
+  // ---- how many weeks should the module section actually span? ----
+  // Left purely to pace (remainingModules / perWeek), a learner who's far
+  // ahead of schedule or on a light remaining load finishes their modules
+  // in far fewer weeks than the programme is designed to run for — the
+  // plan would show a big unexplained gap before the true deadline. So:
+  // work out how many weeks are actually available until the programme's
+  // supposed completion (its standard duration from cohort start, or from
+  // today if there's no cohort start on file), reserve the capstone weeks
+  // plus a minimum 2-week round-up/wrap-up buffer at the very end, and use
+  // WHICHEVER IS LARGER of that and the pace-only week count. That way the
+  // plan never gets compressed past what the person's chosen pace needs
+  // (someone behind schedule still moves as fast as their pace requires),
+  // but a plan that would otherwise finish early gets spread out — some
+  // topics taking more than one week — so it actually fills the time and
+  // still completes every module.
+  const paceOnlyModuleWeeks = remainingModules > 0 ? Math.ceil(remainingModules / perWeek) : 0;
+  const ROUND_UP_BUFFER_WEEKS = 2;
+  let targetModuleWeeks = paceOnlyModuleWeeks;
+  if(remainingModules > 0 && prog.standardWeeks){
+    const weeksToPlannedEnd = eng.cohortStart
+      ? daysBetween(new Date(opts.startDateStr + 'T00:00:00'), addDays(eng.cohortStart, prog.standardWeeks * 7)) / 7
+      : prog.standardWeeks; // no cohort date on file — assume the plan is starting fresh
+    const availableModuleWeeks = Math.max(weeksToPlannedEnd - capstoneWeeksTotal - ROUND_UP_BUFFER_WEEKS, 1);
+    targetModuleWeeks = Math.max(paceOnlyModuleWeeks, Math.round(availableModuleWeeks));
+  }
+  const moduleWeekCount = remainingModules > 0 ? Math.max(targetModuleWeeks, 1) : 0;
+  const wasStretched = moduleWeekCount > paceOnlyModuleWeeks;
+
+  const weekSlices = scheduleTopics_(remainingModules, moduleWeekCount);
+  // How many total weeks each topic (by 0-based index within the remaining
+  // modules) ends up occupying, so multi-week topics can be labelled
+  // "(week 2 of 3)" etc. instead of silently repeating.
+  const topicSpan = {};
+  weekSlices.forEach(slice => slice.forEach(ti => { topicSpan[ti] = (topicSpan[ti]||0) + 1; }));
+  const topicSeen = {};
+
   const items = [];
   let cursor = new Date(opts.startDateStr + 'T00:00:00');
-  let modulesLeft = remainingModules;
   let weekNum = 1;
-  while(modulesLeft > 0){
-    const thisWeek = Math.min(perWeek, modulesLeft);
-    const startIdx = eng.completed + (remainingModules - modulesLeft);
+  weekSlices.forEach(slice=>{
     let label;
     if(useNamedModules){
-      const names = [];
-      for(let i=0;i<thisWeek;i++){
-        const m = modulesList[startIdx+i];
-        names.push(m ? (m.topic || m.outlineLabel || `Module ${startIdx+i+1}`) : `Module ${startIdx+i+1}`);
-      }
+      const names = slice.map(ti=>{
+        const m = modulesList[eng.completed + ti];
+        const base = m ? (m.topic || m.outlineLabel || `Module ${eng.completed+ti+1}`) : `Module ${eng.completed+ti+1}`;
+        const span = topicSpan[ti] || 1;
+        if(span > 1){
+          topicSeen[ti] = (topicSeen[ti]||0) + 1;
+          return `${base} (week ${topicSeen[ti]} of ${span} — take your time here)`;
+        }
+        return base;
+      });
       label = names.join(' · ');
     } else {
-      label = `${thisWeek} module${thisWeek===1?'':'s'} (${startIdx+1}–${startIdx+thisWeek} of ${eng.totalModules})`;
+      const nums = slice.map(ti=>eng.completed+ti+1);
+      const span = topicSpan[slice[0]] || 1;
+      if(nums.length === 1 && span > 1){
+        topicSeen[slice[0]] = (topicSeen[slice[0]]||0) + 1;
+        label = `Module ${nums[0]} of ${eng.totalModules} (week ${topicSeen[slice[0]]} of ${span})`;
+      } else {
+        label = nums.length === 1
+          ? `Module ${nums[0]} of ${eng.totalModules}`
+          : `${nums.length} modules (${nums[0]}–${nums[nums.length-1]} of ${eng.totalModules})`;
+      }
     }
-    items.push({ week: weekNum, phase: 'Modules', label, start: new Date(cursor), count: thisWeek });
-    modulesLeft -= thisWeek;
+    items.push({ week: weekNum, phase: 'Modules', label, start: new Date(cursor), count: slice.length });
     cursor = addDays(cursor, 7);
     weekNum++;
-  }
+  });
   for(let c=1; c<=capstoneCount; c++){
     items.push({
       week: weekNum, phase: 'Capstone',
@@ -2396,6 +2509,11 @@ function buildTailoredPlan(p, opts){
     capstoneCount, remainingModules, totalModules: eng.totalModules, completed: eng.completed,
     weeksAvailable, targetDate, recommendedPace, onTrackForTarget, monthsLeft: opts.monthsLeft || null,
     startDateStr: opts.startDateStr, useNamedModules, programme: p.programme,
+    // ---- new: was the module section stretched to fill the programme's
+    // standard duration instead of finishing early? Surfaced so the drawer
+    // can tell the admin/participant why some topics span more than one
+    // week, rather than that just silently appearing.
+    moduleWeekCount, paceOnlyModuleWeeks, wasStretched, standardWeeks: prog.standardWeeks || null,
   };
 }
 
@@ -2688,11 +2806,12 @@ function buildOnboardingContent_(p){
   const firstName = (p.name||'').trim().split(/\s+/)[0] || p.name;
   const fmt = (d)=> d ? d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '[to be confirmed]';
   const mentor = p.mentor || '[unassigned — assign a mentor before sending]';
+  const mentorPhone = p.mentor ? (MENTOR_PHONES[p.mentor] || '') : '';
 
   const fields = {
     firstName, progName,
     id: p.id, cohort: p.cohortId || '—', totalModules: eng.totalModules || '—',
-    mentor, targetDate: fmt(eng.predictedFinal), email: p.email || '',
+    mentor, mentorPhone, targetDate: fmt(eng.predictedFinal), email: p.email || '',
     days: p.preferredDays || SETTINGS.defaultStudyDays || 2, hours: p.hoursPerDay || SETTINGS.defaultHours || 2,
     checkinFormUrl: CHECKIN_FORM_URL || null,
   };
@@ -2706,7 +2825,7 @@ function buildOnboardingContent_(p){
       <tr><td><b>Participant ID</b></td><td>${fields.id}</td></tr>
       <tr><td><b>Cohort</b></td><td>${fields.cohort}</td></tr>
       <tr><td><b>Total modules</b></td><td>${fields.totalModules}</td></tr>
-      <tr><td><b>Your assigned mentor</b></td><td>${fields.mentor}</td></tr>
+      <tr><td><b>Your assigned mentor</b></td><td>${fields.mentor}${fields.mentorPhone ? ` — ${fields.mentorPhone}` : ''}</td></tr>
       <tr><td><b>Target completion</b></td><td>${fields.targetDate} (plus a grace period if you need it)</td></tr>
     </table>
     <h3>2. Your Personal Study Plan (attached 📎)</h3>
@@ -2719,7 +2838,7 @@ function buildOnboardingContent_(p){
       <li>Expect a friendly reminder email each week nudging you back to your modules.</li>
     </ul>
     <h3>4. Your Mentor Has Your Back</h3>
-    <p>${fields.mentor} is your go-to for questions, blockers, or if life gets in the way of your schedule. Reach out any time — we'd always rather help early than catch up late.</p>
+    <p>${fields.mentor} is your go-to for questions, blockers, or if life gets in the way of your schedule.${fields.mentorPhone ? ` You can reach them on <b>${fields.mentorPhone}</b> (call or WhatsApp).` : ''} Reach out any time — we'd always rather help early than catch up late.</p>
     <h3>5. Your First 7 Days ✅</h3>
     <ul>
       <li>Reply to confirm you've received this email.</li>
@@ -2853,6 +2972,7 @@ function openLessonPlanDrawer(id){
       </div>
       <button id="planPrintBtn" class="ghost" style="width:100%;margin-top:8px;">Open printable version instead</button>
       <div class="admin-only-note" style="margin-top:8px;">${moduleSourceNote} Plan assumes ${plan.capstoneCount} capstone project(s) for ${p.programme}, splitting the programme's capstone weeks between them (minimum 1 week each).</div>
+      ${plan.wasStretched ? `<div class="admin-only-note" style="margin-top:8px;">At this pace the modules alone would've finished in ${plan.paceOnlyModuleWeeks} week${plan.paceOnlyModuleWeeks===1?'':'s'} — well before the programme's usual ${plan.standardWeeks}-week run. This plan spreads the same modules across ${plan.moduleWeekCount} weeks instead (some topics get more than one week to go deeper), leaving at least a 2-week buffer before the deadline to round everything up.</div>` : ''}
     `;
     document.getElementById('planDownloadPdfBtn').onclick = ()=> downloadTailoredPlanPdf_(p, plan);
     document.getElementById('planPrintBtn').onclick = ()=> downloadPlanAsPdf_(p, plan);
@@ -3179,6 +3299,15 @@ function mentorNeedsFollowUp_(rows){
   ));
 }
 
+// Picks a truly random (not deterministic) study quote from STUDY_QUOTES —
+// used for the mentor Monday nudge, which should feel fresh week to week,
+// unlike the per-participant lesson-plan quote (pickQuote_) which is
+// deliberately the SAME quote every time for a given participant so it
+// matches across their drawer/PDF/print/onboarding-pack views.
+function randomQuote_(){
+  return STUDY_QUOTES[Math.floor(Math.random() * STUDY_QUOTES.length)];
+}
+
 // Builds the email content for one mentor's Monday check-in nudge.
 function buildMondayNudgeContent_(mentorKey, rows){
   const label = mentorKey === '__unassigned__' ? 'Unassigned' : mentorKey;
@@ -3196,7 +3325,9 @@ function buildMondayNudgeContent_(mentorKey, rows){
   } else {
     bodyHtml += "Nobody on your list is currently flagged At Risk or Needs Follow-up — nice work. Just a friendly nudge to keep the weekly check-ins going.<br><br>";
   }
-  bodyHtml += 'Once you\'ve checked in with them, hit "✅ I checked up on my learners" in the Mentors tab so LearnOps can see it\'s done.<br><br>Thanks,<br>10Alytics LearnOps';
+  bodyHtml += 'Once you\'ve checked in with them, hit "✅ I checked up on my learners" in the Mentors tab so LearnOps can see it\'s done.<br><br>';
+  bodyHtml += `<i>"${randomQuote_()}"</i><br><br>`;
+  bodyHtml += 'Thanks,<br>10Alytics LearnOps';
   const subject = `Monday Check-in — Your Learners (${dateLabel})`;
   return { to: toEmail, subject, htmlBody: bodyHtml, flaggedCount: flagged.length, total: rows.length };
 }
@@ -5823,10 +5954,11 @@ function openEditMentorsDrawer(){
   if(!requireEditAuth()) return;
   const backendReady = !!MENTOR_API_URL;
   const hasToken = !!sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
-  const rowHtml = (name, email) => `
+  const rowHtml = (name, email, phone) => `
     <div class="mentor-edit-row" data-orig-name="${name.replace(/"/g,'&quot;')}" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
       <input type="text" class="mentorNameInput" value="${name.replace(/"/g,'&quot;')}" placeholder="Mentor name" style="flex:1;min-width:0;">
       <input type="email" class="mentorEmailInput" value="${(email||'').replace(/"/g,'&quot;')}" placeholder="name@10alytics.org" style="flex:1;min-width:0;">
+      <input type="tel" class="mentorPhoneInput" value="${(phone||'').replace(/"/g,'&quot;')}" placeholder="+44…" style="flex:0.8;min-width:0;">
       <button class="ghost mentorSaveRowBtn" title="Save" style="padding:6px 9px;">💾</button>
       <button class="danger-ghost mentorDeleteRowBtn" title="Remove ${name.replace(/"/g,'&quot;')}" style="padding:6px 9px;">🗑</button>
     </div>`;
@@ -5851,7 +5983,7 @@ function openEditMentorsDrawer(){
       <div class="field-group">
         <label>Current mentors</label>
         <div id="mentorEditRows">
-          ${TEAM_MEMBERS.map(m=>rowHtml(m, MENTOR_EMAILS[m])).join('') || '<div class="muted">No mentors yet — add one below.</div>'}
+          ${TEAM_MEMBERS.map(m=>rowHtml(m, MENTOR_EMAILS[m], MENTOR_PHONES[m])).join('') || '<div class="muted">No mentors yet — add one below.</div>'}
         </div>
       </div>
       <div class="field-group">
@@ -5859,6 +5991,7 @@ function openEditMentorsDrawer(){
         <div style="display:flex;gap:6px;align-items:center;">
           <input type="text" id="newMentorName" placeholder="Full name" style="flex:1;min-width:0;">
           <input type="email" id="newMentorEmail" placeholder="name@10alytics.org" style="flex:1;min-width:0;">
+          <input type="tel" id="newMentorPhone" placeholder="+44…" style="flex:0.8;min-width:0;">
           <button class="primary" id="addMentorRowBtn" style="padding:6px 10px;">+ Add</button>
         </div>
       </div>
@@ -5879,12 +6012,14 @@ function openEditMentorsDrawer(){
   document.getElementById('addMentorRowBtn').onclick = async ()=>{
     const name = document.getElementById('newMentorName').value.trim();
     const email = document.getElementById('newMentorEmail').value.trim();
+    const phone = document.getElementById('newMentorPhone').value.trim();
     if(!name){ showToast('Enter a name first.'); return; }
     if(TEAM_MEMBERS.includes(name)){ showToast(`${name} is already in the list — edit their row instead.`); return; }
-    const res = await upsertMentorInSheet_({ name, email });
+    const res = await upsertMentorInSheet_({ name, email, phone });
     if(res.skipped || res.ok){
       TEAM_MEMBERS.push(name);
       MENTOR_EMAILS[name] = email;
+      MENTOR_PHONES[name] = phone;
       showToast(res.skipped ? `${name} added locally (not synced — see note above).` : `${name} added and synced.`);
       openEditMentorsDrawer();
       renderMentorsTab(); renderAll();
@@ -5901,18 +6036,20 @@ function wireMentorEditRows_(){
       const originalName = row.dataset.origName;
       const name = row.querySelector('.mentorNameInput').value.trim();
       const email = row.querySelector('.mentorEmailInput').value.trim();
+      const phone = row.querySelector('.mentorPhoneInput').value.trim();
       if(!name){ showToast('Mentor name cannot be blank.'); return; }
       const renaming = name !== originalName;
       if(renaming){
         const affected = participants.filter(p=>p.mentor===originalName).length;
         if(affected && !confirm(`Renaming "${originalName}" to "${name}" — ${affected} participant${affected===1?'':'s'} currently assigned to them will need reassigning separately (this rename only updates the mentor roster, not each participant's record). Continue?`)) return;
       }
-      const res = await upsertMentorInSheet_({ name, email }, originalName);
+      const res = await upsertMentorInSheet_({ name, email, phone }, originalName);
       if(res.skipped || res.ok){
         const idx = TEAM_MEMBERS.indexOf(originalName);
         if(idx > -1) TEAM_MEMBERS[idx] = name; else TEAM_MEMBERS.push(name);
-        if(originalName !== name) delete MENTOR_EMAILS[originalName];
+        if(originalName !== name){ delete MENTOR_EMAILS[originalName]; delete MENTOR_PHONES[originalName]; }
         MENTOR_EMAILS[name] = email;
+        MENTOR_PHONES[name] = phone;
         showToast(res.skipped ? 'Saved locally (not synced — see note above).' : 'Saved and synced.');
         openEditMentorsDrawer();
         renderMentorsTab(); renderAll();
@@ -5933,6 +6070,7 @@ function wireMentorEditRows_(){
         const idx = TEAM_MEMBERS.indexOf(name);
         if(idx > -1) TEAM_MEMBERS.splice(idx,1);
         delete MENTOR_EMAILS[name];
+        delete MENTOR_PHONES[name];
         showToast(res.skipped ? 'Removed locally (not synced — see note above).' : 'Removed and synced.');
         openEditMentorsDrawer();
         renderMentorsTab(); renderAll();
