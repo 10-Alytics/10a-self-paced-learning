@@ -966,6 +966,26 @@ function applyMentorsFromApi_(mentors){
   MENTORS_LIVE_LOADED = true;
 }
 
+// Google Apps Script Web App URL that writes Assigned_Mentor directly to
+// the ParticipantDB sheet, so changes show up for every device (not just
+// the browser that made them). Deploy Code.gs (see README) and paste the
+// resulting /exec URL here. Leave blank to fall back to the old
+// browser-only local draft behaviour.
+// NOTE: this must be declared here, ABOVE loadMentorsFromSheet_ /
+// MENTOR_CHECKIN_STATUS below — those reference MENTOR_API_URL at the top
+// level of the script (not just inside a function body), so if this
+// `const` were declared further down the file (as it originally was),
+// every visitor would hit "Uncaught ReferenceError: Cannot access
+// 'MENTOR_API_URL' before initialization" and the login form's submit
+// handler would never get attached, which is what caused the "sign-in
+// does nothing" symptom.
+const MENTOR_API_URL = 'https://script.google.com/macros/s/AKfycby8Xni1T6yJ81mIfjlJTDLdkhApypYp7PfRZinHLYsEdDKH_aT3zxWvQwIjGciAr8Cu/exec';
+// This is just the NAME of the browser-storage slot the admin token gets
+// kept in for the session — it is NOT the token itself. The real secret
+// (whatever you set ADMIN_TOKEN to in Code.gs) gets typed into the
+// "Admin write token" box on the site itself, once per browser session.
+const MENTOR_API_TOKEN_KEY = 'splms-admin-token';
+
 // Fetches the current mentor roster (name + email) from the Apps Script
 // backend's "Mentors" sheet tab via a plain GET (no admin token needed —
 // reading the roster is not a write). Silently no-ops if MENTOR_API_URL
@@ -1170,18 +1190,6 @@ function requireEditAuth(){
   alert('Incorrect passcode. The change was not made.');
   return false;
 }
-
-// Google Apps Script Web App URL that writes Assigned_Mentor directly to
-// the ParticipantDB sheet, so changes show up for every device (not just
-// the browser that made them). Deploy Code.gs (see README) and paste the
-// resulting /exec URL here. Leave blank to fall back to the old
-// browser-only local draft behaviour.
-const MENTOR_API_URL = 'https://script.google.com/macros/s/AKfycby8Xni1T6yJ81mIfjlJTDLdkhApypYp7PfRZinHLYsEdDKH_aT3zxWvQwIjGciAr8Cu/exec';
-// This is just the NAME of the browser-storage slot the admin token gets
-// kept in for the session — it is NOT the token itself. The real secret
-// (whatever you set ADMIN_TOKEN to in Code.gs) gets typed into the
-// "Admin write token" box on the site itself, once per browser session.
-const MENTOR_API_TOKEN_KEY = 'splms-admin-token';
 
 // -----------------------------------------------------------------------
 // LESSON PLAN / CALENDAR ENGINE
