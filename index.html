@@ -2825,7 +2825,13 @@ function buildOnboardingContent_(p){
   const fields = {
     firstName, progName,
     id: p.id, cohort: p.cohortId || '—', totalModules: eng.totalModules || '—',
-    mentor, mentorPhone, targetDate: fmt(eng.predictedFinal), email: p.email || '',
+    // Use the already-corrected "projected completion" figure (falls back to
+    // the real cohort deadline — cohortStart + 6 months + grace — when the
+    // participant has no real pace/evidence yet), NOT the raw pace-only
+    // predictedFinal. A brand-new enrollee has zero modules done and no
+    // check-ins, so predictedFinal here was just "today + generic pace",
+    // which showed a date months earlier than their actual cohort deadline.
+    mentor, mentorPhone, targetDate: fmt(eng.projectedCompletion), email: p.email || '',
     days: p.preferredDays || SETTINGS.defaultStudyDays || 2, hours: p.hoursPerDay || SETTINGS.defaultHours || 2,
     checkinFormUrl: CHECKIN_FORM_URL || null,
   };
