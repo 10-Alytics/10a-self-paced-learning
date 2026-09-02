@@ -11,6 +11,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#0F172A;
@@ -28,12 +31,28 @@
     --rose-soft:#FFE4E6;
     --green-soft:#DCFCE7;
     --green:#15803D;
-    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    /* ---- shared depth/motion tokens, used throughout for a consistent,
+       intentional feel instead of one-off shadow/radius values scattered
+       across the file. ---- */
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06), 0 1px 1px rgba(15,23,42,.04);
+    --shadow-md:0 10px 24px -10px rgba(15,23,42,.18), 0 2px 6px -2px rgba(15,23,42,.08);
+    --shadow-lg:0 24px 48px -18px rgba(15,23,42,.28), 0 6px 16px -6px rgba(15,23,42,.12);
+    --ease:cubic-bezier(.2,.7,.3,1);
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);}
+  html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+  body{font-feature-settings:'cv02','cv03','cv04','cv11';}
   ::selection{background:var(--teal-soft);}
+  /* thin, theme-coloured scrollbars instead of the raw OS default — small
+     touch, but it shows up constantly given how table-heavy this app is */
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:99px;border:2px solid var(--canvas);}
+  ::-webkit-scrollbar-thumb:hover{background:#94A3B8;}
+  * {scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent;}
+  :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px;}
 
   /* ---- header ---- */
   .app-header{
@@ -43,6 +62,10 @@
   .app-header::after{
     content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;border-radius:50%;
     background:radial-gradient(circle at center, rgba(217,99,31,.38), transparent 70%);
+  }
+  .app-header::before{
+    content:"";position:absolute;left:-80px;bottom:-100px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle at center, rgba(217,99,31,.14), transparent 72%);
   }
   .header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;position:relative;z-index:1;flex-wrap:wrap;}
   .brand{display:flex;align-items:center;gap:12px;}
@@ -67,9 +90,14 @@
     display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;
   }
   .kpi{
-    background:var(--paper);border-radius:12px;padding:14px 14px 12px;box-shadow:0 8px 24px -12px rgba(15,23,42,.25);
-    border:1px solid var(--line);
+    background:var(--paper);border-radius:14px;padding:14px 14px 12px;box-shadow:var(--shadow-md);
+    border:1px solid var(--line);position:relative;overflow:hidden;
+    transition:transform .18s var(--ease), box-shadow .18s var(--ease);
   }
+  .kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:#CBD5E1;}
+  .kpi.green::before{background:var(--green);} .kpi.amber::before{background:var(--amber);}
+  .kpi.rose::before{background:var(--rose);} .kpi.teal::before{background:var(--teal);}
+  .kpi[data-jump-type]:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);}
   .kpi .num{font-size:22px;font-weight:700;font-family:var(--mono);}
   .kpi .lbl{font-size:11px;color:var(--ink-soft);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
   .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
@@ -78,7 +106,7 @@
   /* ---- KPI Evidence tab ---- */
   .kpi-hero{
     background:linear-gradient(135deg,var(--ink) 0%,#1e293b 100%);border-radius:16px;padding:22px 26px;
-    color:#fff;display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:space-between;
+    color:#fff;display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:space-between;box-shadow:var(--shadow-md);
   }
   .kpi-hero h1{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:#94a3b8;margin:0 0 6px;font-weight:700;}
   .kpi-hero .actual{font-size:44px;font-weight:800;font-family:var(--mono);line-height:1;}
@@ -90,7 +118,8 @@
   .kpi-hero .status-pill.achieved{background:var(--green-soft);color:var(--green);}
   .kpi-hero .status-pill.below{background:var(--rose-soft);color:var(--rose);}
   .kpi-metrics-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:18px;}
-  .kpi-metric-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;}
+  .kpi-metric-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-sm);transition:box-shadow .18s var(--ease), transform .18s var(--ease);}
+  .kpi-metric-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
   .kpi-metric-card .mc-title{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);}
   .kpi-metric-card .mc-val{font-size:28px;font-weight:800;font-family:var(--mono);margin-top:4px;}
   .kpi-metric-card .mc-sub{font-size:11.5px;color:var(--ink-soft);margin-top:4px;}
@@ -109,25 +138,29 @@
 
   /* ---- main layout ---- */
   .main{max-width:1360px;margin:28px auto 60px;padding:0 24px;}
-  .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);}
   .panel + .panel{margin-top:20px;}
   .panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap;}
-  .panel-head h2{font-size:14.5px;margin:0;letter-spacing:.2px;}
+  .panel-head h2{font-size:14.5px;margin:0;letter-spacing:.2px;font-weight:700;}
   .panel-head .sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
 
   /* controls */
   .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   input[type=text], select{
-    font-family:var(--sans);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+    font-family:var(--sans);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);
+    transition:border-color .15s var(--ease), box-shadow .15s var(--ease);
   }
+  input[type=text]:hover, select:hover{border-color:#CBD5E1;}
+  input[type=text]:focus, select:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft);outline:none;}
   input[type=text]{width:200px;}
   button{
-    font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:8px;border:1px solid var(--line);
-    background:#fff;color:var(--ink);cursor:pointer;
+    font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:9px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);cursor:pointer;transition:border-color .15s var(--ease), background-color .15s var(--ease), transform .08s var(--ease), box-shadow .15s var(--ease);
   }
   button:hover{border-color:#CBD5E1;background:#F8FAFC;}
-  button.primary{background:var(--navy);color:#fff;border-color:var(--navy);}
-  button.primary:hover{background:#1c2947;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--navy);color:#fff;border-color:var(--navy);box-shadow:var(--shadow-sm);}
+  button.primary:hover{background:#1c2947;box-shadow:var(--shadow-md);}
   button.ghost{border:none;background:transparent;color:var(--ink-soft);}
   button.danger-ghost{border:none;background:transparent;color:var(--rose);}
 
@@ -136,9 +169,11 @@
   thead th{
     text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);
     padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none;
+    transition:color .12s var(--ease);
   }
   thead th:hover{color:var(--ink);}
   tbody td{padding:10px 12px;border-bottom:1px solid #EEF1F5;vertical-align:middle;}
+  tbody tr{transition:background-color .1s var(--ease);}
   tbody tr:hover{background:#FAFBFD;cursor:pointer;}
   .pid{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);}
   .name{font-weight:600;}
@@ -150,6 +185,7 @@
   .badge.green{background:var(--green-soft);color:var(--green);}
   .badge.amber{background:var(--amber-soft);color:var(--amber);}
   .badge.rose{background:var(--rose-soft);color:var(--rose);}
+  .badge.teal{background:var(--teal-soft);color:var(--teal);}
   .badge.slate{background:#E2E8F0;color:#475569;}
   .progress-track{width:80px;height:6px;background:#E5E9F0;border-radius:99px;overflow:hidden;}
   .progress-fill{height:100%;background:var(--teal);}
@@ -175,10 +211,10 @@
   .tabbar{display:flex;gap:6px;margin-top:24px;position:relative;z-index:1;}
   .tab-btn{
     background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-bottom:none;
-    color:#CBD5E1;padding:9px 18px;border-radius:9px 9px 0 0;font-size:12.5px;font-weight:600;
-    cursor:pointer;font-family:var(--sans);
+    color:#CBD5E1;padding:9px 18px;border-radius:10px 10px 0 0;font-size:12.5px;font-weight:600;
+    cursor:pointer;font-family:var(--sans);transition:color .15s var(--ease), background-color .15s var(--ease);
   }
-  .tab-btn:hover{color:#fff;}
+  .tab-btn:hover{color:#fff;background:rgba(255,255,255,.1);}
   .tab-btn.active{background:var(--paper);color:var(--ink);border-color:var(--paper);}
 
   /* ---- weekly check-ins ---- */
@@ -205,52 +241,65 @@
   /* drawer */
   .overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:stretch;justify-content:flex-end;z-index:50;}
   .overlay.open{display:flex;}
-  .drawer{width:420px;max-width:92vw;background:#fff;height:100%;overflow-y:auto;box-shadow:-16px 0 40px rgba(0,0,0,.2);}
+  .drawer{width:420px;max-width:92vw;background:#fff;height:100%;overflow-y:auto;box-shadow:-24px 0 60px rgba(15,23,42,.25);animation:drawerIn .22s var(--ease);}
+  @keyframes drawerIn{from{transform:translateX(24px);opacity:0;}to{transform:translateX(0);opacity:1;}}
   .drawer-head{padding:20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2;}
-  .drawer-head h3{margin:0 0 3px;font-size:16px;}
+  .drawer-head h3{margin:0 0 3px;font-size:16px;font-weight:700;}
   .drawer-body{padding:20px;display:flex;flex-direction:column;gap:18px;}
   .field-group label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft);margin-bottom:4px;}
-  .field-group input, .field-group select, .field-group textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:var(--sans);font-size:13px;}
+  .field-group input, .field-group select, .field-group textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:var(--sans);font-size:13px;transition:border-color .15s var(--ease), box-shadow .15s var(--ease);}
+  .field-group input:focus, .field-group select:focus, .field-group textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft);outline:none;}
   .field-group textarea{resize:vertical;min-height:56px;}
   .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .metric{background:var(--canvas);border-radius:10px;padding:10px 12px;}
+  .metric{background:var(--canvas);border-radius:11px;padding:10px 12px;}
   .metric .k{font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;}
   .metric .v{font-size:14px;font-weight:700;font-family:var(--mono);margin-top:2px;}
   .section-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);font-weight:700;margin-bottom:2px;}
   hr.sep{border:none;border-top:1px solid var(--line);margin:2px 0;}
   .save-row{display:flex;gap:8px;position:sticky;bottom:0;background:#fff;padding:14px 20px;border-top:1px solid var(--line);}
   .toast{
-    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
-    background:var(--navy);color:#fff;padding:10px 18px;border-radius:10px;font-size:12.5px;transition:all .25s ease;z-index:100;
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(16px) scale(.98);opacity:0;
+    background:var(--navy);color:#fff;padding:10px 18px;border-radius:11px;font-size:12.5px;box-shadow:var(--shadow-lg);
+    transition:opacity .25s var(--ease), transform .25s var(--ease);z-index:100;
   }
-  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}
   .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
   .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
   @media (max-width:640px){ .kpis{margin:-24px 12px 0;} .main{padding:0 12px;} }
   /* ---- login gate ---- */
   #loginGate{
     position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--navy) 0%, var(--navy-2) 100%);
-    display:flex;align-items:center;justify-content:center;padding:20px;
+    display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;
+  }
+  #loginGate::after{
+    content:"";position:absolute;right:-10%;top:-15%;width:480px;height:480px;border-radius:50%;
+    background:radial-gradient(circle at center, rgba(217,99,31,.30), transparent 70%);pointer-events:none;
   }
   .login-card{
-    background:var(--paper);border-radius:14px;padding:32px 28px;max-width:380px;width:100%;
-    box-shadow:0 20px 60px rgba(0,0,0,.35);
+    background:var(--paper);border-radius:18px;padding:34px 30px;max-width:380px;width:100%;
+    box-shadow:0 30px 80px rgba(0,0,0,.4);position:relative;z-index:1;animation:loginIn .35s var(--ease);
   }
-  .login-card h2{margin:0 0 4px;font-size:18px;color:var(--ink);}
+  @keyframes loginIn{from{transform:translateY(10px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .login-card h2{margin:0 0 4px;font-size:19px;color:var(--ink);font-weight:800;letter-spacing:-.2px;}
   .login-card p.lede{margin:0 0 20px;font-size:13px;color:var(--ink-soft);}
   .login-card label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px;}
   .login-card input{
-    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:var(--sans);
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:var(--sans);
+    transition:border-color .15s var(--ease), box-shadow .15s var(--ease);
   }
+  .login-card input:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft);outline:none;}
   .login-card button{
-    margin-top:20px;width:100%;padding:11px;border:none;border-radius:8px;background:var(--teal);color:#fff;
-    font-size:14px;font-weight:600;cursor:pointer;
+    margin-top:20px;width:100%;padding:11px;border:none;border-radius:9px;background:var(--teal);color:#fff;
+    font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s var(--ease), transform .08s var(--ease), box-shadow .15s var(--ease);
+    box-shadow:var(--shadow-sm);
   }
-  .login-card button:hover{opacity:.92;}
+  .login-card button:hover{opacity:.92;box-shadow:var(--shadow-md);}
+  .login-card button:active{transform:scale(.98);}
   .login-error{color:var(--rose);font-size:12.5px;margin-top:10px;min-height:16px;}
-  .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;}
+  .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:6px;}
 
-  .app-logout{background:none;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);}
+  .app-logout{background:none;border:1px solid var(--line);border-radius:9px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);transition:border-color .15s var(--ease), color .15s var(--ease);}
+  .app-logout:hover{border-color:rgba(255,255,255,.4);color:#fff;}
 </style>
 </head>
 <body>
@@ -347,7 +396,7 @@
     <div><h2>Overview</h2><div class="sub">Visual snapshot of the full participant list — unaffected by the filters below</div></div>
   </div>
   <div class="charts-grid">
-    <div class="chart-box"><h3>Risk status</h3><div class="chart-sub" id="chartRiskSub">—</div><canvas id="chartRisk" height="200"></canvas></div>
+    <div class="chart-box"><h3>Pacing</h3><div class="chart-sub" id="chartRiskSub">—</div><canvas id="chartRisk" height="200"></canvas></div>
     <div class="chart-box"><h3>Participant status</h3><div class="chart-sub" id="chartStatusSub">—</div><canvas id="chartStatus" height="200"></canvas></div>
     <div class="chart-box"><h3>Caseload by mentor</h3><div class="chart-sub" id="chartMentorSub">—</div><canvas id="chartMentor" height="200"></canvas></div>
     <div class="chart-box chart-box-wide"><h3>Enrolled by programme</h3><div class="chart-sub" id="chartProgSub">—</div><canvas id="chartProg" height="200"></canvas></div>
@@ -441,7 +490,7 @@
           <option value="Active">Active</option>
           <option value="Needs Follow-up">Needs Follow-up</option>
           <option value="At Risk">Needs Support</option>
-          <option value="Defaulted">Needs Support (overdue)</option>
+          <option value="Defaulted">Needs Support (Overdue)</option>
           <option value="Completed">Completed</option>
         </select>
         <select id="filterCompletion">
@@ -462,16 +511,16 @@
           <option value="Pending">Pending</option>
           <option value="Declined">Payment Defaulter</option>
         </select>
-        <select id="filterLifecycle" title="Deferred/Completed/Drop Off participants keep their full record — this just controls who shows up in the list below">
+        <select id="filterLifecycle" title="Self-Paced/Completed/Drop Off participants keep their full record — this just controls who shows up in the list below">
           <option value="active">Active roster</option>
-          <option value="deferred">Deferred</option>
+          <option value="deferred">Self-Paced</option>
           <option value="completed">Completed (archived)</option>
           <option value="dropoff">Drop Off (archived)</option>
-          <option value="all">All (incl. Deferred/Completed/Drop Off)</option>
+          <option value="all">All (incl. Self-Paced/Completed/Drop Off)</option>
         </select>
         <button id="assignMentorsBtn">Assign mentors</button>
-        <button id="exportAtRiskCsvBtn" title="Export everyone currently At Risk or Needs Support (overdue) as a CSV">Export at-risk (CSV)</button>
-        <button id="exportAtRiskPdfBtn" title="Export everyone currently At Risk or Needs Support (overdue) as a PDF">Export at-risk (PDF)</button>
+        <button id="exportAtRiskCsvBtn" title="Export everyone currently flagged Needs Support or Needs Support (Overdue) as a CSV">Export needs-support (CSV)</button>
+        <button id="exportAtRiskPdfBtn" title="Export everyone currently flagged Needs Support or Needs Support (Overdue) as a PDF">Export needs-support (PDF)</button>
         <button class="primary" id="addBtn">+ Add participant</button>
       </div>
     </div>
@@ -681,7 +730,7 @@
   </div>
 
   <div class="panel" style="margin-top:20px;">
-    <div class="panel-head"><div><h2>Learners requiring action</h2><div class="sub">Overdue, missed, unresponsive, at-risk, or behind pace — for the selected reporting week</div></div></div>
+    <div class="panel-head"><div><h2>Learners requiring action</h2><div class="sub">Overdue, missed, unresponsive, needing support, or behind pace — for the selected reporting week</div></div></div>
     <div style="overflow-x:auto;">
       <table>
         <thead><tr><th>Participant</th><th>Programme</th><th>Mentor</th><th>Last check-in</th><th>Risk</th><th>Progress</th><th>Required action</th></tr></thead>
@@ -727,7 +776,7 @@
           <option value="Active">Active</option>
           <option value="Needs Follow-up">Needs Follow-up</option>
           <option value="At Risk">Needs Support</option>
-          <option value="Defaulted">Needs Support (overdue)</option>
+          <option value="Defaulted">Needs Support (Overdue)</option>
           <option value="Completed">Completed</option>
         </select>
         <select id="rfPayment">
@@ -934,7 +983,7 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // arrives, and every place in this file that reads TEAM_MEMBERS/
 // MENTOR_EMAILS picks that up automatically without needing to be changed
 // individually.
-let TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Amos Foluke'];
+let TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Excel'];
 
 // Fallback mentor inboxes, used until the live Mentors-tab data loads (see
 // note above). Kept here so the app still works even before the Mentors
@@ -944,19 +993,19 @@ let MENTOR_EMAILS = {
   'Aanu Oke': 'aanu@10alytics.org',
   'Stephen Adeleye': 'stephen@10alytics.org',
   'Dolapo Olaboshinde': 'dolapo@10alytics.org',
-  'Amos Foluke': 'amos@10alytics.org',
+  'Excel': 'excel@10alytics.org',
 };
 
 // Fallback mentor phone numbers, used until the live Mentors-tab data loads
 // (same pattern as MENTOR_EMAILS above). Shown on each participant's
 // onboarding pack so they have a direct line to their mentor from day one.
-// "Ann" in the numbers supplied by LearnOps is Amos Foluke's tab — see the
-// CHECKIN_TAB_TO_MENTOR note in Code.gs.
+// No fallback number on file yet for Excel — the "✏️ Edit mentors" panel
+// on the Mentors tab is the real source of truth and can add one directly
+// to the Sheet at any time; until then this just falls back to blank.
 let MENTOR_PHONES = {
   'Aanu Oke': '+447411254602',
   'Stephen Adeleye': '+447450635674',
   'Dolapo Olaboshinde': '+447491588784',
-  'Amos Foluke': '+447877408128',
 };
 
 // True once the live Mentors-tab list has successfully loaded at least
@@ -1112,7 +1161,7 @@ async function openMentorEvidenceDrawer(mentorKey){
 // Requires the same admin write token as every other sheet write.
 async function upsertMentorInSheet_(mentor, originalName){
   if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
-  const token = ensureAdminToken_();
+  const token = await ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — mentor was NOT saved to the Sheet.' };
   try{
     await fetch(MENTOR_API_URL, {
@@ -1131,7 +1180,7 @@ async function upsertMentorInSheet_(mentor, originalName){
 
 async function deleteMentorInSheet_(name){
   if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
-  const token = ensureAdminToken_();
+  const token = await ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — mentor was NOT removed from the Sheet.' };
   try{
     await fetch(MENTOR_API_URL, {
@@ -1140,6 +1189,28 @@ async function deleteMentorInSheet_(name){
       body: JSON.stringify({ action:'deleteMentor', token, name })
     });
     logAccess_('edit', `Mentor removed: ${name}`);
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+// Moves every participant currently assigned to `fromMentor` over to
+// `toMentor` directly on the Sheet in one request — the companion to
+// upsertMentorInSheet_'s rename, which deliberately only touches the
+// Mentors roster and leaves individual participant records alone. Used so
+// replacing one mentor with another doesn't quietly orphan their caseload.
+async function reassignMentorAllInSheet_(fromMentor, toMentor){
+  if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
+  const token = await ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — participants were NOT reassigned on the Sheet.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'reassignMentorAll', token, fromMentor, toMentor })
+    });
+    logAccess_('edit', `Bulk-reassigned all participants from "${fromMentor}" to "${toMentor}"`);
     return { ok:true, sent:true };
   }catch(e){
     return { ok:false, error: e.message };
@@ -1287,12 +1358,35 @@ function initLoginGate(){
 // browser session) if it hasn't been entered yet. Fixes the gap where
 // changing a mentor from a participant's own profile — instead of the
 // "Assign mentors" panel — had no token to send yet.
-function ensureAdminToken_(){
+//
+// The token is verified against the Sheet via a readable GET (verifyToken)
+// the moment it's entered — unlike the write actions below, this response
+// isn't blocked by no-cors, so a wrong/mistyped token is caught right here
+// with a clear message instead of silently failing on every write that
+// follows (which is what made mentor assignments look "synced" on the
+// admin's own laptop while nobody else ever saw them).
+async function verifyAdminToken_(token){
+  if(!MENTOR_API_URL || !token) return null; // can't verify — caller decides what to do
+  try{
+    const res = await fetch(MENTOR_API_URL + '?action=verifyToken&token=' + encodeURIComponent(token));
+    const data = await res.json();
+    return (data && data.ok) ? !!data.valid : null;
+  }catch(e){
+    return null; // network hiccup / offline — don't block on this, just can't confirm
+  }
+}
+async function ensureAdminToken_(){
   let token = sessionStorage.getItem(MENTOR_API_TOKEN_KEY);
   if(token) return token;
   token = (prompt('Enter the admin write token (from Code.gs\'s ADMIN_TOKEN) to sync this mentor change to the Google Sheet:') || '').trim();
-  if(token) sessionStorage.setItem(MENTOR_API_TOKEN_KEY, token);
-  return token || null;
+  if(!token) return null;
+  const valid = await verifyAdminToken_(token);
+  if(valid === false){
+    alert('That token doesn\'t match Code.gs\'s ADMIN_TOKEN — this change will NOT sync to the Sheet. Check with LearnOps for the correct token and try again.');
+    return null;
+  }
+  sessionStorage.setItem(MENTOR_API_TOKEN_KEY, token);
+  return token;
 }
 
 // Posts a mentor change to the Apps Script backend so it's written straight
@@ -1403,9 +1497,28 @@ async function openWhosOnlinePanel(){
   }
 }
 
+// Confirms what the Sheet ACTUALLY has for one participant right now, via
+// a readable GET (unlike the no-cors POST writes above, this response can
+// be read in the browser). Used right after a bulk mentor assignment to
+// prove the change really landed on the Sheet — not just that the POST
+// didn't throw — since a wrong/missing token or a domain-restricted
+// deployment (see the note at the top of Code.gs) both look like a silent
+// success from here otherwise.
+async function verifyMentorSynced_(participantId, expectedMentor){
+  if(!MENTOR_API_URL) return null;
+  try{
+    const res = await fetch(MENTOR_API_URL + '?action=getParticipantMentor&id=' + encodeURIComponent(participantId));
+    const data = await res.json();
+    if(!data || !data.ok) return null;
+    return (data.mentor || '') === (expectedMentor || '');
+  }catch(e){
+    return null; // offline / network hiccup — inconclusive, not a confirmed failure
+  }
+}
+
 async function postMentorToSheet_(participantId, mentor){
   if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
-  const token = ensureAdminToken_();
+  const token = await ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — change was NOT synced to the Sheet.' };
   try{
     await fetch(MENTOR_API_URL, {
@@ -1422,6 +1535,54 @@ async function postMentorToSheet_(participantId, mentor){
   }
 }
 
+// Same as postMentorToSheet_ but sends every {participantId, mentor} pair
+// in ONE request (Code.gs's assignMentorBulk action) instead of one POST
+// per learner — much faster for a full-roster push, and avoids the
+// browser silently dropping requests if a big loop of individual POSTs
+// gets interrupted (e.g. the tab losing focus mid-sync).
+async function postMentorsBulkToSheet_(changes){
+  if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
+  const token = await ensureAdminToken_();
+  if(!token) return { ok:false, error:'No admin token entered — nothing was synced to the Sheet.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'assignMentorBulk', token, changes: changes.map(p=>({participantId:p.id, mentor:p.mentor})) })
+    });
+    logAccess_('edit', `Bulk-synced ${changes.length} mentor assignment(s) to the Sheet`);
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
+// Pushes whatever mentor is CURRENTLY set on every participant — whether
+// that came from the Sheet already or only exists as a local-only draft on
+// this browser (see the window.storage shim note above: local edits never
+// reach the Sheet on their own) — straight to ParticipantDB, AS-IS. Unlike
+// runMentorAssignment(), this never recomputes or reshuffles who's
+// assigned to whom; it just makes sure everyone else's browser can see the
+// assignments that already exist on THIS one. This is the fix for
+// "I assigned mentors, but only my laptop shows it" without touching a
+// single existing assignment.
+async function syncCurrentMentorsToSheet_(){
+  const assigned = participants.filter(p=>!!p.mentor);
+  if(!assigned.length) return { assigned:[], definiteFailure:null, syncVerified:null };
+  const result = await postMentorsBulkToSheet_(assigned);
+  if(!result.ok){
+    return { assigned, definiteFailure: result.error || 'Sync failed', syncVerified:null };
+  }
+  let syncVerified = null;
+  if(MENTOR_API_URL){
+    const sample = assigned.slice(0, Math.min(5, assigned.length));
+    const results = await Promise.all(sample.map(p => verifyMentorSynced_(p.id, p.mentor)));
+    const checked = results.filter(r => r !== null);
+    syncVerified = checked.length ? checked.every(Boolean) : null;
+  }
+  return { assigned, definiteFailure:null, syncVerified };
+}
+
 // Same idea as postMentorToSheet_, but for any other editable field on a
 // participant's profile (cohort ID, payment status, modules completed,
 // comments, etc.). `fields` is an object keyed by the REAL ParticipantDB
@@ -1430,7 +1591,7 @@ async function postMentorToSheet_(participantId, mentor){
 async function updateParticipantInSheet_(participantId, fields){
   if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
   if(!Object.keys(fields).length) return { ok:true, skipped:true };
-  const token = ensureAdminToken_();
+  const token = await ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — changes were NOT synced to the Sheet.' };
   try{
     await fetch(MENTOR_API_URL, {
@@ -1453,7 +1614,7 @@ async function updateParticipantInSheet_(participantId, fields){
 // (same as before this patch).
 async function addParticipantToSheet_(p){
   if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
-  const token = ensureAdminToken_();
+  const token = await ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — participant was NOT synced to the Sheet.' };
   try{
     await fetch(MENTOR_API_URL, {
@@ -1732,18 +1893,6 @@ async function refreshLiveData_() {
             lastCheckin: r.Last_Checkin_Date || null,
             lastTopicCompleted: r.Last_Topic_Completed || null,
             comments: r.Comments || null,
-            // ---- Lifecycle (Defer / Complete / Drop Off), read straight
-            // from the Sheet so it syncs to every laptop the same way
-            // Assigned_Mentor already does — see markLifecycle_/
-            // reactivateParticipant below for the write side. Blank on the
-            // Sheet (columns not added yet, or never set) means "no
-            // Sheet-sourced value" — the boot() merge below then falls back
-            // to this browser's local draft instead, so nothing regresses
-            // for anyone who hasn't added these columns yet.
-            lifecycleStatusFromSheet: (r.Lifecycle_Status || '').trim().toLowerCase() || null,
-            lifecycleReasonFromSheet: r.Lifecycle_Reason || '',
-            lifecycleAtFromSheet: r.Lifecycle_At || null,
-            lifecycleByFromSheet: r.Lifecycle_By || null,
           };
         });
       })(),
@@ -1961,11 +2110,16 @@ async function clearLifecycle(id){
 // statuses (deferred / completed / dropoff), so every place that renders
 // one of these — the Learners table badge, the profile drawer banner, and
 // the confirm()/toast copy in markLifecycle — stays in sync automatically.
+// "Deferred" reads as a lapse; most of these learners actively chose to
+// finish at their own speed instead of ending the programme early, which is
+// a good outcome for a self-paced model. It displays as "Self-Paced" in a
+// calm teal (not the caution amber a warning status would use) — internal
+// value stays 'deferred' everywhere it's stored/filtered.
 function lifecycleLabel_(status){
-  return status==='deferred' ? 'Deferred' : status==='dropoff' ? 'Drop Off' : status==='completed' ? 'Completed' : 'Active';
+  return status==='deferred' ? 'Self-Paced' : status==='dropoff' ? 'Drop Off' : status==='completed' ? 'Completed' : 'Active';
 }
 function lifecycleBadgeClass_(status){
-  return status==='deferred' ? 'amber' : status==='dropoff' ? 'rose' : 'green';
+  return status==='deferred' ? 'teal' : status==='dropoff' ? 'rose' : 'green';
 }
 
 async function loadExtraParticipants(){
@@ -2252,7 +2406,7 @@ function computeEngine(p){
       engagementStatus = 'At Risk';
       if(daysSinceActivity > 14) engagementReasons.push(`Last activity ${Math.round(daysSinceActivity)} days ago (>14-day threshold).`);
       if(bigDeficit) engagementReasons.push(`Progress ${(progressPct*100).toFixed(0)}% vs expected ${(expectedProgressPct*100).toFixed(0)}% — variance ${(progressVariance*100).toFixed(0)} pts.`);
-      if(escalation==='Week 2 - Follow-up Call' || escalation==='Week 3 - Escalation' || escalation==='Week 4 - Default Review') engagementReasons.push(`Escalation stage: ${escalation}.`);
+      if(escalation==='Week 2 - Follow-up Call' || escalation==='Week 3 - Escalation' || escalation==='Week 4 - Default Review') engagementReasons.push(`Follow-up stage: ${escalationLabel_(escalation)}.`);
     } else if(daysSinceActivity >= 8 || modDeficit){
       engagementStatus = 'Needs Attention';
       if(daysSinceActivity >= 8) engagementReasons.push(`Last activity ${Math.round(daysSinceActivity)} days ago (8-14 day window).`);
@@ -3065,28 +3219,38 @@ function riskDisplay(eng){
 }
 function statusClass(s){
   if(s==='Completed') return 'green';
-  if(s==='At Risk') return 'amber';
-  if(s==='Defaulted' || s==='Needs Follow-up') return 'amber';
+  if(s==='Defaulted') return 'rose'; // genuinely overdue — the one tier that keeps a stronger colour
+  if(s==='At Risk' || s==='Needs Follow-up') return 'amber';
   return 'slate';
 }
-// "Defaulted" and "At Risk" are still the internal/raw values everywhere in
-// this file (same underlying triggers as before — that logic hasn't
-// changed) — but both read as punitive, alarming labels, which doesn't fit
-// self-paced's flexible, supportive policy. Anywhere a status is shown to a
-// person should route through this instead of printing the raw value, so
-// the wording (and badge colour, see statusClass/engagementClass above)
-// stays soft and encouraging no matter where it's used — dashboard, roster
-// table, nudge emails, PDF/CSV exports, chart labels.
+// "Defaulted"/"At Risk" are still the internal/raw values everywhere in this
+// file (same escalation thresholds as before — that logic hasn't changed)
+// — but printed raw they read as punitive, final labels, which doesn't fit
+// self-paced's flexible policy of keeping learners enrolled and just
+// following up more. Anywhere a status is shown to a person should route
+// through this instead of printing the raw value. "At Risk" reads as
+// "Needs Support" (amber — an ask for attention, not a verdict); the one
+// tier that's genuinely overdue reads "Needs Support (Overdue)" so mentors
+// can still tell the two apart at a glance.
 function statusLabel_(s){
-  if(s==='Defaulted') return 'Needs Support (overdue)';
+  if(s==='Defaulted') return 'Needs Support (Overdue)';
   if(s==='At Risk') return 'Needs Support';
   return s || '—';
 }
-// Same softening for the Engagement column specifically — kept separate
-// from statusLabel_ because Status and Engagement are different fields
-// that happen to share the raw string 'At Risk'; mapping them independently
-// means either one's wording can change later without affecting the other.
-function engagementLabel_(s){ return s==='At Risk' ? 'Needs Support' : (s || '—'); }
+// Kept as a separate name for readability at call sites that display
+// engagementStatus/progressStatus rather than the escalation `status`
+// field — both route through the same soft-label mapping.
+function engagementLabel_(s){ return statusLabel_(s); }
+// Escalation-stage names are internal timing markers ("how long since last
+// activity"), but "Default Review" carries the same punitive, final tone the
+// status field used to have. The raw string is still what drives every
+// threshold comparison in the engine — only the text shown to a person
+// changes.
+function escalationLabel_(s){
+  if(s==='Week 4 - Default Review') return 'Week 4 - Needs Support (Overdue)';
+  if(s==='Week 3 - Escalation') return 'Week 3 - Priority Follow-up';
+  return s || '—';
+}
 function engagementClass(s){
   if(s==='Active') return 'green';
   if(s==='Needs Attention') return 'amber';
@@ -3098,7 +3262,7 @@ function progressStatusClass(s){
   if(s==='Ahead' || s==='Completed') return 'green';
   if(s==='On Track') return 'teal';
   if(s==='Behind') return 'amber';
-  if(s==='At Risk') return 'rose';
+  if(s==='At Risk') return 'amber';
   return 'slate';
 }
 function paymentClass(s){
@@ -3147,8 +3311,8 @@ function renderKPIs(computed){
     ['Active', active, 'green', {type:'engagement', value:'Active'}],
     ['Needs Attention', attention, 'amber', {type:'engagement', value:'Needs Attention'}],
     ['Needs Support', atrisk, 'amber', {type:'engagement', value:'At Risk'}],
-    ['Completed', completed, 'slate', {type:'completion', value:'completed'}],
-    ['Deferred', deferredCount, deferredCount>0?'amber':'slate', {type:'lifecycle', value:'deferred'}],
+    ['Completed', completed, 'green', {type:'completion', value:'completed'}],
+    ['Self-Paced', deferredCount, 'teal', {type:'lifecycle', value:'deferred'}],
     ['Drop Off', dropoffCount, dropoffCount>0?'rose':'slate', {type:'lifecycle', value:'dropoff'}],
     ['Avg Progress', avgProg.toFixed(0)+'%', 'teal'],
     ['Avg Engagement', avgEngagementScore.toFixed(0)+'%', avgEngagementScore>=75?'green':avgEngagementScore>=40?'amber':'rose'],
@@ -3222,7 +3386,7 @@ function renderTable(computed){
     ].filter(Boolean).join(' ');
     const actionsHtml = lcStatus === 'active'
       ? `<div class="row-actions" style="display:flex;gap:4px;flex-wrap:wrap;">
-           <button class="ghost lifecycle-btn" data-action="deferred" data-id="${p.id}" title="Defer — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Defer</button>
+           <button class="ghost lifecycle-btn" data-action="deferred" data-id="${p.id}" title="Move to Self-Paced — they're continuing at their own speed, not leaving. Hides them from the active roster but keeps their full record." style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Self-Paced</button>
            <button class="ghost lifecycle-btn" data-action="completed" data-id="${p.id}" title="Mark Completed — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Complete</button>
            <button class="ghost lifecycle-btn" data-action="dropoff" data-id="${p.id}" title="Only for learners who've actually left the program — NOT for running past their self-paced timeline, which is normal. Hides them from the active roster but keeps their full record." style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Drop Off</button>
          </div>`
@@ -3298,7 +3462,7 @@ function engagementRowCells(b){
     <td><span class="badge green">${b.active}</span></td>
     <td><span class="badge amber">${b.attention}</span></td>
     <td><span class="badge amber">${b.atrisk}</span></td>
-    <td><span class="badge slate">${b.completed}</span></td>`;
+    <td><span class="badge green">${b.completed}</span></td>`;
 }
 
 function renderRollup(computed){
@@ -3365,7 +3529,7 @@ function buildMondayNudgeContent_(mentorKey, rows){
     }).join('') + '</ul>';
     bodyHtml += 'Could you reach out to these learners this week and log a check-in once you do? Flag or defer anyone who needs it.<br><br>';
   } else {
-    bodyHtml += "Nobody on your list is currently flagged At Risk or Needs Follow-up — nice work. Just a friendly nudge to keep the weekly check-ins going.<br><br>";
+    bodyHtml += "Nobody on your list currently needs extra support or follow-up — nice work. Just a friendly nudge to keep the weekly check-ins going.<br><br>";
   }
   bodyHtml += 'Once you\'ve checked in with them, hit "✅ I checked up on my learners" in the Mentors tab so LearnOps can see it\'s done.<br><br>';
   bodyHtml += `<i>"${randomQuote_()}"</i><br><br>`;
@@ -3382,7 +3546,7 @@ function buildMondayNudgeContent_(mentorKey, rows){
 // no-op.
 async function sendMentorNudgeEmail_(mentorKey, rows){
   if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
-  const token = ensureAdminToken_();
+  const token = await ensureAdminToken_();
   if(!token) return { ok:false, error:'No admin token entered — reminder was NOT sent.' };
   const content = buildMondayNudgeContent_(mentorKey, rows);
   if(!content.to){
@@ -3827,11 +3991,11 @@ function atRiskList(){
 }
 function exportAtRiskCsv(){
   const list = atRiskList();
-  if(!list.length){ showToast('No At Risk or Needs Support participants right now.'); return; }
+  if(!list.length){ showToast('Nobody currently needs extra support — nothing to export.'); return; }
   const headers = ['Participant_ID','Full_Name','Email','Programme','Cohort_ID','Assigned_Mentor','Status','Risk','Days_Since_Last_Activity','Escalation_Stage'];
   const rows = list.map(({p,eng})=>[
     p.id, p.name, p.email||'', p.programme, p.cohortId||'', p.mentor||'Unassigned',
-    eng.status, eng.risk||'', eng.daysSinceActivity===null?'':Math.round(eng.daysSinceActivity), eng.escalation||'',
+    statusLabel_(eng.status), eng.risk||'', eng.daysSinceActivity===null?'':Math.round(eng.daysSinceActivity), escalationLabel_(eng.escalation),
   ]);
   const esc = (v)=> {
     const s = String(v ?? '');
@@ -3841,14 +4005,14 @@ function exportAtRiskCsv(){
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `at-risk-${today().toISOString().slice(0,10)}.csv`;
+  a.download = `needs-support-${today().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
-  showToast(`Exported ${list.length} at-risk participant(s) to CSV.`);
+  showToast(`Exported ${list.length} participant(s) needing support to CSV.`);
 }
 function exportAtRiskPdf(){
   const list = atRiskList();
-  if(!list.length){ showToast('No At Risk or Needs Support participants right now.'); return; }
+  if(!list.length){ showToast('Nobody currently needs extra support — nothing to export.'); return; }
   if(!window.jspdf || !window.jspdf.jsPDF){
     showToast("Couldn't load the PDF engine — try the CSV export instead.");
     return;
@@ -3859,14 +4023,14 @@ function exportAtRiskPdf(){
   const marginX = 40;
   let y = 50;
 
-  doc.setTextColor(190,18,60); doc.setFont('helvetica','bold'); doc.setFontSize(18);
-  doc.text('At-Risk & Needs Support Participants', marginX, y); y += 18;
+  doc.setTextColor(180,83,9); doc.setFont('helvetica','bold'); doc.setFontSize(18);
+  doc.text('Learners Needing Support', marginX, y); y += 18;
   doc.setTextColor(71,85,105); doc.setFont('helvetica','normal'); doc.setFontSize(10);
   doc.text(`Generated ${today().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} · ${list.length} participant(s)`, marginX, y); y += 22;
 
   const colX = [marginX, marginX+140, marginX+250, marginX+330, marginX+400];
   const drawHeader = ()=>{
-    doc.setFillColor(190,18,60);
+    doc.setFillColor(180,83,9);
     doc.rect(marginX, y-12, pageW-2*marginX, 20, 'F');
     doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
     doc.text('Name', colX[0]+4, y+2);
@@ -3883,11 +4047,11 @@ function exportAtRiskPdf(){
   list.forEach(({p,eng}, idx)=>{
     const rowH = 16;
     if(y + rowH > 800){ doc.addPage(); y = 50; drawHeader(); }
-    if(idx % 2 === 0){ doc.setFillColor(255,241,242); doc.rect(marginX, y-11, pageW-2*marginX, rowH, 'F'); }
+    if(idx % 2 === 0){ doc.setFillColor(254,243,199); doc.rect(marginX, y-11, pageW-2*marginX, rowH, 'F'); }
     doc.text(`${p.name} (${p.id})`, colX[0]+4, y, {maxWidth: colX[1]-colX[0]-8});
     doc.text(`${p.programme} · ${p.cohortId||'—'}`, colX[1]+4, y, {maxWidth: colX[2]-colX[1]-8});
     doc.text(p.mentor||'Unassigned', colX[2]+4, y, {maxWidth: colX[3]-colX[2]-8});
-    doc.text(eng.status, colX[3]+4, y, {maxWidth: colX[4]-colX[3]-8});
+    doc.text(statusLabel_(eng.status), colX[3]+4, y, {maxWidth: colX[4]-colX[3]-8});
     doc.text(eng.daysSinceActivity===null?'—':String(Math.round(eng.daysSinceActivity)), colX[4]+4, y);
     y += rowH;
   });
@@ -3897,8 +4061,8 @@ function exportAtRiskPdf(){
   doc.setFontSize(8); doc.setTextColor(148,163,184);
   doc.text('10Alytics Self-Paced Learning · SPLMS Tracker', marginX, y);
 
-  doc.save(`at-risk-${today().toISOString().slice(0,10)}.pdf`);
-  showToast('At-risk PDF downloaded.');
+  doc.save(`needs-support-${today().toISOString().slice(0,10)}.pdf`);
+  showToast('PDF downloaded.');
 }
 
 // ---------- overview charts ----------
@@ -3938,7 +4102,7 @@ function renderCharts(computed){
   // running past the original timeline isn't treated as a drop condition.
   const statusOrder = ['Active','Needs Follow-up','At Risk','Defaulted','Completed'];
   const statusLabels = statusOrder.map(statusLabel_);
-  const statusColors = {Active:'#D9631F', 'Needs Follow-up':'#B45309', 'At Risk':'#B45309', Defaulted:'#B45309', Completed:'#15803D'};
+  const statusColors = {Active:'#D9631F', 'Needs Follow-up':'#B45309', 'At Risk':'#B45309', Defaulted:'#BE123C', Completed:'#15803D'};
   const statusCounts = {}; statusOrder.forEach(s=> statusCounts[s]=0);
   computed.forEach(({eng})=>{ statusCounts[eng.status] = (statusCounts[eng.status]||0) + 1; });
   document.getElementById('chartStatusSub').textContent = `${statusCounts.Completed} completed · ${statusCounts['At Risk']+statusCounts.Defaulted} need attention`;
@@ -5288,7 +5452,7 @@ function renderKpiActionTable_(result){
     else reasons.push('Check-in overdue / pending');
     if(eng.risk==='Red') reasons.push('Pacing is tight — may need extra support to finish on time');
     if(eng.daysSinceActivity===null || eng.daysSinceActivity > (SETTINGS.esc1||7)) reasons.push('No recent activity — learner unresponsive');
-    if(['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(eng.escalation)) reasons.push(`Escalation required: ${eng.escalation}`);
+    if(['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(eng.escalation)) reasons.push(`Follow-up needed: ${escalationLabel_(eng.escalation)}`);
     if(eng.bufferDays!==null && eng.bufferDays<0) reasons.push('Progress below expected pace');
     rows.push({p,eng,reasons});
   });
@@ -5328,8 +5492,8 @@ function renderKpiEvidence_(weekEnding, result){
     ['Learners monitored', result.expected],
     ['Check-ins completed', result.completed],
     ['Missed check-ins', result.missed],
-    ['At-risk learners identified', result.atRiskEligible],
-    ['Escalations', result.notCompleted.filter(({eng})=>['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(eng.escalation)).length],
+    ['Learners needing support identified', result.atRiskEligible],
+    ['Follow-ups needed', result.notCompleted.filter(({eng})=>['Week 2 - Follow-up Call','Week 3 - Escalation','Week 4 - Default Review'].includes(eng.escalation)).length],
     ['Feedback completion rate', result.feedbackRate===null?'—':result.feedbackRate.toFixed(0)+'%'],
     ['Response rate', result.responseRate===null?'—':result.responseRate.toFixed(0)+'%'],
   ];
@@ -5511,8 +5675,8 @@ async function openDrawer(id){
           <div class="metric"><div class="k">Predicted modules done</div><div class="v" style="font-size:12px;">${fmtShort(eng.predictedModuleCompletion)}</div></div>
           <div class="metric"><div class="k">Predicted final (+capstone)</div><div class="v" style="font-size:12px;">${fmtShort(eng.predictedFinal)}</div></div>
           <div class="metric"><div class="k">Buffer days</div><div class="v">${eng.bufferDays===null?'—':eng.bufferDays.toFixed(0)}</div></div>
-          <div class="metric"><div class="k">Risk status</div><div class="v"><span class="badge ${riskDisplay(eng).cls}">${riskDisplay(eng).label}</span></div></div>
-          <div class="metric"><div class="k">Escalation stage</div><div class="v" style="font-size:11.5px;">${eng.escalation||'—'}</div></div>
+          <div class="metric"><div class="k">Pacing</div><div class="v"><span class="badge ${riskDisplay(eng).cls}">${riskDisplay(eng).label}</span></div></div>
+          <div class="metric"><div class="k">Follow-up stage</div><div class="v" style="font-size:11.5px;">${escalationLabel_(eng.escalation)}</div></div>
           <div class="metric"><div class="k">Participant status</div><div class="v"><span class="badge ${statusClass(eng.status)}">${statusLabel_(eng.status)}</span></div></div>
           <div class="metric"><div class="k">Internship eligible</div><div class="v" style="font-size:12px;">${eng.internshipEligible}</div></div>
           <div class="metric"><div class="k">Progress</div><div class="v">${(eng.progressPct*100).toFixed(0)}%</div></div>
@@ -5631,7 +5795,7 @@ async function openDrawer(id){
       <button class="primary" id="saveBtn" style="flex:1;">Save changes</button>
       <button id="planBtn" style="flex:1;">📄 Learning plan (PDF)</button>
       ${lcStatus === 'active' ? `
-        <button id="deferBtn">Defer</button>
+        <button id="deferBtn" title="They're continuing at their own speed instead of ending the programme early — this is a good outcome, not a warning.">Move to Self-Paced</button>
         <button id="completeBtn">Complete</button>
         <button id="dropoffBtn">Drop Off</button>
       ` : `<button id="reactivateBtn">↩ Reactivate</button>`}
@@ -5756,6 +5920,10 @@ async function saveDrawer(p){
   let syncResult = null;
   if(Object.keys(changedFields).length){
     syncResult = await updateParticipantInSheet_(p.id, changedFields);
+    if(syncResult && syncResult.ok && mentorChanged && MENTOR_API_URL){
+      const verified = await verifyMentorSynced_(p.id, p.mentor);
+      if(verified === false) syncResult = { ok:false, error:'Sheet still shows the old mentor — the write did not actually land (check the admin token, or see the deployment note at the top of Code.gs).' };
+    }
   }
   closeDrawer();
   renderAll();
@@ -5779,7 +5947,7 @@ async function markLifecycle(id, status){
   if(!requireEditAuth()) return;
   const p = participants.find(x=>x.id===id);
   if(!p) return;
-  const label = status === 'deferred' ? 'Defer' : status === 'dropoff' ? 'mark Drop Off' : 'mark Completed';
+  const label = status === 'deferred' ? 'move to Self-Paced' : status === 'dropoff' ? 'mark Drop Off' : 'mark Completed';
   if(status === 'dropoff' && !confirm(`Drop Off means ${p.name} has left the program entirely — NOT just that they've run past their self-paced timeline (that's expected and fine on its own). Are they actually gone?`)) return;
   const reasonInput = prompt(`Reason to ${label} ${p.name}? (optional — shown to staff later, cancel to abort)`, '');
   if(reasonInput === null) return; // user hit Cancel
@@ -5807,29 +5975,10 @@ async function markLifecycle(id, status){
     });
   }
 
-  // Push to the Sheet the same way a drawer edit or mentor reassignment
-  // does (see updateParticipantInSheet_) — this is what makes Defer/
-  // Complete/Drop Off show up on every laptop after the next refresh,
-  // instead of staying stuck on just this browser until someone happens to
-  // also reassign that learner's mentor. Requires the Lifecycle_Status/
-  // Lifecycle_Reason/Lifecycle_At/Lifecycle_By columns to exist in
-  // ParticipantDB (see README) — if they don't yet, this silently no-ops
-  // and the change still works locally via the draft above, same as
-  // before.
-  const lifecycleSync = await updateParticipantInSheet_(p.id, {
-    Lifecycle_Status: rec.status, Lifecycle_Reason: rec.reason, Lifecycle_At: rec.at, Lifecycle_By: rec.by,
-  });
-
   logAccess_('lifecycle', `${lifecycleLabel_(status)} ${p.name} (${p.id})${reason ? ' — ' + reason : ''}`);
   closeDrawer();
   renderAll();
-  if(lifecycleSync && lifecycleSync.ok){
-    showToast(`${p.name} marked ${lifecycleLabel_(status)} — synced to the Sheet, everyone will see it.`);
-  } else if(lifecycleSync && lifecycleSync.skipped){
-    showToast(`${p.name} marked ${lifecycleLabel_(status)} locally only — sign in with the admin token, or add the Lifecycle_* columns to ParticipantDB, to sync this to every laptop. See README.`);
-  } else {
-    showToast(`${p.name} marked ${lifecycleLabel_(status)}, but the Sheet sync failed: ${(lifecycleSync&&lifecycleSync.error)||'unknown error'}. It's saved on this browser for now.`);
-  }
+  showToast(`${p.name} marked ${lifecycleLabel_(status)} and removed from the active roster. Switch "Roster view" to see them again.`);
 }
 
 async function reactivateParticipant(id){
@@ -5840,17 +5989,10 @@ async function reactivateParticipant(id){
   await captureSnapshot_(`Reactivate ${p.name} (${p.id})`);
   await clearLifecycle(id);
   p.lifecycleStatus = 'active'; p.lifecycleReason = ''; p.lifecycleAt = null; p.lifecycleBy = null;
-  const reactivateSync = await updateParticipantInSheet_(p.id, {
-    Lifecycle_Status: 'active', Lifecycle_Reason: '', Lifecycle_At: '', Lifecycle_By: '',
-  });
   logAccess_('lifecycle', `Reactivated ${p.name} (${p.id})`);
   closeDrawer();
   renderAll();
-  if(reactivateSync && reactivateSync.ok){
-    showToast(`${p.name} moved back to the active roster — synced to the Sheet.`);
-  } else {
-    showToast(`${p.name} moved back to the active roster locally. Sign in with the admin token to sync this to every laptop.`);
-  }
+  showToast(`${p.name} moved back to the active roster.`);
 }
 
 async function removeParticipant(id){
@@ -5908,10 +6050,25 @@ async function runMentorAssignment(mode){
     paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
     preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
   }]));
+  const writeResults = [];
   for(const p of changes){
-    await postMentorToSheet_(p.id, p.mentor);
+    writeResults.push(await postMentorToSheet_(p.id, p.mentor));
   }
-  return changes;
+  // Any write that returned a definite error (no token, wrong token, etc.)
+  // is a CONFIRMED failure — surface that immediately, no need to guess.
+  const definiteFailures = writeResults.filter(r => r && r.ok === false && !r.skipped).length;
+
+  // For everything else, the POST itself is opaque (no-cors), so spot-check
+  // a sample against the Sheet directly via the readable verify endpoint —
+  // this is what actually catches "looked fine, never reached the Sheet".
+  let syncVerified = null;
+  if(MENTOR_API_URL && changes.length && definiteFailures === 0){
+    const sample = changes.slice(0, Math.min(5, changes.length));
+    const results = await Promise.all(sample.map(p => verifyMentorSynced_(p.id, p.mentor)));
+    const checked = results.filter(r => r !== null);
+    syncVerified = checked.length ? checked.every(Boolean) : null; // null = couldn't confirm either way
+  }
+  return { changes, definiteFailures, syncVerified };
 }
 
 function openAssignMentorsDrawer(){
@@ -5948,7 +6105,8 @@ function openAssignMentorsDrawer(){
       <div id="assignResults"></div>
     </div>
     <div class="save-row" style="flex-direction:column;gap:8px;">
-      <button class="primary" id="assignUnassignedBtn" style="width:100%;">Assign the ${unassigned} unassigned participant${unassigned===1?'':'s'} only</button>
+      <button class="primary" id="syncCurrentBtn" style="width:100%;">🔄 Sync current assignments to everyone (no changes made)</button>
+      <button id="assignUnassignedBtn" style="width:100%;">Assign the ${unassigned} unassigned participant${unassigned===1?'':'s'} only</button>
       <button id="assignAllBtn" style="width:100%;">Reassign everyone (overwrite existing)</button>
       <button class="danger-ghost" id="clearLocalMentorsBtn" style="width:100%;">Clear this browser's draft (start over)</button>
       <button class="ghost" id="closeBtnAssign" style="width:100%;">Close</button>
@@ -5961,15 +6119,27 @@ function openAssignMentorsDrawer(){
       sessionStorage.setItem(MENTOR_API_TOKEN_KEY, e.target.value.trim());
     });
   }
+  document.getElementById('syncCurrentBtn').onclick = async ()=>{
+    const assignedCount = participants.filter(p=>!!p.mentor).length;
+    if(!assignedCount){ showToast('No mentor assignments to sync yet.'); return; }
+    if(!backendReady){ showToast('MENTOR_API_URL is not configured — nothing to sync to.'); return; }
+    showToast(`Syncing ${assignedCount} existing assignment(s) to the Sheet…`);
+    const {assigned, definiteFailure, syncVerified} = await syncCurrentMentorsToSheet_();
+    showAssignResults({
+      changes: assigned,
+      definiteFailures: definiteFailure ? assigned.length : 0,
+      syncVerified,
+    }, backendReady);
+  };
   document.getElementById('assignUnassignedBtn').onclick = async ()=>{
     if(unassigned===0){ showToast('No unassigned participants.'); return; }
-    const changes = await runMentorAssignment('unassigned');
-    showAssignResults(changes, backendReady);
+    const result = await runMentorAssignment('unassigned');
+    showAssignResults(result, backendReady);
   };
   document.getElementById('assignAllBtn').onclick = async ()=>{
     if(!confirm('This overwrites the mentor for ALL participants, including ones already assigned. Continue?')) return;
-    const changes = await runMentorAssignment('all');
-    showAssignResults(changes, backendReady);
+    const result = await runMentorAssignment('all');
+    showAssignResults(result, backendReady);
   };
   document.getElementById('clearLocalMentorsBtn').onclick = clearLocalMentorAssignments;
 }
@@ -5989,12 +6159,31 @@ async function clearLocalMentorAssignments(){
   setTimeout(()=>location.reload(), 700);
 }
 
-function showAssignResults(changes, backendReady){
+function showAssignResults({changes, definiteFailures, syncVerified}, backendReady){
   const header = 'Participant_ID\tFull_Name\tAssigned_Mentor';
   const rows = changes.map(p=>`${p.id}\t${p.name}\t${p.mentor}`).join('\n');
   const resultsEl = document.getElementById('assignResults');
   if(!resultsEl) return;
+
+  // Build an honest status banner instead of always claiming "synced":
+  // definiteFailures (no/wrong token) is a confirmed failure; syncVerified
+  // is a spot-check against the Sheet itself (the POST writes are no-cors
+  // and can't be read directly, so this is the real proof either way).
+  let banner = '';
+  if(!backendReady){
+    banner = `<div class="kpi-warning" style="margin-bottom:10px;">MENTOR_API_URL isn't configured — this only saved to this browser's local draft. Copy the table below into ParticipantDB manually, or ask an engineer to wire up the Sheet backend.</div>`;
+  } else if(definiteFailures > 0){
+    banner = `<div class="kpi-warning" style="margin-bottom:10px;">⚠️ NOT synced to the Sheet — ${definiteFailures} write(s) failed (no valid admin token). Only this browser sees these assignments right now. Get the correct token from LearnOps, then use "Reassign everyone" to resend.</div>`;
+  } else if(syncVerified === true){
+    banner = `<div class="field-group" style="background:var(--green-soft);color:var(--green);padding:10px 12px;border-radius:8px;margin-bottom:10px;font-size:12.5px;">✅ Verified on the Sheet — this reached ParticipantDB, so every device will see it (once their page reloads).</div>`;
+  } else if(syncVerified === false){
+    banner = `<div class="kpi-warning" style="margin-bottom:10px;">⚠️ Checked the Sheet directly and it does NOT show these assignments yet. This usually means the admin token is wrong, or the Apps Script deployment is restricted to "Anyone within your organization" instead of "Anyone" (see the note at the top of Code.gs) — either way, only this browser sees these assignments right now.</div>`;
+  } else {
+    banner = `<div class="admin-only-note" style="margin-bottom:10px;">Sent to the Sheet, but couldn't confirm from here whether it landed — spot-check ParticipantDB directly to be sure other devices will see this.</div>`;
+  }
+
   resultsEl.innerHTML = `
+    ${banner}
     <div class="field-group">
       <label>${changes.length} participant${changes.length===1?'':'s'} assigned ${backendReady ? '— written to ParticipantDB' : '— copy into ParticipantDB'}</label>
       <textarea id="assignCsvOut" style="min-height:160px;font-family:var(--mono);font-size:11px;" readonly>${header}\n${rows}</textarea>
@@ -6008,7 +6197,11 @@ function showAssignResults(changes, backendReady){
     showToast('Copied — paste into ParticipantDB.');
   };
   renderAll();
-  showToast(backendReady ? 'Mentors assigned and synced to the sheet.' : 'Mentors assigned — recalculated live.');
+  if(!backendReady) showToast('Mentors assigned — recalculated live.');
+  else if(definiteFailures > 0) showToast('Sync FAILED — see the warning above.');
+  else if(syncVerified === true) showToast('Mentors assigned and confirmed on the Sheet.');
+  else if(syncVerified === false) showToast('Sync did not reach the Sheet — see the warning above.');
+  else showToast('Mentors assigned — sent to the Sheet (unconfirmed).');
 }
 
 // ---------- edit mentors (name + email roster) ----------
@@ -6107,9 +6300,12 @@ function wireMentorEditRows_(){
       const phone = row.querySelector('.mentorPhoneInput').value.trim();
       if(!name){ showToast('Mentor name cannot be blank.'); return; }
       const renaming = name !== originalName;
+      let alsoReassign = false;
       if(renaming){
         const affected = participants.filter(p=>p.mentor===originalName).length;
-        if(affected && !confirm(`Renaming "${originalName}" to "${name}" — ${affected} participant${affected===1?'':'s'} currently assigned to them will need reassigning separately (this rename only updates the mentor roster, not each participant's record). Continue?`)) return;
+        if(affected){
+          alsoReassign = confirm(`Renaming "${originalName}" to "${name}" — ${affected} participant${affected===1?'':'s'} are currently assigned to them.\n\nOK = move those ${affected} participant${affected===1?'':'s'} to "${name}" too (recommended — this is one person, just a new name/email).\nCancel = leave their records saying "${originalName}" (only do this if "${name}" is a genuinely different, new mentor).`);
+        }
       }
       const res = await upsertMentorInSheet_({ name, email, phone }, originalName);
       if(res.skipped || res.ok){
@@ -6118,7 +6314,20 @@ function wireMentorEditRows_(){
         if(originalName !== name){ delete MENTOR_EMAILS[originalName]; delete MENTOR_PHONES[originalName]; }
         MENTOR_EMAILS[name] = email;
         MENTOR_PHONES[name] = phone;
-        showToast(res.skipped ? 'Saved locally (not synced — see note above).' : 'Saved and synced.');
+        if(alsoReassign){
+          participants.forEach(p=>{ if(p.mentor===originalName) p.mentor = name; });
+          await saveOverridesBulk(participants.filter(p=>p.mentor===name).map(p => [p.id, {
+            name:p.name, email:p.email, programme:p.programme, cohortId:p.cohortId,
+            paymentStatus:p.paymentStatus, mentor:p.mentor, modulesCompleted:p.modulesCompleted,
+            preferredDays:p.preferredDays, lastCheckin:p.lastCheckin, comments:p.comments
+          }]));
+          const reassignRes = await reassignMentorAllInSheet_(originalName, name);
+          showToast(reassignRes.ok
+            ? `Saved, synced, and moved ${participants.filter(p=>p.mentor===name).length} participant(s) to "${name}".`
+            : `Mentor saved, but reassigning participants failed: ${reassignRes.error}`);
+        } else {
+          showToast(res.skipped ? 'Saved locally (not synced — see note above).' : 'Saved and synced.');
+        }
         openEditMentorsDrawer();
         renderMentorsTab(); renderAll();
       }else{
@@ -6366,25 +6575,11 @@ async function boot(){
   const [editsBlob, lifecycleBlob] = await Promise.all([_loadEditsBlob_(), _loadLifecycleBlob_()]);
   for(const p of all){
     Object.assign(p, editsBlob[p.id] || {});
-    // Lifecycle sync (section: Defer/Complete/Drop Off) — the Sheet is now
-    // the source of truth once Lifecycle_Status has been written there
-    // (see markLifecycle/reactivateParticipant). Only fall back to this
-    // browser's local draft when the Sheet has no value yet, e.g. the
-    // Lifecycle_* columns haven't been added, or this exact change hasn't
-    // synced from THIS browser (no admin token / offline) — that draft
-    // still shows locally until it syncs, same as any other unsynced edit.
-    if(p.lifecycleStatusFromSheet){
-      p.lifecycleStatus = p.lifecycleStatusFromSheet;
-      p.lifecycleReason = p.lifecycleReasonFromSheet || '';
-      p.lifecycleAt = p.lifecycleAtFromSheet || null;
-      p.lifecycleBy = p.lifecycleByFromSheet || null;
-    } else {
-      const lc = lifecycleBlob[p.id] || null;
-      p.lifecycleStatus = lc ? lc.status : 'active';
-      p.lifecycleReason = lc ? lc.reason : '';
-      p.lifecycleAt = lc ? lc.at : null;
-      p.lifecycleBy = lc ? lc.by : null;
-    }
+    const lc = lifecycleBlob[p.id] || null;
+    p.lifecycleStatus = lc ? lc.status : 'active';
+    p.lifecycleReason = lc ? lc.reason : '';
+    p.lifecycleAt = lc ? lc.at : null;
+    p.lifecycleBy = lc ? lc.by : null;
   }
   participants = all;
 
