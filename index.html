@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <title>SPLMS — Self-Paced Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- defer: none of these are needed to show the login gate or parse the
      rest of the page — they're only used later (PDF/XLSX export on a
      button click, charts after boot()). Without defer, the browser was
@@ -29,11 +32,24 @@
     --green-soft:#DCFCE7;
     --green:#15803D;
     --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --display: 'Space Grotesk', var(--sans);
+    /* Elevation scale — one consistent set of shadows used everywhere,
+       instead of the same flat rgba(0,0,0,.1) card-shadow repeated on
+       every surface regardless of how "raised" it actually is. */
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06), 0 1px 1px rgba(15,23,42,.04);
+    --shadow-md:0 8px 24px -12px rgba(15,23,42,.25);
+    --shadow-lg:0 20px 60px rgba(15,23,42,.35);
+    --radius-sm:8px;
+    --radius-md:12px;
+    --radius-lg:16px;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);}
   ::selection{background:var(--teal-soft);}
+  h1,h2,h3{font-family:var(--display);}
+  :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px;}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:.001ms !important;transition-duration:.001ms !important;} }
 
   /* ---- header ---- */
   .app-header{
@@ -48,7 +64,7 @@
   .brand{display:flex;align-items:center;gap:12px;}
   .brand-mark{width:42px;height:42px;border-radius:10px;background:#1B1B1B;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none;overflow:hidden;}
   .brand-mark img{width:100%;height:100%;object-fit:cover;display:block;}
-  .brand h1{margin:0;font-size:19px;letter-spacing:.2px;}
+  .brand h1{margin:0;font-size:20px;font-family:var(--display);font-weight:700;letter-spacing:.1px;}
   .brand p{margin:2px 0 0;font-size:12.5px;color:#A9B4C9;}
   .rule-pill{
     background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:10px;
@@ -67,10 +83,11 @@
     display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;
   }
   .kpi{
-    background:var(--paper);border-radius:12px;padding:14px 14px 12px;box-shadow:0 8px 24px -12px rgba(15,23,42,.25);
-    border:1px solid var(--line);
+    background:var(--paper);border-radius:var(--radius-md);padding:14px 14px 12px;box-shadow:var(--shadow-md);
+    border:1px solid var(--line);transition:transform .15s ease, box-shadow .15s ease;
   }
-  .kpi .num{font-size:22px;font-weight:700;font-family:var(--mono);}
+  .kpi[data-jump-type]:hover{transform:translateY(-2px);box-shadow:0 12px 28px -10px rgba(15,23,42,.3);border-color:#CBD5E1;}
+  .kpi .num{font-size:23px;font-weight:700;font-family:var(--mono);letter-spacing:-.2px;}
   .kpi .lbl{font-size:11px;color:var(--ink-soft);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
   .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
   .kpi.teal .num{color:var(--teal);}
@@ -109,37 +126,50 @@
 
   /* ---- main layout ---- */
   .main{max-width:1360px;margin:28px auto 60px;padding:0 24px;}
-  .panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-sm);}
   .panel + .panel{margin-top:20px;}
   .panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap;}
-  .panel-head h2{font-size:14.5px;margin:0;letter-spacing:.2px;}
+  .panel-head h2{font-size:15px;margin:0;letter-spacing:.1px;font-family:var(--display);font-weight:600;}
   .panel-head .sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
 
   /* controls */
   .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   input[type=text], select{
     font-family:var(--sans);font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+    transition:border-color .15s ease;
   }
+  input[type=text]:hover, select:hover{border-color:#CBD5E1;}
   input[type=text]{width:200px;}
   button{
     font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:8px;border:1px solid var(--line);
-    background:#fff;color:var(--ink);cursor:pointer;
+    background:#fff;color:var(--ink);cursor:pointer;transition:border-color .15s ease, background .15s ease, transform .1s ease;
   }
   button:hover{border-color:#CBD5E1;background:#F8FAFC;}
+  button:active{transform:translateY(1px);}
+  button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+  /* primary was hovering to a mismatched cool blue (#1c2947) left over from
+     an earlier palette — the rest of the brand (header, KPI numbers, badges)
+     is a warm navy/terracotta system, so this now lightens toward
+     --navy-2 instead, keeping the whole button family on-brand. */
   button.primary{background:var(--navy);color:#fff;border-color:var(--navy);}
-  button.primary:hover{background:#1c2947;}
+  button.primary:hover{background:var(--navy-2);border-color:var(--navy-2);}
   button.ghost{border:none;background:transparent;color:var(--ink-soft);}
+  button.ghost:hover{background:var(--canvas);}
   button.danger-ghost{border:none;background:transparent;color:var(--rose);}
+  button.danger-ghost:hover{background:var(--rose-soft);}
 
   /* table */
   table{width:100%;border-collapse:collapse;font-size:12.8px;}
   thead th{
     text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);
     padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none;
+    position:sticky;top:0;background:var(--paper);z-index:1;
   }
   thead th:hover{color:var(--ink);}
   tbody td{padding:10px 12px;border-bottom:1px solid #EEF1F5;vertical-align:middle;}
   tbody tr:hover{background:#FAFBFD;cursor:pointer;}
+  tbody tr:nth-child(even){background:#FBFCFE;}
+  tbody tr:nth-child(even):hover{background:#FAFBFD;}
   .pid{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);}
   .name{font-weight:600;}
   .email{font-size:11px;color:var(--ink-soft);}
@@ -226,7 +256,22 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
   .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
-  @media (max-width:640px){ .kpis{margin:-24px 12px 0;} .main{padding:0 12px;} }
+  .table-scroll{scrollbar-width:thin;scrollbar-color:#CBD5E1 transparent;}
+  .table-scroll::-webkit-scrollbar{width:8px;height:8px;}
+  .table-scroll::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:99px;}
+  .table-scroll::-webkit-scrollbar-thumb:hover{background:#94A3B8;}
+  @media (max-width:900px){
+    .kpi .num{font-size:19px;}
+    .drawer{width:100%;}
+  }
+  @media (max-width:640px){
+    .kpis{margin:-24px 12px 0;}
+    .main{padding:0 12px;}
+    .tabbar{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:none;}
+    .tabbar::-webkit-scrollbar{display:none;}
+    .tab-btn{flex:none;}
+    .table-scroll{max-height:none !important;}
+  }
   /* ---- login gate ---- */
   #loginGate{
     position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--navy) 0%, var(--navy-2) 100%);
@@ -322,7 +367,7 @@
   <div class="panel-head">
     <div><h2>Admin Dashboard sync check</h2><div class="sub">Comparing the Sheet's own "AdminDashboard" tab against what this page computes live from ParticipantDB</div></div>
   </div>
-  <div style="overflow-x:auto;">
+  <div class="table-scroll" style="overflow-x:auto;">
     <table>
       <thead><tr><th>Metric</th><th>Sheet's AdminDashboard tab</th><th>This page (live)</th><th></th></tr></thead>
       <tbody id="adminDashboardSyncTbody"></tbody>
@@ -334,7 +379,7 @@
   <div class="panel-head">
     <div><h2>New participants by week</h2><div class="sub" id="intakeSub">Grouped by when each participant was added — helps catch anyone stuck outside the Sheet</div></div>
   </div>
-  <div style="overflow-x:auto;">
+  <div class="table-scroll" style="overflow-x:auto;">
     <table>
       <thead><tr><th>Week</th><th>Added</th><th>In ParticipantDB?</th><th>Names</th></tr></thead>
       <tbody id="intakeTbody"></tbody>
@@ -361,7 +406,7 @@
     <div class="panel-head">
       <div><h2>By programme</h2><div class="sub">Live rollup — click Learners tab for the full roster</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Programme</th><th>Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>Needs Support</th><th>Completed</th></tr></thead>
         <tbody id="progRollup"></tbody>
@@ -373,7 +418,7 @@
     <div class="panel-head">
       <div><h2>By mentor</h2><div class="sub">Who's carrying which caseload — click a row to jump to their caseload on the Mentors tab</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>Needs Support</th><th>Completed</th></tr></thead>
         <tbody id="mentorRollup"></tbody>
@@ -385,7 +430,7 @@
     <div class="panel-head">
       <div><h2>Data quality</h2><div class="sub">Everything worth double-checking in ParticipantDB, in one place (section 20)</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Participant</th><th>Programme</th><th>Issue</th></tr></thead>
         <tbody id="dataQualityRollup"></tbody>
@@ -398,7 +443,7 @@
     <div class="panel-head">
       <div><h2>Onboarding pack status</h2><div class="sub">Who still needs their welcome pack — click Send to open their profile</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Participant</th><th>Programme</th><th>Mentor</th><th></th></tr></thead>
         <tbody id="onboardingStatusRollup"></tbody>
@@ -475,7 +520,7 @@
         <button class="primary" id="addBtn">+ Add participant</button>
       </div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;max-height:72vh;overflow-y:auto;">
       <table>
         <thead>
           <tr>
@@ -515,7 +560,7 @@
         <button id="mondayNudgeAllBtn" title="Open a pre-filled, BCC'd Monday check-in reminder for every mentor">🔔 Send Monday reminders</button>
       </div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>Needs Support</th><th>Completed</th><th>Follow-up Rate</th><th>Last check-up</th><th>Actions</th></tr></thead>
         <tbody id="mentorsTabBody"></tbody>
@@ -538,7 +583,7 @@
         <button class="primary" id="openFormBtn">Open check-in form ↗</button>
       </div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead>
           <tr>
@@ -559,7 +604,7 @@
     <div class="panel-head">
       <div><h2>Check-in compliance by programme</h2><div class="sub">Supporting evidence of engagement — not the primary dashboard measure (section 2 &amp; 18)</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Programme</th><th>Enrolled</th><th>Ever submitted</th><th>Submission rate</th><th>Met commitment (latest)</th></tr></thead>
         <tbody id="checkinCompliance"></tbody>
@@ -586,7 +631,7 @@
     <div class="panel-head">
       <div><h2>Evidence — by learner</h2><div class="sub">Click a learner to see their full activity timeline and supporting evidence (section 16 &amp; 17)</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Learner</th><th>Programme</th><th>Mentor</th><th>Progress</th><th>Expected</th><th>Variance</th><th>Last Activity</th><th>Evidence</th><th>Risk</th><th>Projected Completion</th></tr></thead>
         <tbody id="evidenceLearnerBody"></tbody>
@@ -621,7 +666,7 @@
     <div class="panel-head">
       <div><h2>Learners who left the program</h2><div class="sub">Everyone currently marked Drop Off, with who recorded it, when, and why — the underlying evidence for the Retention KPI above. Running past their original timeline does NOT appear here — that's expected, not an exit.</div></div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Learner</th><th>Programme</th><th>Mentor</th><th>Date recorded</th><th>Recorded by</th><th>Reason</th></tr></thead>
         <tbody id="retentionEvidenceBody"></tbody>
@@ -672,7 +717,7 @@
 
   <div class="panel" style="margin-top:20px;">
     <div class="panel-head"><div><h2>Weekly check-in trend</h2><div class="sub" id="kpiTrendSub">Historical performance across the appraisal period — every week is kept, never overwritten</div></div></div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Week</th><th>Expected</th><th>Completed</th><th>Rate</th><th>Target</th><th>Status</th></tr></thead>
         <tbody id="kpiTrendBody"></tbody>
@@ -682,7 +727,7 @@
 
   <div class="panel" style="margin-top:20px;">
     <div class="panel-head"><div><h2>Learners requiring action</h2><div class="sub">Overdue, missed, unresponsive, at-risk, or behind pace — for the selected reporting week</div></div></div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead><tr><th>Participant</th><th>Programme</th><th>Mentor</th><th>Last check-in</th><th>Risk</th><th>Progress</th><th>Required action</th></tr></thead>
         <tbody id="kpiActionBody"></tbody>
@@ -698,7 +743,7 @@
     <div class="evidence-grid" id="kpiEvidenceGrid"></div>
     <div style="padding:14px 18px;">
       <div class="sub" style="margin-bottom:6px;">Data quality — check-in rows excluded from the KPI this week</div>
-      <div style="overflow-x:auto;">
+      <div class="table-scroll" style="overflow-x:auto;">
         <table>
           <thead><tr><th>Participant / row</th><th>Issue</th></tr></thead>
           <tbody id="kpiDataQualityBody"></tbody>
@@ -756,7 +801,7 @@
         <button id="reportCsvBtn">Download CSV</button>
       </div>
     </div>
-    <div style="overflow-x:auto;">
+    <div class="table-scroll" style="overflow-x:auto;">
       <table>
         <thead>
           <tr>
