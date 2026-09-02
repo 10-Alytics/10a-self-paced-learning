@@ -645,6 +645,17 @@
       <div><h2>Evidence Summary — <span id="evidenceQuarterLabel">this quarter</span></h2><div class="sub">Progress, engagement, and evidence for every learner in the selected reporting period</div></div>
     </div>
     <div class="evidence-grid" id="evidenceSummaryGrid"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--line);">
+      <div class="chart-box" style="border-right:1px solid var(--line);"><h3>Evidence Rate by Programme</h3><div class="chart-sub" id="chartEvidenceProgSub">—</div><canvas id="chartEvidenceProg" height="220"></canvas></div>
+      <div class="chart-box"><h3>Evidence Rate by Mentor</h3><div class="chart-sub" id="chartEvidenceMentorSub">—</div><canvas id="chartEvidenceMentor" height="220"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;">
+    <div class="panel-head">
+      <div><h2>Mentor Comments — word cloud</h2><div class="sub">Most frequent words across every logged Wed/Fri comment — real mentor evidence, unedited</div></div>
+    </div>
+    <div id="mentorCommentCloud" style="padding:18px;min-height:80px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">Loading…</div>
   </div>
 
   <div class="panel" style="margin-top:18px;">
@@ -1000,6 +1011,15 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // MENTOR_EMAILS picks that up automatically without needing to be changed
 // individually.
 let TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Excel Abioye'];
+// Mirrors Code.gs's CHECKIN_TAB_TO_MENTOR (tab name -> full mentor name) so
+// the front end can go the other way (full mentor name -> tab name) when
+// writing a comment back to the right tab. Keep these two in sync.
+const MENTOR_TO_CHECKIN_TAB = {
+  'Stephen Adeleye': 'Stephen',
+  'Aanu Oke': 'Aanuoluwatomiwa',
+  'Dolapo Olaboshinde': 'Dolapo',
+  'Excel Abioye': 'Excel',
+};
 
 // Fallback mentor inboxes, used until the live Mentors-tab data loads (see
 // note above). Kept here so the app still works even before the Mentors
@@ -1146,13 +1166,21 @@ async function openMentorEvidenceDrawer(mentorKey){
   `;
   document.getElementById('overlay').classList.add('open');
   document.getElementById('closeMentorEvidenceBtn').onclick = closeDrawer;
+  await renderMentorEvidenceBody_(mentorKey);
+}
+
+// Pulled out of openMentorEvidenceDrawer so saving a new comment can
+// re-render the same drawer in place, without closing/reopening it.
+async function renderMentorEvidenceBody_(mentorKey){
   const body = document.getElementById('mentorEvidenceBody');
+  if(!body) return;
   const checkins = await loadMentorCheckins_();
   const s = checkins[mentorKey];
   if(!s){
     body.innerHTML = `<div class="kpi-warning">No check-in tracker data found for ${mentorKey} yet — either Code.gs hasn't been redeployed with the getMentorCheckins action, or this mentor doesn't have a matching tab in the check-ins spreadsheet (see CHECKIN_TAB_TO_MENTOR in Code.gs).</div>`;
     return;
   }
+  const tabName = MENTOR_TO_CHECKIN_TAB[mentorKey];
   const rows = s.evidence;
   body.innerHTML = `
     <div class="metric-grid" style="margin-bottom:14px;">
@@ -1160,16 +1188,94 @@ async function openMentorEvidenceDrawer(mentorKey){
       <div class="metric"><div class="k">Fri check-in rate</div><div class="v">${s.friRate===null?'—':s.friRate+'%'} <span class="muted" style="font-weight:400;">(${s.friDone}/${s.friTotal})</span></div></div>
       <div class="metric"><div class="k">Learners on tracker</div><div class="v">${s.assigned}</div></div>
     </div>
-    ${rows.length ? `<table><thead><tr><th>Learner</th><th>Wed</th><th>Fri</th><th>Comments</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr>
+    ${rows.length ? `<table><thead><tr><th>Learner</th><th>Wed</th><th>Fri</th><th>Comments</th><th></th></tr></thead><tbody>
+      ${rows.map(r=>`<tr data-pid="${r.participantId}">
         <td>${r.name || r.participantId}</td>
         <td><span class="muted" style="font-size:11px;">${r.wed||'—'}</span></td>
         <td><span class="muted" style="font-size:11px;">${r.fri||'—'}</span></td>
         <td style="font-size:12px;">${[r.wedComment,r.friComment].filter(Boolean).join(' · ')}</td>
+        <td>${tabName ? `<button class="ghost log-checkin-btn" data-pid="${r.participantId}" data-name="${(r.name||r.participantId).replace(/"/g,'&quot;')}" style="padding:3px 8px;font-size:11px;">+ Log</button>` : ''}</td>
       </tr>`).join('')}
     </tbody></table>` : '<div class="muted">No comments logged yet.</div>'}
+    ${tabName ? `<div class="save-row" style="margin-top:12px;"><button class="primary" id="logNewCheckinBtn" style="flex:1;">+ Log a Wed/Fri comment</button></div>` : `<div class="kpi-warning" style="margin-top:12px;">No matching tab found for ${mentorKey} in MENTOR_TO_CHECKIN_TAB — can't log comments here until that mapping is fixed.</div>`}
   `;
+  if(tabName){
+    body.querySelectorAll('.log-checkin-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=> openLogCheckinForm_(mentorKey, tabName, btn.dataset.pid, btn.dataset.name));
+    });
+    const addBtn = document.getElementById('logNewCheckinBtn');
+    if(addBtn) addBtn.addEventListener('click', ()=>{
+      const pid = prompt(`Participant ID to log a comment for (must already be on ${mentorKey}'s tracker tab):`);
+      if(pid && pid.trim()) openLogCheckinForm_(mentorKey, tabName, pid.trim(), pid.trim());
+    });
+  }
 }
+
+// Small inline form (rendered inside the drawer, above the table) for
+// logging one Wed or Fri comment for one learner. Writes straight to the
+// mentor's tab via postMentorCheckin_, then re-renders the drawer so the
+// new comment shows up immediately.
+function openLogCheckinForm_(mentorKey, tabName, participantId, learnerName){
+  const body = document.getElementById('mentorEvidenceBody');
+  if(!body) return;
+  const formHost = document.createElement('div');
+  formHost.className = 'panel';
+  formHost.style.cssText = 'margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:8px;';
+  formHost.innerHTML = `
+    <div style="font-weight:600;margin-bottom:8px;">Log comment — ${learnerName}</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <label style="display:flex;align-items:center;gap:4px;font-size:13px;"><input type="radio" name="ciDay" value="wed" checked> Wednesday</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:13px;"><input type="radio" name="ciDay" value="fri"> Friday</label>
+    </div>
+    <textarea id="ciCommentInput" rows="3" style="width:100%;" placeholder="What did you follow up on with this learner?"></textarea>
+    <div class="save-row" style="margin-top:8px;">
+      <button class="ghost" id="ciCancelBtn" style="flex:1;">Cancel</button>
+      <button class="primary" id="ciSaveBtn" style="flex:1;">Save to tracker</button>
+    </div>
+    <div class="muted" id="ciStatus" style="margin-top:6px;font-size:12px;"></div>
+  `;
+  body.prepend(formHost);
+  document.getElementById('ciCancelBtn').onclick = () => formHost.remove();
+  document.getElementById('ciSaveBtn').onclick = async () => {
+    const day = formHost.querySelector('input[name="ciDay"]:checked').value;
+    const comment = document.getElementById('ciCommentInput').value.trim();
+    if(!comment){ document.getElementById('ciStatus').textContent = 'Enter a comment first.'; return; }
+    const statusEl = document.getElementById('ciStatus');
+    statusEl.textContent = 'Saving…';
+    const res = await postMentorCheckin_(tabName, participantId, day, comment);
+    if(res.ok){
+      showToast(`Saved to ${learnerName}'s ${day==='wed'?'Wednesday':'Friday'} comment.`);
+      await renderMentorEvidenceBody_(mentorKey);
+    } else {
+      statusEl.textContent = 'Failed: ' + (res.error || 'unknown error');
+    }
+  };
+}
+// Writes a mentor's Wed or Fri comment straight back into their tab on
+// the Wed/Fri check-in tracker spreadsheet — the write-back counterpart to
+// loadMentorCheckins_ above. day is 'wed' or 'fri'. Uses the signed-in
+// user's own email (no admin token needed — see _writeMentorCheckin_ in
+// Code.gs) so any signed-in staff/mentor can log a comment, same as the
+// existing "I checked up on my learners" ping.
+async function postMentorCheckin_(tabName, participantId, day, comment){
+  if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
+  const email = currentUserEmail();
+  if(!email) return { ok:false, error:'No signed-in email on file — sign in again and retry.' };
+  try{
+    await fetch(MENTOR_API_URL, {
+      method:'POST',
+      mode:'no-cors',
+      body: JSON.stringify({ action:'submitMentorCheckin', email, tabName, participantId, day, comment })
+    });
+    // no-cors responses are opaque, same limitation as the other
+    // postXToSheet_ functions above — "didn't throw" is treated as sent.
+    logAccess_('edit', `Logged ${day==='wed'?'Wed':'Fri'} check-in comment for ${participantId} on ${tabName}'s tracker`);
+    return { ok:true, sent:true };
+  }catch(e){
+    return { ok:false, error: e.message };
+  }
+}
+
 // `mentor` = {name, email}. Pass `originalName` when renaming an existing
 // mentor (so the backend updates that row instead of appending a new one).
 // Requires the same admin write token as every other sheet write.
@@ -5280,6 +5386,9 @@ function renderEvidenceSummary(){
     grid.innerHTML = items.map(([k,v])=>`<div class="ev-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   }
 
+  renderEvidenceRateCharts_(computed);
+  renderMentorCommentCloud_();
+
   const body = document.getElementById('evidenceLearnerBody');
   if(body){
     body.innerHTML = computed.map(({p,eng})=>{
@@ -5300,6 +5409,103 @@ function renderEvidenceSummary(){
     `;}).join('');
     body.querySelectorAll('tr').forEach(tr=> tr.addEventListener('click', ()=> openDrawer(tr.dataset.id)));
   }
+}
+
+// Two bar charts for the Evidence Summary panel, in the spirit of a
+// classic BI dashboard (KPI cards + bar charts by category): evidence
+// submission rate broken down by programme and by mentor. "Evidence" here
+// means eng.evidenceCount>0 — same definition used for Avg Evidence Rate
+// elsewhere in this tab — scoped to learners still in progress, since
+// completed learners aren't expected to keep submitting evidence.
+function renderEvidenceRateCharts_(computed){
+  const inProgress = computed.filter(c=>!c.eng.isCompleted);
+
+  // By programme
+  const progCodes = Object.keys(PROGRAMMES||{}).filter(code=> inProgress.some(c=>c.p.programme===code));
+  const progRates = progCodes.map(code=>{
+    const group = inProgress.filter(c=>c.p.programme===code);
+    const withEvidence = group.filter(c=>c.eng.evidenceCount>0).length;
+    return group.length ? Math.round(withEvidence/group.length*100) : 0;
+  });
+  const progLabels = progCodes.map(code=> (PROGRAMMES[code]||{}).name || code);
+  const progSub = document.getElementById('chartEvidenceProgSub');
+  if(progSub) progSub.textContent = progCodes.length ? `${progCodes.length} programme(s), learners in progress only` : 'No in-progress learners yet';
+  destroyChart_('evidenceProg');
+  const progCanvas = document.getElementById('chartEvidenceProg');
+  if(progCanvas){
+    CHART_INSTANCES.evidenceProg = new Chart(progCanvas, {
+      type: 'bar',
+      data: { labels: progLabels, datasets: [{ data: progRates, backgroundColor: '#D9631F', borderRadius: 5, maxBarThickness: 30 }] },
+      options: {
+        indexAxis: 'y',
+        plugins:{ legend:{ display:false }, tooltip:{ displayColors:false, callbacks:{ label:(item)=> item.raw+'%' } } },
+        scales:{ x:{ beginAtZero:true, max:100, ticks:{ callback:(v)=>v+'%' }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
+      },
+    });
+  }
+
+  // By mentor (including Unassigned)
+  const mentorGroups = {};
+  TEAM_MEMBERS.forEach(m=> mentorGroups[m] = []);
+  let unassignedGroup = [];
+  inProgress.forEach(c=>{ c.p.mentor ? (mentorGroups[c.p.mentor] = mentorGroups[c.p.mentor]||[]).push(c) : unassignedGroup.push(c); });
+  const mentorLabels = [...TEAM_MEMBERS.filter(m=> (mentorGroups[m]||[]).length), ...(unassignedGroup.length ? ['Unassigned'] : [])];
+  const mentorRates = mentorLabels.map(m=>{
+    const group = m==='Unassigned' ? unassignedGroup : (mentorGroups[m]||[]);
+    const withEvidence = group.filter(c=>c.eng.evidenceCount>0).length;
+    return group.length ? Math.round(withEvidence/group.length*100) : 0;
+  });
+  const mentorSub = document.getElementById('chartEvidenceMentorSub');
+  if(mentorSub) mentorSub.textContent = mentorLabels.length ? 'Learners in progress only' : 'No in-progress learners yet';
+  destroyChart_('evidenceMentor');
+  const mentorCanvas = document.getElementById('chartEvidenceMentor');
+  if(mentorCanvas){
+    CHART_INSTANCES.evidenceMentor = new Chart(mentorCanvas, {
+      type: 'bar',
+      data: { labels: mentorLabels, datasets: [{ data: mentorRates, backgroundColor: mentorLabels.map(l=> l==='Unassigned' ? '#94A3B8' : '#0F766E'), borderRadius: 5, maxBarThickness: 30 }] },
+      options: {
+        indexAxis: 'y',
+        plugins:{ legend:{ display:false }, tooltip:{ displayColors:false, callbacks:{ label:(item)=> item.raw+'%' } } },
+        scales:{ x:{ beginAtZero:true, max:100, ticks:{ callback:(v)=>v+'%' }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
+      },
+    });
+  }
+}
+
+// Lightweight tag/word cloud (no extra library — just sized spans) built
+// from every real Wed/Fri comment across all mentors, pulled the same way
+// the mentor evidence drawer does (loadMentorCheckins_). Common filler
+// words are stripped so what's left is mostly the substance of what
+// mentors are actually writing about.
+const COMMENT_CLOUD_STOPWORDS = new Set(['the','a','an','and','or','but','is','are','was','were','be','been','to','of','in','on','for','with','at','by','from','this','that','it','as','has','have','had','will','would','not','no','yes','she','he','they','them','her','his','their','i','we','you','your','our','did','do','does','so','if','up','out','still','just','about','after','before','more','than','also','was','been','into','over','learner','mentor']);
+async function renderMentorCommentCloud_(){
+  const host = document.getElementById('mentorCommentCloud');
+  if(!host) return;
+  const checkins = await loadMentorCheckins_();
+  const freq = {};
+  Object.values(checkins).forEach(s=>{
+    (s.evidence||[]).forEach(r=>{
+      [r.wedComment, r.friComment].filter(Boolean).forEach(text=>{
+        text.toLowerCase().split(/[^a-z']+/).forEach(word=>{
+          word = word.trim();
+          if(word.length < 3 || COMMENT_CLOUD_STOPWORDS.has(word)) return;
+          freq[word] = (freq[word]||0) + 1;
+        });
+      });
+    });
+  });
+  const words = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0, 40);
+  if(!words.length){
+    host.innerHTML = '<div class="muted">No mentor comments logged yet.</div>';
+    return;
+  }
+  const maxCount = words[0][1];
+  const palette = ['#D9631F','#0F766E','#B45309','#15803D','#161311'];
+  host.innerHTML = words.map(([w,count],i)=>{
+    const size = 12 + Math.round((count/maxCount) * 26);
+    const color = palette[i % palette.length];
+    return `<span title="${count} mention(s)" style="font-size:${size}px;font-weight:700;color:${color};line-height:1;">${w}</span>`;
+  }).join('');
 }
 
 // ---- Retention KPI (Category: Retention, Target 80%) ----
