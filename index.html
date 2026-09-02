@@ -363,7 +363,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Programme</th><th>Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th></tr></thead>
+        <thead><tr><th>Programme</th><th>Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>Needs Support</th><th>Completed</th></tr></thead>
         <tbody id="progRollup"></tbody>
       </table>
     </div>
@@ -375,7 +375,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th></tr></thead>
+        <thead><tr><th>Mentor</th><th>Assigned</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>Needs Support</th><th>Completed</th></tr></thead>
         <tbody id="mentorRollup"></tbody>
       </table>
     </div>
@@ -428,7 +428,7 @@
           <option value="">All engagement</option>
           <option value="Active">Active</option>
           <option value="Needs Attention">Needs Attention</option>
-          <option value="At Risk">At Risk</option>
+          <option value="At Risk">Needs Support</option>
           <option value="Completed">Completed</option>
         </select>
         <select id="filterRisk" title="Pacing vs. deadline — a scheduling signal for mentors, not a judgement">
@@ -440,7 +440,7 @@
           <option value="">All status</option>
           <option value="Active">Active</option>
           <option value="Needs Follow-up">Needs Follow-up</option>
-          <option value="At Risk">At Risk</option>
+          <option value="At Risk">Needs Support</option>
           <option value="Defaulted">Needs Support (overdue)</option>
           <option value="Completed">Completed</option>
         </select>
@@ -517,7 +517,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>At Risk</th><th>Completed</th><th>Follow-up Rate</th><th>Last check-up</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Mentor</th><th>Assigned Learners</th><th>Avg Progress</th><th>Active</th><th>Attention</th><th>Needs Support</th><th>Completed</th><th>Follow-up Rate</th><th>Last check-up</th><th>Actions</th></tr></thead>
         <tbody id="mentorsTabBody"></tbody>
       </table>
     </div>
@@ -726,7 +726,7 @@
           <option value="">All status</option>
           <option value="Active">Active</option>
           <option value="Needs Follow-up">Needs Follow-up</option>
-          <option value="At Risk">At Risk</option>
+          <option value="At Risk">Needs Support</option>
           <option value="Defaulted">Needs Support (overdue)</option>
           <option value="Completed">Completed</option>
         </select>
@@ -1732,6 +1732,18 @@ async function refreshLiveData_() {
             lastCheckin: r.Last_Checkin_Date || null,
             lastTopicCompleted: r.Last_Topic_Completed || null,
             comments: r.Comments || null,
+            // ---- Lifecycle (Defer / Complete / Drop Off), read straight
+            // from the Sheet so it syncs to every laptop the same way
+            // Assigned_Mentor already does — see markLifecycle_/
+            // reactivateParticipant below for the write side. Blank on the
+            // Sheet (columns not added yet, or never set) means "no
+            // Sheet-sourced value" — the boot() merge below then falls back
+            // to this browser's local draft instead, so nothing regresses
+            // for anyone who hasn't added these columns yet.
+            lifecycleStatusFromSheet: (r.Lifecycle_Status || '').trim().toLowerCase() || null,
+            lifecycleReasonFromSheet: r.Lifecycle_Reason || '',
+            lifecycleAtFromSheet: r.Lifecycle_At || null,
+            lifecycleByFromSheet: r.Lifecycle_By || null,
           };
         });
       })(),
@@ -3053,22 +3065,32 @@ function riskDisplay(eng){
 }
 function statusClass(s){
   if(s==='Completed') return 'green';
-  if(s==='At Risk') return 'rose';
+  if(s==='At Risk') return 'amber';
   if(s==='Defaulted' || s==='Needs Follow-up') return 'amber';
   return 'slate';
 }
-// "Defaulted" is still the internal/raw value everywhere in this file
-// (still triggered at the same Week-4-inactivity escalation stage as
-// before — that logic hasn't changed) — but it reads as a punitive, final
-// label, which doesn't fit self-paced's flexible policy of keeping overdue
-// learners enrolled and just following up more. Anywhere a status is shown
-// to a person should route through this instead of printing the raw
-// value.
-function statusLabel_(s){ return s==='Defaulted' ? 'Needs Support (overdue)' : (s || '—'); }
+// "Defaulted" and "At Risk" are still the internal/raw values everywhere in
+// this file (same underlying triggers as before — that logic hasn't
+// changed) — but both read as punitive, alarming labels, which doesn't fit
+// self-paced's flexible, supportive policy. Anywhere a status is shown to a
+// person should route through this instead of printing the raw value, so
+// the wording (and badge colour, see statusClass/engagementClass above)
+// stays soft and encouraging no matter where it's used — dashboard, roster
+// table, nudge emails, PDF/CSV exports, chart labels.
+function statusLabel_(s){
+  if(s==='Defaulted') return 'Needs Support (overdue)';
+  if(s==='At Risk') return 'Needs Support';
+  return s || '—';
+}
+// Same softening for the Engagement column specifically — kept separate
+// from statusLabel_ because Status and Engagement are different fields
+// that happen to share the raw string 'At Risk'; mapping them independently
+// means either one's wording can change later without affecting the other.
+function engagementLabel_(s){ return s==='At Risk' ? 'Needs Support' : (s || '—'); }
 function engagementClass(s){
   if(s==='Active') return 'green';
   if(s==='Needs Attention') return 'amber';
-  if(s==='At Risk') return 'rose';
+  if(s==='At Risk') return 'amber';
   if(s==='Completed') return 'green';
   return 'slate';
 }
@@ -3124,7 +3146,7 @@ function renderKPIs(computed){
     ['Total Learners', n, '', {type:'completion', value:''}],
     ['Active', active, 'green', {type:'engagement', value:'Active'}],
     ['Needs Attention', attention, 'amber', {type:'engagement', value:'Needs Attention'}],
-    ['At Risk', atrisk, 'rose', {type:'engagement', value:'At Risk'}],
+    ['Needs Support', atrisk, 'amber', {type:'engagement', value:'At Risk'}],
     ['Completed', completed, 'slate', {type:'completion', value:'completed'}],
     ['Deferred', deferredCount, deferredCount>0?'amber':'slate', {type:'lifecycle', value:'deferred'}],
     ['Drop Off', dropoffCount, dropoffCount>0?'rose':'slate', {type:'lifecycle', value:'dropoff'}],
@@ -3227,7 +3249,7 @@ function renderTable(computed){
       <td class="pid">${p.lastCheckin ? fmtShort(new Date(p.lastCheckin)) : '<span class="muted">—</span>'}</td>
       <td class="pid">${eng.daysSinceActivity===null?'—':Math.round(eng.daysSinceActivity)}</td>
       <td class="pid">${eng.evidenceCount}</td>
-      <td><span class="badge ${engagementClass(eng.engagementStatus)}" title="${(eng.engagementReasons||[]).join(' ')}">${eng.engagementStatus}</span></td>
+      <td><span class="badge ${engagementClass(eng.engagementStatus)}" title="${(eng.engagementReasons||[]).join(' ')}">${engagementLabel_(eng.engagementStatus)}</span></td>
       <td><span class="badge ${rd.cls}">${rd.label}</span></td>
       <td class="pid">${projectedTxt}</td>
       <td><span class="badge ${statusClass(eng.isCompleted?'Completed':eng.status)}">${eng.isCompleted ? 'Completed' : 'In Progress'}</span></td>
@@ -3275,7 +3297,7 @@ function engagementRowCells(b){
     <td>${b.n ? (b.prog/b.n*100).toFixed(0)+'%' : '<span class="muted">—</span>'}</td>
     <td><span class="badge green">${b.active}</span></td>
     <td><span class="badge amber">${b.attention}</span></td>
-    <td><span class="badge rose">${b.atrisk}</span></td>
+    <td><span class="badge amber">${b.atrisk}</span></td>
     <td><span class="badge slate">${b.completed}</span></td>`;
 }
 
@@ -3916,7 +3938,7 @@ function renderCharts(computed){
   // running past the original timeline isn't treated as a drop condition.
   const statusOrder = ['Active','Needs Follow-up','At Risk','Defaulted','Completed'];
   const statusLabels = statusOrder.map(statusLabel_);
-  const statusColors = {Active:'#D9631F', 'Needs Follow-up':'#B45309', 'At Risk':'#BE123C', Defaulted:'#B45309', Completed:'#15803D'};
+  const statusColors = {Active:'#D9631F', 'Needs Follow-up':'#B45309', 'At Risk':'#B45309', Defaulted:'#B45309', Completed:'#15803D'};
   const statusCounts = {}; statusOrder.forEach(s=> statusCounts[s]=0);
   computed.forEach(({eng})=>{ statusCounts[eng.status] = (statusCounts[eng.status]||0) + 1; });
   document.getElementById('chartStatusSub').textContent = `${statusCounts.Completed} completed · ${statusCounts['At Risk']+statusCounts.Defaulted} need attention`;
@@ -5036,7 +5058,7 @@ function renderEvidenceSummary(){
     ['Avg Progress', avgProg.toFixed(0)+'%'],
     ['Active', active],
     ['Needs Attention', attention],
-    ['At Risk', atrisk],
+    ['Needs Support', atrisk],
     ['Completed', completed],
     [`Submitted Evidence (${q.label})`, `${evidenceThisQuarter}/${n} (${evidenceRate.toFixed(0)}%)`],
     ['Avg Days Since Last Activity', avgDays===null?'—':avgDays.toFixed(1)],
@@ -5785,10 +5807,29 @@ async function markLifecycle(id, status){
     });
   }
 
+  // Push to the Sheet the same way a drawer edit or mentor reassignment
+  // does (see updateParticipantInSheet_) — this is what makes Defer/
+  // Complete/Drop Off show up on every laptop after the next refresh,
+  // instead of staying stuck on just this browser until someone happens to
+  // also reassign that learner's mentor. Requires the Lifecycle_Status/
+  // Lifecycle_Reason/Lifecycle_At/Lifecycle_By columns to exist in
+  // ParticipantDB (see README) — if they don't yet, this silently no-ops
+  // and the change still works locally via the draft above, same as
+  // before.
+  const lifecycleSync = await updateParticipantInSheet_(p.id, {
+    Lifecycle_Status: rec.status, Lifecycle_Reason: rec.reason, Lifecycle_At: rec.at, Lifecycle_By: rec.by,
+  });
+
   logAccess_('lifecycle', `${lifecycleLabel_(status)} ${p.name} (${p.id})${reason ? ' — ' + reason : ''}`);
   closeDrawer();
   renderAll();
-  showToast(`${p.name} marked ${lifecycleLabel_(status)} and removed from the active roster. Switch "Roster view" to see them again.`);
+  if(lifecycleSync && lifecycleSync.ok){
+    showToast(`${p.name} marked ${lifecycleLabel_(status)} — synced to the Sheet, everyone will see it.`);
+  } else if(lifecycleSync && lifecycleSync.skipped){
+    showToast(`${p.name} marked ${lifecycleLabel_(status)} locally only — sign in with the admin token, or add the Lifecycle_* columns to ParticipantDB, to sync this to every laptop. See README.`);
+  } else {
+    showToast(`${p.name} marked ${lifecycleLabel_(status)}, but the Sheet sync failed: ${(lifecycleSync&&lifecycleSync.error)||'unknown error'}. It's saved on this browser for now.`);
+  }
 }
 
 async function reactivateParticipant(id){
@@ -5799,10 +5840,17 @@ async function reactivateParticipant(id){
   await captureSnapshot_(`Reactivate ${p.name} (${p.id})`);
   await clearLifecycle(id);
   p.lifecycleStatus = 'active'; p.lifecycleReason = ''; p.lifecycleAt = null; p.lifecycleBy = null;
+  const reactivateSync = await updateParticipantInSheet_(p.id, {
+    Lifecycle_Status: 'active', Lifecycle_Reason: '', Lifecycle_At: '', Lifecycle_By: '',
+  });
   logAccess_('lifecycle', `Reactivated ${p.name} (${p.id})`);
   closeDrawer();
   renderAll();
-  showToast(`${p.name} moved back to the active roster.`);
+  if(reactivateSync && reactivateSync.ok){
+    showToast(`${p.name} moved back to the active roster — synced to the Sheet.`);
+  } else {
+    showToast(`${p.name} moved back to the active roster locally. Sign in with the admin token to sync this to every laptop.`);
+  }
 }
 
 async function removeParticipant(id){
@@ -6318,11 +6366,25 @@ async function boot(){
   const [editsBlob, lifecycleBlob] = await Promise.all([_loadEditsBlob_(), _loadLifecycleBlob_()]);
   for(const p of all){
     Object.assign(p, editsBlob[p.id] || {});
-    const lc = lifecycleBlob[p.id] || null;
-    p.lifecycleStatus = lc ? lc.status : 'active';
-    p.lifecycleReason = lc ? lc.reason : '';
-    p.lifecycleAt = lc ? lc.at : null;
-    p.lifecycleBy = lc ? lc.by : null;
+    // Lifecycle sync (section: Defer/Complete/Drop Off) — the Sheet is now
+    // the source of truth once Lifecycle_Status has been written there
+    // (see markLifecycle/reactivateParticipant). Only fall back to this
+    // browser's local draft when the Sheet has no value yet, e.g. the
+    // Lifecycle_* columns haven't been added, or this exact change hasn't
+    // synced from THIS browser (no admin token / offline) — that draft
+    // still shows locally until it syncs, same as any other unsynced edit.
+    if(p.lifecycleStatusFromSheet){
+      p.lifecycleStatus = p.lifecycleStatusFromSheet;
+      p.lifecycleReason = p.lifecycleReasonFromSheet || '';
+      p.lifecycleAt = p.lifecycleAtFromSheet || null;
+      p.lifecycleBy = p.lifecycleByFromSheet || null;
+    } else {
+      const lc = lifecycleBlob[p.id] || null;
+      p.lifecycleStatus = lc ? lc.status : 'active';
+      p.lifecycleReason = lc ? lc.reason : '';
+      p.lifecycleAt = lc ? lc.at : null;
+      p.lifecycleBy = lc ? lc.by : null;
+    }
   }
   participants = all;
 
