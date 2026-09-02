@@ -94,12 +94,12 @@
     border:1px solid var(--line);position:relative;overflow:hidden;
     transition:transform .18s var(--ease), box-shadow .18s var(--ease);
   }
-  .kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:#CBD5E1;}
+  .kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--teal);}
   .kpi.green::before{background:var(--green);} .kpi.amber::before{background:var(--amber);}
   .kpi.rose::before{background:var(--rose);} .kpi.teal::before{background:var(--teal);}
   .kpi[data-jump-type]:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);}
-  .kpi .num{font-size:22px;font-weight:700;font-family:var(--mono);}
-  .kpi .lbl{font-size:11px;color:var(--ink-soft);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
+  .kpi .num{font-size:26px;font-weight:800;font-family:var(--mono);letter-spacing:-.3px;}
+  .kpi .lbl{font-size:11px;color:var(--ink-soft);margin-top:3px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
   .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
   .kpi.teal .num{color:var(--teal);}
 
@@ -209,11 +209,24 @@
   }
   .flag-banner b{font-weight:700;}
   .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:16px;}
-  .chart-box{background:var(--canvas);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0;}
+  .chart-box{background:var(--canvas);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0;transition:box-shadow .18s var(--ease);}
+  .chart-box:hover{box-shadow:var(--shadow-sm);}
   .chart-box h3{margin:0 0 2px;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
   .chart-box .chart-sub{font-size:11px;color:var(--ink-soft);margin-bottom:10px;}
   .chart-box canvas{max-height:220px;}
   .chart-box-wide{grid-column:1 / -1;}
+  /* ---- mentor comment word cloud — frequency mapped to size/weight/
+     colour on a single brand gradient (muted -> teal) rather than a
+     cycling rainbow palette, for a calmer, analytics-dashboard feel ---- */
+  .word-cloud{
+    padding:24px 18px 18px;min-height:90px;display:flex;flex-wrap:wrap;gap:10px 16px;
+    align-items:baseline;justify-content:center;text-align:center;background:var(--canvas);
+  }
+  .word-cloud .wc-word{
+    font-family:var(--sans);line-height:1;cursor:default;transition:opacity .15s var(--ease);
+    letter-spacing:-.01em;
+  }
+  .word-cloud .wc-word:hover{opacity:.72;}
   .chart-empty{font-size:12.5px;color:var(--ink-soft);padding:30px 0;text-align:center;}
 
   /* ---- tabs ---- */
@@ -275,37 +288,77 @@
   .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:13px;}
   .footnote{font-size:11px;color:#94A3B8;text-align:center;margin:22px 0 0;}
   @media (max-width:640px){ .kpis{margin:-24px 12px 0;} .main{padding:0 12px;} }
-  /* ---- login gate ---- */
+  /* ---- login gate — split card: branded panel + form panel ---- */
   #loginGate{
     position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,var(--navy) 0%, var(--navy-2) 100%);
-    display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto;
   }
   #loginGate::after{
     content:"";position:absolute;right:-10%;top:-15%;width:480px;height:480px;border-radius:50%;
     background:radial-gradient(circle at center, rgba(217,99,31,.30), transparent 70%);pointer-events:none;
   }
-  .login-card{
-    background:var(--paper);border-radius:18px;padding:34px 30px;max-width:380px;width:100%;
-    box-shadow:0 30px 80px rgba(0,0,0,.4);position:relative;z-index:1;animation:loginIn .35s var(--ease);
+  #loginGate::before{
+    content:"";position:absolute;left:-8%;bottom:-18%;width:420px;height:420px;border-radius:50%;
+    background:radial-gradient(circle at center, rgba(217,99,31,.12), transparent 72%);pointer-events:none;
   }
-  @keyframes loginIn{from{transform:translateY(10px);opacity:0;}to{transform:translateY(0);opacity:1;}}
-  .login-card h2{margin:0 0 4px;font-size:19px;color:var(--ink);font-weight:800;letter-spacing:-.2px;}
-  .login-card p.lede{margin:0 0 20px;font-size:13px;color:var(--ink-soft);}
+  .login-shell{
+    display:flex;max-width:840px;width:100%;min-height:520px;border-radius:22px;overflow:hidden;
+    box-shadow:0 40px 100px rgba(0,0,0,.45);position:relative;z-index:1;animation:loginIn .4s var(--ease);
+  }
+  @keyframes loginIn{from{transform:translateY(14px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  /* left: branded panel — hidden below 880px, form panel becomes the whole shell */
+  .login-brand{
+    flex:1 1 46%;background:linear-gradient(155deg,var(--navy) 0%,var(--navy-2) 55%, #2b1c10 100%);
+    color:#fff;padding:44px 38px;display:flex;flex-direction:column;justify-content:space-between;
+    position:relative;overflow:hidden;
+  }
+  .login-brand::after{
+    content:"";position:absolute;right:-70px;bottom:-70px;width:280px;height:280px;border-radius:50%;
+    background:radial-gradient(circle at center, rgba(217,99,31,.35), transparent 70%);pointer-events:none;
+  }
+  .login-brand-badge{
+    width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;letter-spacing:-.3px;
+    color:var(--teal);position:relative;z-index:1;
+  }
+  .login-brand h1{margin:22px 0 8px;font-size:24px;font-weight:800;letter-spacing:-.4px;line-height:1.2;position:relative;z-index:1;}
+  .login-brand p.tag{margin:0;font-size:13.5px;color:#A9B4C9;line-height:1.55;max-width:280px;position:relative;z-index:1;}
+  .login-brand-features{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:14px;position:relative;z-index:1;}
+  .login-brand-features li{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#D9E1EC;line-height:1.4;}
+  .login-brand-features li .dot{
+    flex:none;width:22px;height:22px;border-radius:7px;background:rgba(217,99,31,.18);border:1px solid rgba(217,99,31,.35);
+    display:flex;align-items:center;justify-content:center;font-size:12px;margin-top:1px;
+  }
+  .login-brand-foot{font-size:11px;color:#7C8AA3;position:relative;z-index:1;margin-top:28px;}
+  /* right: form panel */
+  .login-card{
+    flex:1 1 54%;background:var(--paper);padding:44px 40px;display:flex;flex-direction:column;justify-content:center;
+    min-width:0;
+  }
+  .login-card h2{margin:0 0 4px;font-size:21px;color:var(--ink);font-weight:800;letter-spacing:-.3px;}
+  .login-card p.lede{margin:0 0 24px;font-size:13px;color:var(--ink-soft);}
   .login-card label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin:14px 0 6px;}
   .login-card input{
-    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:var(--sans);
-    transition:border-color .15s var(--ease), box-shadow .15s var(--ease);
+    width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:var(--sans);
+    background:var(--paper);transition:border-color .15s var(--ease), box-shadow .15s var(--ease);
   }
   .login-card input:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft);outline:none;}
   .login-card button{
-    margin-top:20px;width:100%;padding:11px;border:none;border-radius:9px;background:var(--teal);color:#fff;
-    font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s var(--ease), transform .08s var(--ease), box-shadow .15s var(--ease);
-    box-shadow:var(--shadow-sm);
+    margin-top:22px;width:100%;padding:12px;border:none;border-radius:10px;
+    background:linear-gradient(135deg,var(--teal) 0%,#c2560f 100%);color:#fff;
+    font-size:14.5px;font-weight:700;cursor:pointer;letter-spacing:.1px;
+    transition:opacity .15s var(--ease), transform .08s var(--ease), box-shadow .15s var(--ease);
+    box-shadow:0 8px 20px -6px rgba(217,99,31,.55);
   }
-  .login-card button:hover{opacity:.92;box-shadow:var(--shadow-md);}
+  .login-card button:hover{opacity:.94;box-shadow:0 10px 26px -6px rgba(217,99,31,.65);}
   .login-card button:active{transform:scale(.98);}
   .login-error{color:var(--rose);font-size:12.5px;margin-top:10px;min-height:16px;}
   .admin-only-note{font-size:11.5px;color:var(--ink-soft);background:var(--canvas);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:6px;}
+  @media (max-width:880px){
+    .login-brand{display:none;}
+    .login-shell{max-width:420px;min-height:0;}
+    .login-card{padding:36px 28px;}
+  }
 
   .app-logout{background:none;border:1px solid var(--line);border-radius:9px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);transition:border-color .15s var(--ease), color .15s var(--ease);}
   .app-logout:hover{border-color:rgba(255,255,255,.4);color:#fff;}
@@ -314,21 +367,36 @@
 <body>
 
 <div id="loginGate">
-  <div class="login-card">
-    <h2>10Alytics · SPL Tracker</h2>
-    <p class="lede">Staff &amp; mentors only — sign in with your work email to continue.</p>
-    <form id="loginForm">
-      <label for="loginEmail">Email address</label>
-      <input type="email" id="loginEmail" placeholder="you@yourcompany.com" autocomplete="username" required>
-      <label for="loginPassword">Access password</label>
-      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;margin:2px 0 0;">
-        <input type="checkbox" id="loginPasswordToggle" style="width:auto;margin:0;" onchange="document.getElementById('loginPassword').type = this.checked ? 'text' : 'password';">
-        Show password
-      </label>
-      <button type="submit">Sign in</button>
-      <div class="login-error" id="loginError"></div>
-    </form>
+  <div class="login-shell">
+    <div class="login-brand">
+      <div>
+        <div class="login-brand-badge">10A</div>
+        <h1>Self-Paced Learning,<br>tracked in real time.</h1>
+        <p class="tag">One live view of every learner's pace, mentor follow-up, and evidence — pulled straight from your tracker, no manual reporting.</p>
+        <ul class="login-brand-features">
+          <li><span class="dot">📈</span> Live pacing, risk &amp; projected completion per learner</li>
+          <li><span class="dot">✅</span> Real Wed/Fri mentor check-in evidence, not guesswork</li>
+          <li><span class="dot">🎯</span> Retention &amp; check-in KPIs, computed live — never hard-coded</li>
+        </ul>
+      </div>
+      <div class="login-brand-foot">10Alytics · SPLMS Tracker</div>
+    </div>
+    <div class="login-card">
+      <h2>Welcome back</h2>
+      <p class="lede">Staff &amp; mentors only — sign in with your work email to continue.</p>
+      <form id="loginForm">
+        <label for="loginEmail">Email address</label>
+        <input type="email" id="loginEmail" placeholder="you@yourcompany.com" autocomplete="username" required>
+        <label for="loginPassword">Access password</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" required>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:400;margin:2px 0 0;">
+          <input type="checkbox" id="loginPasswordToggle" style="width:auto;margin:0;" onchange="document.getElementById('loginPassword').type = this.checked ? 'text' : 'password';">
+          Show password
+        </label>
+        <button type="submit">Sign in →</button>
+        <div class="login-error" id="loginError"></div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -572,7 +640,18 @@
 <div class="main" id="mentorsView" style="display:none;">
   <div id="mondayNudgeBanner"></div>
   <div id="mentorWorkRateBanner"></div>
+
   <div class="panel">
+    <div class="panel-head">
+      <div><h2>Caseload &amp; Follow-up by Mentor</h2><div class="sub">Learners assigned and Wed/Fri follow-up rate — real tracker data</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--line);">
+      <div class="chart-box" style="border-right:1px solid var(--line);"><h3>Caseload</h3><div class="chart-sub" id="chartMentorCaseloadSub">—</div><canvas id="chartMentorCaseload" height="200"></canvas></div>
+      <div class="chart-box"><h3>Follow-up Rate (Wed+Fri avg)</h3><div class="chart-sub" id="chartMentorFollowupSub">—</div><canvas id="chartMentorFollowup" height="200"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;">
     <div class="panel-head">
       <div><h2>Mentors</h2><div class="sub">Caseload and outcomes per mentor — click a row to see that mentor's learners</div></div>
       <div class="controls">
@@ -655,7 +734,8 @@
     <div class="panel-head">
       <div><h2>Mentor Comments — word cloud</h2><div class="sub">Most frequent words across every logged Wed/Fri comment — real mentor evidence, unedited</div></div>
     </div>
-    <div id="mentorCommentCloud" style="padding:18px;min-height:80px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">Loading…</div>
+    <div id="mentorCommentCloud" class="word-cloud">Loading…</div>
+    <div class="muted" id="mentorCommentCloudFootnote" style="font-size:11px;padding:0 18px 14px;"></div>
   </div>
 
   <div class="panel" style="margin-top:18px;">
@@ -1145,6 +1225,7 @@ async function loadMentorCheckins_(){
         wedRate: wedEligible.length ? Math.round(wedDone.length/wedEligible.length*100) : null,
         friRate: friEligible.length ? Math.round(friDone.length/friEligible.length*100) : null,
         evidence,
+        allRows: rows, // every row (even with no comment yet) — used to prefill the per-participant Wed/Fri panel in openDrawer
       };
     });
     return summary;
@@ -1257,7 +1338,7 @@ function openLogCheckinForm_(mentorKey, tabName, participantId, learnerName){
 // user's own email (no admin token needed — see _writeMentorCheckin_ in
 // Code.gs) so any signed-in staff/mentor can log a comment, same as the
 // existing "I checked up on my learners" ping.
-async function postMentorCheckin_(tabName, participantId, day, comment){
+async function postMentorCheckin_(tabName, participantId, day, comment, status){
   if(!MENTOR_API_URL) return { ok:false, error:'MENTOR_API_URL is not configured.' };
   const email = currentUserEmail();
   if(!email) return { ok:false, error:'No signed-in email on file — sign in again and retry.' };
@@ -1265,7 +1346,7 @@ async function postMentorCheckin_(tabName, participantId, day, comment){
     await fetch(MENTOR_API_URL, {
       method:'POST',
       mode:'no-cors',
-      body: JSON.stringify({ action:'submitMentorCheckin', email, tabName, participantId, day, comment })
+      body: JSON.stringify({ action:'submitMentorCheckin', email, tabName, participantId, day, comment, status })
     });
     // no-cors responses are opaque, same limitation as the other
     // postXToSheet_ functions above — "didn't throw" is treated as sent.
@@ -3611,8 +3692,15 @@ function bucketByEngagement(list){
   return b;
 }
 function engagementRowCells(b){
+  const pct = b.n ? Math.round(b.prog/b.n*100) : null;
+  const barTrack = `<div style="display:flex;align-items:center;gap:8px;">
+      <div style="flex:1;min-width:60px;height:8px;border-radius:99px;background:var(--canvas);overflow:hidden;">
+        <div style="height:100%;border-radius:99px;background:var(--teal);width:${pct===null?0:pct}%;"></div>
+      </div>
+      <span style="font-weight:700;font-family:var(--mono);font-size:12px;min-width:34px;text-align:right;">${pct===null?'—':pct+'%'}</span>
+    </div>`;
   return `<td>${b.n}</td>
-    <td>${b.n ? (b.prog/b.n*100).toFixed(0)+'%' : '<span class="muted">—</span>'}</td>
+    <td>${barTrack}</td>
     <td><span class="badge green">${b.active}</span></td>
     <td><span class="badge amber">${b.attention}</span></td>
     <td><span class="badge amber">${b.atrisk}</span></td>
@@ -3895,6 +3983,7 @@ function renderMentorsTab(){
   const tbody = document.getElementById('mentorsTabBody');
   if(!tbody) return;
   tbody.innerHTML = rows || '<tr><td colspan=10 class="muted">No data</td></tr>';
+  renderMentorCaseloadCharts_(keys, byMentor);
   tbody.querySelectorAll('.mentor-row').forEach(tr=>{
     tr.addEventListener('click', ()=>{
       switchTab('learners');
@@ -3944,6 +4033,54 @@ function renderMentorsTab(){
       td.title = `${s.wedDone}/${s.wedTotal} checked in Wed · ${s.friDone}/${s.friTotal} checked in Fri · ${s.assigned} learners on tracker`;
     });
     renderMentorWorkRateBanner_(summary);
+  }).catch(()=>{});
+}
+
+// Two bar charts above the Mentors table: caseload (assigned learners,
+// straight from ParticipantDB/computed) and follow-up rate (avg of Wed+Fri
+// check-in rate, straight from the real tracker via loadMentorCheckins_).
+function renderMentorCaseloadCharts_(keys, byMentor){
+  const labels = keys.map(k=> k==='__unassigned__' ? 'Unassigned' : k);
+  const caseloadData = keys.map(k=> (byMentor[k]||[]).length);
+  const caseloadSub = document.getElementById('chartMentorCaseloadSub');
+  if(caseloadSub) caseloadSub.textContent = `${keys.filter(k=>k!=='__unassigned__').length} mentor(s)`;
+  destroyChart_('mentorCaseload');
+  const caseloadCanvas = document.getElementById('chartMentorCaseload');
+  if(caseloadCanvas){
+    CHART_INSTANCES.mentorCaseload = new Chart(caseloadCanvas, {
+      type: 'bar',
+      data: { labels, datasets: [{ data: caseloadData, backgroundColor: labels.map(l=> l==='Unassigned' ? '#94A3B8' : '#D9631F'), borderRadius: 5, maxBarThickness: 30 }] },
+      options: {
+        indexAxis: 'y',
+        plugins:{ legend:{ display:false }, tooltip:{ displayColors:false } },
+        scales:{ x:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
+      },
+    });
+  }
+
+  const followupSub = document.getElementById('chartMentorFollowupSub');
+  const followupCanvas = document.getElementById('chartMentorFollowup');
+  loadMentorCheckins_().then(summary=>{
+    const withData = keys.filter(k=> k!=='__unassigned__' && summary[k] && (summary[k].wedRate!==null || summary[k].friRate!==null));
+    const fLabels = withData;
+    const fData = withData.map(k=>{
+      const s = summary[k];
+      const vals = [s.wedRate, s.friRate].filter(v=>v!==null);
+      return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+    });
+    if(followupSub) followupSub.textContent = withData.length ? 'Avg of Wed + Fri check-in rate' : 'No tracker data yet';
+    destroyChart_('mentorFollowup');
+    if(followupCanvas){
+      CHART_INSTANCES.mentorFollowup = new Chart(followupCanvas, {
+        type: 'bar',
+        data: { labels: fLabels, datasets: [{ data: fData, backgroundColor: '#0F766E', borderRadius: 5, maxBarThickness: 30 }] },
+        options: {
+          indexAxis: 'y',
+          plugins:{ legend:{ display:false }, tooltip:{ displayColors:false, callbacks:{ label:(item)=> item.raw+'%' } } },
+          scales:{ x:{ beginAtZero:true, max:100, ticks:{ callback:(v)=>v+'%' }, grid:{ color:'#E2E8F0' } }, y:{ grid:{ display:false } } },
+        },
+      });
+    }
   }).catch(()=>{});
 }
 
@@ -5476,16 +5613,29 @@ function renderEvidenceRateCharts_(computed){
 // from every real Wed/Fri comment across all mentors, pulled the same way
 // the mentor evidence drawer does (loadMentorCheckins_). Common filler
 // words are stripped so what's left is mostly the substance of what
-// mentors are actually writing about.
-const COMMENT_CLOUD_STOPWORDS = new Set(['the','a','an','and','or','but','is','are','was','were','be','been','to','of','in','on','for','with','at','by','from','this','that','it','as','has','have','had','will','would','not','no','yes','she','he','they','them','her','his','their','i','we','you','your','our','did','do','does','so','if','up','out','still','just','about','after','before','more','than','also','was','been','into','over','learner','mentor']);
+// mentors are actually writing about. Colour and weight are mapped to
+// each word's rank on a single muted -> brand-teal gradient (a "heat"
+// scale) rather than cycling through unrelated colours, and size uses a
+// square-root curve so one very common word doesn't visually swamp
+// everything else — both standard practice for a cloud that reads as
+// analysis rather than clip art.
+const COMMENT_CLOUD_STOPWORDS = new Set(['the','a','an','and','or','but','is','are','was','were','be','been','to','of','in','on','for','with','at','by','from','this','that','it','as','has','have','had','will','would','not','no','yes','she','he','they','them','her','his','their','i','we','you','your','our','did','do','does','so','if','up','out','still','just','about','after','before','more','than','also','into','over','learner','mentor','checked','check','said','told','week','today','been','were']);
+function _lerpColor_(hexA, hexB, t){
+  const a = [1,3,5].map(i=>parseInt(hexA.slice(i,i+2),16));
+  const b = [1,3,5].map(i=>parseInt(hexB.slice(i,i+2),16));
+  const c = a.map((v,i)=> Math.round(v + (b[i]-v)*t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
 async function renderMentorCommentCloud_(){
   const host = document.getElementById('mentorCommentCloud');
   if(!host) return;
   const checkins = await loadMentorCheckins_();
   const freq = {};
+  let commentsAnalyzed = 0;
   Object.values(checkins).forEach(s=>{
     (s.evidence||[]).forEach(r=>{
       [r.wedComment, r.friComment].filter(Boolean).forEach(text=>{
+        commentsAnalyzed++;
         text.toLowerCase().split(/[^a-z']+/).forEach(word=>{
           word = word.trim();
           if(word.length < 3 || COMMENT_CLOUD_STOPWORDS.has(word)) return;
@@ -5494,18 +5644,31 @@ async function renderMentorCommentCloud_(){
       });
     });
   });
-  const words = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0, 40);
+  const footnote = document.getElementById('mentorCommentCloudFootnote');
+  const words = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0, 32);
   if(!words.length){
-    host.innerHTML = '<div class="muted">No mentor comments logged yet.</div>';
+    host.innerHTML = '<div class="muted" style="padding:10px 0;">No mentor comments logged yet.</div>';
+    if(footnote) footnote.textContent = '';
     return;
   }
   const maxCount = words[0][1];
-  const palette = ['#D9631F','#0F766E','#B45309','#15803D','#161311'];
-  host.innerHTML = words.map(([w,count],i)=>{
-    const size = 12 + Math.round((count/maxCount) * 26);
-    const color = palette[i % palette.length];
-    return `<span title="${count} mention(s)" style="font-size:${size}px;font-weight:700;color:${color};line-height:1;">${w}</span>`;
+  const minCount = words[words.length-1][1];
+  const range = Math.max(maxCount - minCount, 1);
+  // Shuffle deterministically-ish by interleaving ranks so the cloud
+  // doesn't read top-to-bottom in strict frequency order (that looks like
+  // a sorted list, not a cloud) while still keeping the most frequent
+  // words visually dominant via size/weight/colour.
+  const ordered = words.map((w,i)=>({w, i})).sort((a,b)=> (a.i%2) - (b.i%2) || a.i - b.i);
+  host.innerHTML = ordered.map(({w:[word,count]})=>{
+    const t = (count - minCount) / range; // 0 = least frequent shown, 1 = most frequent
+    const sizeT = Math.sqrt(t); // sqrt curve so the top word doesn't dominate
+    const size = Math.round(14 + sizeT * 22); // 14px – 36px
+    const weight = Math.round(500 + t * 300); // 500 – 800
+    const color = _lerpColor_('#94A3B8', '#D9631F', t); // muted grey -> brand orange
+    const label = word.charAt(0).toUpperCase() + word.slice(1);
+    return `<span class="wc-word" title="${count} mention${count===1?'':'s'}" style="font-size:${size}px;font-weight:${weight};color:${color};">${label}</span>`;
   }).join('');
+  if(footnote) footnote.textContent = `Based on ${commentsAnalyzed} logged comment${commentsAnalyzed===1?'':'s'} across all mentors · darker/larger = more frequent`;
 }
 
 // ---- Retention KPI (Category: Retention, Target 80%) ----
@@ -5898,6 +6061,69 @@ async function applyCheckinToProfile(p, entry, key){
 }
 
 // ---------- drawer ----------
+// Fills in the "Weekly Check-in (Wed / Fri)" section of the participant
+// drawer — the same underlying data as the Mentor Evidence drawer
+// (loadMentorCheckins_), but scoped to just this one learner and editable
+// right where a mentor is already looking. Async and called after the
+// drawer's synchronous innerHTML is set, so opening the drawer itself
+// isn't blocked on the check-ins fetch.
+async function renderCheckinWedFriSection_(p){
+  const host = document.getElementById('checkinWedFriSection');
+  if(!host) return;
+  const tabName = p.mentor ? MENTOR_TO_CHECKIN_TAB[p.mentor] : null;
+  if(!p.mentor){
+    host.innerHTML = '<div class="muted" style="font-size:12.5px;">Assign a mentor first — Wed/Fri check-ins live on that mentor\'s tracker tab.</div>';
+    return;
+  }
+  if(!tabName){
+    host.innerHTML = `<div class="muted" style="font-size:12.5px;">No check-in tracker tab mapped for ${p.mentor} (see MENTOR_TO_CHECKIN_TAB).</div>`;
+    return;
+  }
+  const checkins = await loadMentorCheckins_();
+  const s = checkins[p.mentor];
+  const row = s && s.allRows ? s.allRows.find(r=>r.participantId===p.id) : null;
+  if(!row){
+    host.innerHTML = `<div class="muted" style="font-size:12.5px;">${p.name} isn't on ${p.mentor}'s tracker tab yet — add them there first (S/N, Participant ID, Full Name), then reopen this drawer.</div>`;
+    return;
+  }
+  const statusOptions = (val) => ['', 'Checked In', 'Excused', 'Missed'].map(o=>
+    `<option value="${o}" ${o===(val||'')?'selected':''}>${o || '— not set —'}</option>`).join('');
+  host.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="field-group">
+        <label>Wednesday status</label>
+        <select id="ci_wedStatus">${statusOptions(row.wed)}</select>
+        <textarea id="ci_wedComment" placeholder="Wednesday comment" style="margin-top:6px;">${row.wedComment||''}</textarea>
+      </div>
+      <div class="field-group">
+        <label>Friday status</label>
+        <select id="ci_friStatus">${statusOptions(row.fri)}</select>
+        <textarea id="ci_friComment" placeholder="Friday comment" style="margin-top:6px;">${row.friComment||''}</textarea>
+      </div>
+      <button class="primary" id="ci_saveBtn" style="align-self:flex-start;padding:6px 14px;">Save Wed/Fri check-in</button>
+      <div class="muted" id="ci_saveStatus" style="font-size:11.5px;"></div>
+    </div>
+  `;
+  document.getElementById('ci_saveBtn').onclick = async () => {
+    const statusEl = document.getElementById('ci_saveStatus');
+    statusEl.textContent = 'Saving…';
+    const wedStatus = document.getElementById('ci_wedStatus').value;
+    const wedComment = document.getElementById('ci_wedComment').value.trim();
+    const friStatus = document.getElementById('ci_friStatus').value;
+    const friComment = document.getElementById('ci_friComment').value.trim();
+    const [wedRes, friRes] = await Promise.all([
+      postMentorCheckin_(tabName, p.id, 'wed', wedComment, wedStatus),
+      postMentorCheckin_(tabName, p.id, 'fri', friComment, friStatus),
+    ]);
+    if(wedRes.ok && friRes.ok){
+      showToast('Wed/Fri check-in saved.');
+      statusEl.textContent = 'Saved ✓';
+    } else {
+      statusEl.textContent = 'Failed: ' + (wedRes.error || friRes.error || 'unknown error');
+    }
+  };
+}
+
 async function openDrawer(id){
   activeId = id;
   const p = participants.find(x=>x.id===id);
@@ -5961,6 +6187,12 @@ async function openDrawer(id){
         <div class="muted" style="font-size:11.5px;margin-top:4px;" id="onboardingSentNote">
           ${ONBOARDING_SENT[p.id]?.sent ? `Sent ${fmtShort(new Date(ONBOARDING_SENT[p.id].date))} by ${ONBOARDING_SENT[p.id].by}` : 'Not sent yet · visible to all staff once checked'}
         </div>
+      </div>
+
+      <div>
+        <div class="section-title">Weekly Check-in (Wed / Fri)</div>
+        <hr class="sep">
+        <div id="checkinWedFriSection" style="margin-top:10px;">Loading…</div>
       </div>
 
       <div>
@@ -6059,6 +6291,7 @@ async function openDrawer(id){
   `;
   document.getElementById('overlay').classList.add('open');
   renderDrawerCharts(p, eng);
+  renderCheckinWedFriSection_(p);
   document.getElementById('closeBtn').onclick = closeDrawer;
   document.getElementById('saveBtn').onclick = () => saveDrawer(p);
   const deferBtnEl = document.getElementById('deferBtn');
