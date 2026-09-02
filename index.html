@@ -103,7 +103,16 @@
   .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
   .kpi.teal .num{color:var(--teal);}
 
-  /* ---- KPI Evidence tab ---- */
+  .kpi.hero{padding:18px 16px 14px;}
+  .kpi.hero .num{font-size:30px;letter-spacing:-.4px;}
+  .kpi.hero .lbl{font-size:12px;margin-top:4px;}
+  .kpi.hero .sub2{font-size:11px;color:var(--ink-soft);margin-top:5px;line-height:1.4;}
+  .kpi-groups{padding:18px;display:flex;flex-direction:column;gap:20px;}
+  .kpi-group + .kpi-group{padding-top:18px;border-top:1px solid var(--line);}
+  .kpi-group-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+  .kpi-group-head .name{font-size:13px;font-weight:700;color:var(--ink);font-family:var(--display);}
+  .kpi-group-head .desc{font-size:11.5px;color:var(--ink-soft);}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}
   .kpi-hero{
     background:linear-gradient(135deg,var(--ink) 0%,#1e293b 100%);border-radius:16px;padding:22px 26px;
     color:#fff;display:flex;flex-wrap:wrap;gap:22px;align-items:center;justify-content:space-between;box-shadow:var(--shadow-md);
@@ -363,6 +372,13 @@
 
 <div class="kpis" id="kpis"></div>
 
+<div class="panel" id="kpiDetailPanel" style="margin-top:16px;">
+  <div class="panel-head">
+    <div><h2>Programme snapshot</h2><div class="sub">Engagement, pacing and mentor coverage — click any number to jump to the filtered list</div></div>
+  </div>
+  <div class="kpi-groups" id="kpiDetailGroups"></div>
+</div>
+
 <div id="flagArea"></div>
 
 <div id="intakeReconcileBanner"></div>
@@ -511,12 +527,12 @@
           <option value="Pending">Pending</option>
           <option value="Declined">Payment Defaulter</option>
         </select>
-        <select id="filterLifecycle" title="Self-Paced/Completed/Drop Off participants keep their full record — this just controls who shows up in the list below">
+        <select id="filterLifecycle" title="Deferred/Completed/Drop Off participants keep their full record — this just controls who shows up in the list below">
           <option value="active">Active roster</option>
-          <option value="deferred">Self-Paced</option>
+          <option value="deferred">Deferred</option>
           <option value="completed">Completed (archived)</option>
           <option value="dropoff">Drop Off (archived)</option>
-          <option value="all">All (incl. Self-Paced/Completed/Drop Off)</option>
+          <option value="all">All (incl. Deferred/Completed/Drop Off)</option>
         </select>
         <button id="assignMentorsBtn">Assign mentors</button>
         <button id="exportAtRiskCsvBtn" title="Export everyone currently flagged Needs Support or Needs Support (Overdue) as a CSV">Export needs-support (CSV)</button>
@@ -660,7 +676,7 @@
       <h1>Retention Rate — Category: Retention</h1>
       <div class="actual" id="retentionHeroActual">—<small>Target 80%</small></div>
     </div>
-    <div class="stat-blk"><div class="k">Total moved to self-paced</div><div class="v" id="retentionHeroTotal">—</div></div>
+    <div class="stat-blk"><div class="k">Total deferred</div><div class="v" id="retentionHeroTotal">—</div></div>
     <div class="stat-blk"><div class="k">Still learning / retained</div><div class="v" id="retentionHeroRetained">—</div></div>
     <div class="stat-blk"><div class="k">Left the program</div><div class="v" id="retentionHeroDropped">—</div></div>
     <div class="stat-blk"><div class="k">Variance to target</div><div class="v" id="retentionHeroVariance">—</div></div>
@@ -983,7 +999,7 @@ const CHECKIN_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSeh43-sSuT-a1
 // arrives, and every place in this file that reads TEAM_MEMBERS/
 // MENTOR_EMAILS picks that up automatically without needing to be changed
 // individually.
-let TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Excel'];
+let TEAM_MEMBERS = ['Aanu Oke', 'Stephen Adeleye', 'Dolapo Olaboshinde', 'Excel Abioye'];
 
 // Fallback mentor inboxes, used until the live Mentors-tab data loads (see
 // note above). Kept here so the app still works even before the Mentors
@@ -993,19 +1009,17 @@ let MENTOR_EMAILS = {
   'Aanu Oke': 'aanu@10alytics.org',
   'Stephen Adeleye': 'stephen@10alytics.org',
   'Dolapo Olaboshinde': 'dolapo@10alytics.org',
-  'Excel': 'excel@10alytics.org',
+  'Excel Abioye': 'excel@10alytics.org',
 };
 
 // Fallback mentor phone numbers, used until the live Mentors-tab data loads
 // (same pattern as MENTOR_EMAILS above). Shown on each participant's
 // onboarding pack so they have a direct line to their mentor from day one.
-// No fallback number on file yet for Excel — the "✏️ Edit mentors" panel
-// on the Mentors tab is the real source of truth and can add one directly
-// to the Sheet at any time; until then this just falls back to blank.
 let MENTOR_PHONES = {
   'Aanu Oke': '+447411254602',
   'Stephen Adeleye': '+447450635674',
   'Dolapo Olaboshinde': '+447491588784',
+  'Excel Abioye': '+18252547642',
 };
 
 // True once the live Mentors-tab list has successfully loaded at least
@@ -2110,16 +2124,18 @@ async function clearLifecycle(id){
 // statuses (deferred / completed / dropoff), so every place that renders
 // one of these — the Learners table badge, the profile drawer banner, and
 // the confirm()/toast copy in markLifecycle — stays in sync automatically.
-// "Deferred" reads as a lapse; most of these learners actively chose to
-// finish at their own speed instead of ending the programme early, which is
-// a good outcome for a self-paced model. It displays as "Self-Paced" in a
-// calm teal (not the caution amber a warning status would use) — internal
-// value stays 'deferred' everywhere it's stored/filtered.
+// Deferred learners actively chose to finish at their own speed instead of
+// ending the programme early — a good outcome, not a lapse. It reads as
+// "Deferred" (the plain, accurate word for what happened) in the same green
+// as "Completed", because for retention/KPI purposes a deferred learner IS
+// treated as a positive outcome — the only status that counts against the
+// KPI is Drop Off, meaning they actually left. Internal value stays
+// 'deferred' everywhere it's stored/filtered.
 function lifecycleLabel_(status){
-  return status==='deferred' ? 'Self-Paced' : status==='dropoff' ? 'Drop Off' : status==='completed' ? 'Completed' : 'Active';
+  return status==='deferred' ? 'Deferred' : status==='dropoff' ? 'Drop Off' : status==='completed' ? 'Completed' : 'Active';
 }
 function lifecycleBadgeClass_(status){
-  return status==='deferred' ? 'teal' : status==='dropoff' ? 'rose' : 'green';
+  return status==='deferred' ? 'green' : status==='dropoff' ? 'rose' : 'green';
 }
 
 async function loadExtraParticipants(){
@@ -3306,28 +3322,60 @@ function renderKPIs(computed){
   const behindSchedule = count(c=> !c.eng.isCompleted && c.eng.progressStatus==='Behind' || c.eng.progressStatus==='At Risk' && !c.eng.isCompleted);
   const projectedCompletions = count(c=> !c.eng.isCompleted && !!c.eng.projectedCompletion);
 
-  const cards = [
-    ['Total Learners', n, '', {type:'completion', value:''}],
-    ['Active', active, 'green', {type:'engagement', value:'Active'}],
-    ['Needs Attention', attention, 'amber', {type:'engagement', value:'Needs Attention'}],
-    ['Needs Support', atrisk, 'amber', {type:'engagement', value:'At Risk'}],
-    ['Completed', completed, 'green', {type:'completion', value:'completed'}],
-    ['Self-Paced', deferredCount, 'teal', {type:'lifecycle', value:'deferred'}],
-    ['Drop Off', dropoffCount, dropoffCount>0?'rose':'slate', {type:'lifecycle', value:'dropoff'}],
-    ['Avg Progress', avgProg.toFixed(0)+'%', 'teal'],
-    ['Avg Engagement', avgEngagementScore.toFixed(0)+'%', avgEngagementScore>=75?'green':avgEngagementScore>=40?'amber':'rose'],
-    ['Avg Evidence Rate', avgEvidenceRate.toFixed(0)+'%', avgEvidenceRate>=75?'green':avgEvidenceRate>=40?'amber':'rose'],
-    ['Avg Days Since Activity', avgDaysSince===null?'—':avgDaysSince.toFixed(1), ''],
-    ['Mentor Coverage', mentorCoverage.toFixed(0)+'%', mentorCoverage>=90?'green':mentorCoverage>=60?'amber':'rose'],
-    ['Unassigned Learners', mentorUnassigned, mentorUnassigned>0?'amber':'green', {type:'mentor', value:'__unassigned__'}],
-    ['Avg Progress Variance', avgVariance===null?'—':(avgVariance>=0?'+':'')+avgVariance.toFixed(0)+'pt', avgVariance===null?'':avgVariance>=0?'green':'rose'],
-    ['Behind Schedule', behindSchedule, behindSchedule>0?'amber':'green'],
-    ['Projected Completions', projectedCompletions, 'teal'],
+  // ---- Outcomes (hero row) — where every learner ends up. Completed and
+  // Deferred are both styled green here: deferring to finish at your own
+  // pace is a good outcome, same as finishing on the original timeline, so
+  // it should never look like a warning next to it. Drop Off is the only
+  // status that reads as a loss — that's the one thing actually worth a
+  // second look.
+  const heroCards = [
+    ['Total Learners', n, '', {type:'completion', value:''}, 'Everyone currently in the programme'],
+    ['Completed', completed, 'green', {type:'completion', value:'completed'}, 'Finished all modules on the original timeline'],
+    ['Deferred', deferredCount, 'green', {type:'lifecycle', value:'deferred'}, "Finishing at their own pace — still counted as retained, not at risk"],
+    ['Drop Off', dropoffCount, dropoffCount>0?'rose':'slate', {type:'lifecycle', value:'dropoff'}, 'Actually left the programme'],
   ];
-  document.getElementById('kpis').innerHTML = cards.map(([lbl,num,cls,jump])=>`
-    <div class="kpi ${cls}" ${jump ? `style="cursor:pointer;" data-jump-type="${jump.type}" data-jump-value="${jump.value}" title="Click to filter the Learners table"` : ''}><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
+  document.getElementById('kpis').innerHTML = heroCards.map(([lbl,num,cls,jump,sub2])=>`
+    <div class="kpi hero ${cls}" ${jump ? `style="cursor:pointer;" data-jump-type="${jump.type}" data-jump-value="${jump.value}" title="Click to filter the Learners table"` : ''}>
+      <div class="num">${num}</div><div class="lbl">${lbl}</div><div class="sub2">${sub2}</div>
+    </div>
   `).join('');
-  document.querySelectorAll('#kpis [data-jump-type]').forEach(card=>{
+
+  // ---- Secondary groups — same underlying numbers as before, just
+  // organised into named zones instead of one flat row of 16 identical
+  // tiles, so it's obvious at a glance which numbers are about who needs
+  // help right now vs. overall pacing vs. mentor staffing.
+  const groups = [
+    { name:'Engagement', desc:'Who needs a check-in right now', cards:[
+      ['Active', active, 'green', {type:'engagement', value:'Active'}],
+      ['Needs Attention', attention, 'amber', {type:'engagement', value:'Needs Attention'}],
+      ['Needs Support', atrisk, 'amber', {type:'engagement', value:'At Risk'}],
+    ]},
+    { name:'Programme health', desc:'Pace and evidence, averaged across everyone still in progress', cards:[
+      ['Avg Progress', avgProg.toFixed(0)+'%', 'teal'],
+      ['Avg Engagement', avgEngagementScore.toFixed(0)+'%', avgEngagementScore>=75?'green':avgEngagementScore>=40?'amber':'rose'],
+      ['Avg Evidence Rate', avgEvidenceRate.toFixed(0)+'%', avgEvidenceRate>=75?'green':avgEvidenceRate>=40?'amber':'rose'],
+      ['Avg Progress Variance', avgVariance===null?'—':(avgVariance>=0?'+':'')+avgVariance.toFixed(0)+'pt', avgVariance===null?'':avgVariance>=0?'green':'rose'],
+      ['Behind Schedule', behindSchedule, behindSchedule>0?'amber':'green'],
+      ['Projected Completions', projectedCompletions, 'teal'],
+      ['Avg Days Since Activity', avgDaysSince===null?'—':avgDaysSince.toFixed(1), ''],
+    ]},
+    { name:'Mentor coverage', desc:'Staffing, not learner performance', cards:[
+      ['Mentor Coverage', mentorCoverage.toFixed(0)+'%', mentorCoverage>=90?'green':mentorCoverage>=60?'amber':'rose'],
+      ['Unassigned Learners', mentorUnassigned, mentorUnassigned>0?'amber':'green', {type:'mentor', value:'__unassigned__'}],
+    ]},
+  ];
+  document.getElementById('kpiDetailGroups').innerHTML = groups.map(g => `
+    <div class="kpi-group">
+      <div class="kpi-group-head"><span class="name">${g.name}</span><span class="desc">${g.desc}</span></div>
+      <div class="kpi-grid">
+        ${g.cards.map(([lbl,num,cls,jump])=>`
+          <div class="kpi ${cls}" ${jump ? `style="cursor:pointer;" data-jump-type="${jump.type}" data-jump-value="${jump.value}" title="Click to filter the Learners table"` : ''}><div class="num">${num}</div><div class="lbl">${lbl}</div></div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('#kpis [data-jump-type], #kpiDetailGroups [data-jump-type]').forEach(card=>{
     card.addEventListener('click', ()=>{
       const type = card.dataset.jumpType, value = card.dataset.jumpValue;
       switchTab('learners');
@@ -3386,9 +3434,9 @@ function renderTable(computed){
     ].filter(Boolean).join(' ');
     const actionsHtml = lcStatus === 'active'
       ? `<div class="row-actions" style="display:flex;gap:4px;flex-wrap:wrap;">
-           <button class="ghost lifecycle-btn" data-action="deferred" data-id="${p.id}" title="Move to Self-Paced — they're continuing at their own speed, not leaving. Hides them from the active roster but keeps their full record." style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Self-Paced</button>
+           <button class="ghost lifecycle-btn" data-action="deferred" data-id="${p.id}" title="Mark Deferred — they're continuing at their own speed, not leaving. Hides them from the active roster but keeps their full record." style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Defer</button>
            <button class="ghost lifecycle-btn" data-action="completed" data-id="${p.id}" title="Mark Completed — hides them from the active roster but keeps their full record" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Complete</button>
-           <button class="ghost lifecycle-btn" data-action="dropoff" data-id="${p.id}" title="Only for learners who've actually left the program — NOT for running past their self-paced timeline, which is normal. Hides them from the active roster but keeps their full record." style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Drop Off</button>
+           <button class="ghost lifecycle-btn" data-action="dropoff" data-id="${p.id}" title="Only for learners who've actually left the program — NOT for running past their deferred timeline, which is normal. Hides them from the active roster but keeps their full record." style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">Drop Off</button>
          </div>`
       : `<button class="ghost reactivate-btn" data-id="${p.id}" title="${lcTip}" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">↩ Reactivate</button>`;
     return `
@@ -5795,7 +5843,7 @@ async function openDrawer(id){
       <button class="primary" id="saveBtn" style="flex:1;">Save changes</button>
       <button id="planBtn" style="flex:1;">📄 Learning plan (PDF)</button>
       ${lcStatus === 'active' ? `
-        <button id="deferBtn" title="They're continuing at their own speed instead of ending the programme early — this is a good outcome, not a warning.">Move to Self-Paced</button>
+        <button id="deferBtn" title="They're continuing at their own speed instead of ending the programme early — this is a good outcome, not a warning.">Defer</button>
         <button id="completeBtn">Complete</button>
         <button id="dropoffBtn">Drop Off</button>
       ` : `<button id="reactivateBtn">↩ Reactivate</button>`}
@@ -5947,8 +5995,8 @@ async function markLifecycle(id, status){
   if(!requireEditAuth()) return;
   const p = participants.find(x=>x.id===id);
   if(!p) return;
-  const label = status === 'deferred' ? 'move to Self-Paced' : status === 'dropoff' ? 'mark Drop Off' : 'mark Completed';
-  if(status === 'dropoff' && !confirm(`Drop Off means ${p.name} has left the program entirely — NOT just that they've run past their self-paced timeline (that's expected and fine on its own). Are they actually gone?`)) return;
+  const label = status === 'deferred' ? 'mark Deferred' : status === 'dropoff' ? 'mark Drop Off' : 'mark Completed';
+  if(status === 'dropoff' && !confirm(`Drop Off means ${p.name} has left the program entirely — NOT just that they've run past their deferred timeline (that's expected and fine on its own). Are they actually gone?`)) return;
   const reasonInput = prompt(`Reason to ${label} ${p.name}? (optional — shown to staff later, cancel to abort)`, '');
   if(reasonInput === null) return; // user hit Cancel
   const reason = reasonInput.trim();
