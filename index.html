@@ -97,7 +97,8 @@
   .kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--teal);}
   .kpi.green::before{background:var(--green);} .kpi.amber::before{background:var(--amber);}
   .kpi.rose::before{background:var(--rose);} .kpi.teal::before{background:var(--teal);}
-  .kpi[data-jump-type]:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);}
+  .kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);}
+  .kpi[data-jump-type]:hover{cursor:pointer;}
   .kpi .num{font-size:26px;font-weight:800;font-family:var(--mono);letter-spacing:-.3px;}
   .kpi .lbl{font-size:11px;color:var(--ink-soft);margin-top:3px;text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
   .kpi.green .num{color:var(--green);} .kpi.amber .num{color:var(--amber);} .kpi.rose .num{color:var(--rose);}
@@ -146,7 +147,8 @@
   .evidence-grid .ev-item .v{font-size:18px;font-weight:700;font-family:var(--mono);margin-top:3px;}
 
   /* ---- main layout ---- */
-  .main{max-width:1360px;margin:28px auto 60px;padding:0 24px;}
+  .main{max-width:1360px;margin:28px auto 60px;padding:0 24px;animation:viewFade .28s var(--ease);}
+  @keyframes viewFade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
   .panel{background:var(--paper);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);}
   .panel + .panel{margin-top:20px;}
   .panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap;}
@@ -182,8 +184,8 @@
   }
   thead th:hover{color:var(--ink);}
   tbody td{padding:10px 12px;border-bottom:1px solid #EEF1F5;vertical-align:middle;}
-  tbody tr{transition:background-color .1s var(--ease);}
-  tbody tr:hover{background:#FAFBFD;cursor:pointer;}
+  tbody tr{transition:background-color .12s var(--ease), box-shadow .12s var(--ease);}
+  tbody tr:hover{background:var(--teal-soft);cursor:pointer;}
   .pid{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);}
   .name{font-weight:600;}
   .email{font-size:11px;color:var(--ink-soft);}
@@ -376,7 +378,7 @@
         <ul class="login-brand-features">
           <li><span class="dot">📊</span> One live view of programme, activity, and completion progress per learner</li>
           <li><span class="dot">🤝</span> Proactive mentor follow-up outside live classes, backed by real evidence</li>
-          <li><span class="dot">🎯</span> Flexibility to learn at their own pace — with fewer barriers that lead to dropout</li>
+          <li><span class="dot">🎯</span> Flexibility to learn at their own pace — with fewer barriers to completion</li>
         </ul>
       </div>
       <div class="login-brand-foot">10Alytics · SPLMS Tracker</div>
@@ -3966,14 +3968,15 @@ function renderMentorsTab(){
   const rows = keys.map(key=>{
     const b = bucketByEngagement(byMentor[key]);
     const label = key==='__unassigned__' ? 'Unassigned' : key;
+    const isUnknown = key!=='__unassigned__' && !TEAM_MEMBERS.includes(key);
     const actionsCell = key==='__unassigned__' ? '<span class="muted">—</span>'
       : `<div style="display:flex;gap:4px;flex-wrap:wrap;">
            <button class="ghost nudge-row-btn" data-mentor="${key}" title="Send this week's Monday reminder to ${label}" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">🔔 Nudge</button>
            <button class="ghost checkup-row-btn" data-mentor="${key}" title="Log that ${label} checked up on their learners" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">✅ Log</button>
            <button class="ghost evidence-row-btn" data-mentor="${key}" title="See ${label}'s real Wed/Fri check-in evidence and comments" style="padding:4px 7px;font-size:11px;border:1px solid var(--line);">📋 Evidence</button>
          </div>`;
-    return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;">
-      <td><b>${label}</b></td>
+    return `<tr class="mentor-row" data-mentor="${key}" style="cursor:pointer;${isUnknown?'background:#FEF3E8;':''}">
+      <td><b>${isUnknown?'⚠️ ':''}${label}</b>${isUnknown?`<div class="muted" style="font-size:10.5px;font-weight:400;">Not an active mentor — click to reassign these learners</div>`:''}</td>
       ${engagementRowCells(b)}
       <td class="muted followup-rate-cell" data-mentor-cell="${key}" style="font-size:11px;">—</td>
       <td class="muted last-checkup-cell" data-mentor-cell="${key}" style="font-size:11px;">—</td>
