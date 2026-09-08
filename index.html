@@ -1173,6 +1173,17 @@ const PROGRAMMES = {};
 BUNDLE.programmes.forEach(p => PROGRAMMES[p.code] = p);
 BUNDLE.modules = BUNDLE.modules || []; // populated live if DATA_SOURCE.modulesCsvUrl is set
 
+// Snapshot of the known-good, hand-verified programme module counts, taken
+// BEFORE refreshLiveData_ can overwrite BUNDLE.programmes with whatever the
+// live Programmes sheet says. Used only to flag a mismatch (see
+// refreshLiveData_) — never to silently override the sheet.
+const PROGRAMMES_FALLBACK_ = BUNDLE.programmes.map(p => ({ ...p }));
+// Set by refreshLiveData_ if the live Programmes tab's Total_Modules for any
+// code disagrees with PROGRAMMES_FALLBACK_ above. Surfaced on the
+// data-source badge so a typo in the sheet doesn't quietly throw off every
+// lesson-plan calendar for that programme.
+let PROGRAMMES_SYNC_WARNING_ = null;
+
 const STORE_PREFIX = 'splms-tracker-v2';
 
 // -----------------------------------------------------------------------
@@ -1217,13 +1228,14 @@ if (typeof window.storage === 'undefined') {
 // See README.md "Connecting the live data source" for exact steps.
 const DATA_SOURCE = {
   participantsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=923648041&single=true&output=csv',
-  // Left BLANK on purpose: the correct programme list (with fixed module
-  // counts) is now baked into BUNDLE.programmes below, so it no longer
-  // depends on a Google Sheet tab that can drift out of sync. If you ever
-  // want this to be Sheet-driven again, paste the published CSV link back
-  // in here — but make sure the sheet's Total_Modules column matches
-  // BUNDLE.programmes first, or it will silently overwrite this fix again.
-  programmesCsvUrl: '',
+  // Re-enabled (was blank) now that the Programmes tab is published. Kept
+  // safe on purpose: refreshLiveData_ below cross-checks every row's
+  // Total_Modules against the known-good counts baked into
+  // PROGRAMMES_FALLBACK_ (a snapshot of the old hardcoded BUNDLE.programmes
+  // taken at load time) and surfaces a warning on the data-source badge
+  // instead of silently trusting a wrong number — a typo in this tab would
+  // otherwise throw off every lesson-plan calendar for that programme.
+  programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1912207092&single=true&output=csv',
   settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1407597732&single=true&output=csv',
   // Weekly check-in responses. Point this at the "Publish to web > CSV" link
   // for the response sheet behind your check-in Google Form. Leave blank to
@@ -1234,11 +1246,12 @@ const DATA_SOURCE = {
   // of just a module count). "Publish to web > CSV" the Modules tab and
   // paste its link here. Leave blank and the portal falls back to a plain
   // numbered list ("Module 1", "Module 2"...) instead of real topic names.
-  // Left BLANK on purpose, same reason as programmesCsvUrl above: the full,
-  // real module/topic list for every programme is now baked into
-  // BUNDLE.modules below, so plans always show real class names without
-  // needing a Sheet tab kept perfectly in sync.
-  modulesCsvUrl: '',
+  // Re-enabled now that the Modules tab is published. If a row is missing
+  // Programme_Code or Week_Number it's just skipped (see refreshLiveData_);
+  // if the WHOLE fetch comes back with zero usable rows (e.g. a header got
+  // renamed), the code keeps the existing baked-in BUNDLE.modules list
+  // instead of wiping the portal's module names blank.
+  modulesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1522038206&single=true&output=csv',
   // The separate "Admin Dashboard" tab in the Sheet — a different tab from
   // ParticipantDB, used to eyeball totals against what this page computes.
   // NOTE: the exact column layout of this tab wasn't available when this
@@ -1256,6 +1269,13 @@ const DATA_SOURCE = {
   // the link here. Left BLANK until that's set up — the "Who's on now"
   // button will explain what's missing instead of showing fake numbers.
   accessLogCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1350491328&single=true&output=csv',
+  // READ-ONLY fallback for the mentor roster. The normal path is
+  // MENTOR_API_URL's live 'getMentors' action (see loadMentorsFromSheet_),
+  // which is needed anyway for editing mentors — this CSV is only consulted
+  // if that API call fails or Code.gs isn't reachable, so a mentor's name
+  // still shows up correctly even during an Apps Script outage. Never used
+  // for writes.
+  mentorsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1106763505&single=true&output=csv',
 };
 
 // Link to the actual Google Form participants fill in. Shown as a button on
@@ -1345,7 +1365,7 @@ function applyMentorsFromApi_(mentors){
 // 'MENTOR_API_URL' before initialization" and the login form's submit
 // handler would never get attached, which is what caused the "sign-in
 // does nothing" symptom.
-const MENTOR_API_URL = 'https://script.google.com/macros/s/AKfycby8Xni1T6yJ81mIfjlJTDLdkhApypYp7PfRZinHLYsEdDKH_aT3zxWvQwIjGciAr8Cu/exec';
+const MENTOR_API_URL = 'https://script.google.com/macros/s/AKfycbzvS4E8_gUp060XCM32k83kiPjzngmfZ54_f1-_3giQGOuxjxGGhIFDAkiGIb--eF_g/exec';
 // This is just the NAME of the browser-storage slot the admin token gets
 // kept in for the session — it is NOT the token itself. The real secret
 // (whatever you set ADMIN_TOKEN to in Code.gs) gets typed into the
@@ -1359,15 +1379,36 @@ const MENTOR_API_TOKEN_KEY = 'splms-admin-token';
 // 'getMentors' action yet, or if the Mentors tab is empty — in every case
 // the hardcoded fallback defaults above keep the app working.
 async function loadMentorsFromSheet_(){
-  if(!MENTOR_API_URL) return;
-  try{
-    const res = await fetch(MENTOR_API_URL + '?action=getMentors');
-    const data = await res.json();
-    if(data && data.ok && Array.isArray(data.mentors) && data.mentors.length){
-      applyMentorsFromApi_(data.mentors);
+  if(MENTOR_API_URL){
+    try{
+      const res = await fetch(MENTOR_API_URL + '?action=getMentors');
+      const data = await res.json();
+      if(data && data.ok && Array.isArray(data.mentors) && data.mentors.length){
+        applyMentorsFromApi_(data.mentors);
+        return;
+      }
+    }catch(e){
+      // Fall through to the read-only CSV fallback below.
     }
-  }catch(e){
-    // Leave the fallback defaults in place — nothing to do here.
+  }
+  // READ-ONLY fallback: if the Apps Script endpoint is unreachable or
+  // hasn't been deployed with getMentors yet, but the Mentors tab is
+  // published as CSV (DATA_SOURCE.mentorsCsvUrl), use that so the roster
+  // still shows real names/emails instead of sitting on hardcoded defaults.
+  // This path can never be used for writes — "Edit mentors" still requires
+  // MENTOR_API_URL to be working.
+  if(DATA_SOURCE.mentorsCsvUrl){
+    try{
+      const rows = await fetchCsv_(DATA_SOURCE.mentorsCsvUrl, 'Name');
+      const mentors = rows.filter(r=>r.Name).map(r=>({
+        name: r.Name,
+        email: r.Email || '',
+        phone: r.Phone || '',
+      }));
+      if(mentors.length) applyMentorsFromApi_(mentors);
+    }catch(e){
+      // Leave the fallback defaults in place — nothing more to do.
+    }
   }
 }
 
@@ -2273,13 +2314,26 @@ async function refreshLiveData_() {
       (async () => {
         if (!DATA_SOURCE.programmesCsvUrl) return;
         const rows = await fetchCsv_(DATA_SOURCE.programmesCsvUrl, 'Programme_Code');
-        BUNDLE.programmes = rows.filter((r) => r.Programme_Code).map((r) => ({
+        const live = rows.filter((r) => r.Programme_Code).map((r) => ({
           code: r.Programme_Code,
           name: r.Programme_Name,
           totalModules: toNum_(r.Total_Modules, 0),
           capstoneWeeks: toNum_(r.Default_Capstone_Duration_Weeks, 2),
           standardWeeks: toNum_(r.Standard_Programme_Duration_Weeks, 16),
         }));
+        if (!live.length) return; // keep last-known-good instead of wiping it
+        const mismatches = [];
+        live.forEach((lp) => {
+          const known = PROGRAMMES_FALLBACK_.find((f) => f.code === lp.code);
+          if (known && lp.totalModules && lp.totalModules !== known.totalModules) {
+            mismatches.push(lp.code + ' (sheet: ' + lp.totalModules + ', expected: ' + known.totalModules + ')');
+          }
+        });
+        PROGRAMMES_SYNC_WARNING_ = mismatches.length
+          ? 'Total_Modules mismatch in Programmes tab — ' + mismatches.join(', ')
+          : null;
+        if (PROGRAMMES_SYNC_WARNING_) console.warn(PROGRAMMES_SYNC_WARNING_);
+        BUNDLE.programmes = live;
       })(),
       (async () => {
         if (!DATA_SOURCE.settingsCsvUrl) return;
@@ -2381,7 +2435,7 @@ async function refreshLiveData_() {
       (async () => {
         if (!DATA_SOURCE.modulesCsvUrl) return;
         const rows = await fetchCsv_(DATA_SOURCE.modulesCsvUrl, 'Programme_Code');
-        BUNDLE.modules = rows
+        const live = rows
           .filter((r)=> pick_(r, ['Programme_Code','Programme code']) && toNum_(pick_(r, ['Week_Number','Week number']), null) !== null)
           .map((r)=>({
             programme: (pick_(r, ['Programme_Code','Programme code']) || '').trim(),
@@ -2390,6 +2444,8 @@ async function refreshLiveData_() {
             topic: pick_(r, ['Topic']) || '',
             outlineLabel: pick_(r, ['Course_Outline_Label','Course outline label']) || '',
           })).sort((a,b)=> a.weekNumber - b.weekNumber);
+        if (!live.length) return; // keep last-known-good (baked-in) list instead of wiping it blank
+        BUNDLE.modules = live;
       })(),
       (async () => {
         if (!DATA_SOURCE.adminDashboardCsvUrl) return;
@@ -2398,8 +2454,15 @@ async function refreshLiveData_() {
     ]);
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
-    badge.className = 'rule-pill live';
+    if (PROGRAMMES_SYNC_WARNING_) {
+      badge.textContent = 'Live data — refreshed ' + stamp + ' ⚠️ ' + PROGRAMMES_SYNC_WARNING_;
+      badge.className = 'rule-pill error';
+      badge.title = PROGRAMMES_SYNC_WARNING_;
+    } else {
+      badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
+      badge.className = 'rule-pill live';
+      badge.title = '';
+    }
   } catch (err) {
     badge.textContent = 'Could not reach data source — showing last-known snapshot.';
     badge.className = 'rule-pill error';
