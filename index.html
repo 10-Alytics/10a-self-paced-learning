@@ -364,6 +364,186 @@
 
   .app-logout{background:none;border:1px solid var(--line);border-radius:9px;padding:8px 14px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);transition:border-color .15s var(--ease), color .15s var(--ease);}
   .app-logout:hover{border-color:rgba(255,255,255,.4);color:#fff;}
+
+  /* =====================================================================
+     POLISH PASS — purely additive: motion, depth and micro-interactions
+     layered on top of the design system above. Nothing here changes
+     layout/structure, so it can't break any existing selector — it only
+     adds transitions, keyframes, and a few new utility classes that JS
+     opts into (view-enter on tab switch, .scrolled on the header). Safe
+     to delete this whole block to fall back to the previous look exactly.
+     ===================================================================== */
+
+  /* subtle, slow-drifting glow behind the whole app — gives the canvas
+     some life without being distracting or costing much (pure CSS,
+     no JS, GPU-composited). */
+  body{
+    background:
+      radial-gradient(900px 500px at 10% -10%, rgba(217,99,31,.05), transparent 60%),
+      radial-gradient(700px 460px at 110% 10%, rgba(21,128,61,.04), transparent 55%),
+      var(--canvas);
+    background-attachment:fixed;
+  }
+
+  @keyframes viewIn{
+    from{opacity:0;transform:translateY(8px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+  @keyframes cardIn{
+    from{opacity:0;transform:translateY(10px) scale(.985);}
+    to{opacity:1;transform:translateY(0) scale(1);}
+  }
+  @keyframes popIn{
+    0%{opacity:0;transform:scale(.9);}
+    60%{opacity:1;transform:scale(1.03);}
+    100%{opacity:1;transform:scale(1);}
+  }
+  @keyframes shimmer{
+    0%{background-position:-200px 0;}
+    100%{background-position:calc(200px + 100%) 0;}
+  }
+  @keyframes softPulse{
+    0%,100%{opacity:1;}
+    50%{opacity:.55;}
+  }
+  @keyframes gradientDrift{
+    0%{background-position:0% 50%;}
+    50%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
+  }
+
+  /* tab content fade/slide in every time switchTab() shows a view —
+     hooked up via a tiny JS helper (playViewEnter_) added alongside
+     switchTab(), see script section. Respects reduced-motion. */
+  .view-enter{animation:viewIn .32s var(--ease) both;}
+  @media (prefers-reduced-motion: reduce){
+    .view-enter{animation:none;}
+    *{scroll-behavior:auto !important;}
+  }
+  html{scroll-behavior:smooth;}
+
+  /* KPI cards: extra lift + soft glow on hover, staggered pop-in the
+     first time the dashboard renders (nth-child delay, capped so a long
+     grid doesn't take forever to finish appearing) */
+  .kpi{animation:cardIn .38s var(--ease) both;}
+  .kpi:nth-child(1){animation-delay:.02s;} .kpi:nth-child(2){animation-delay:.06s;}
+  .kpi:nth-child(3){animation-delay:.10s;} .kpi:nth-child(4){animation-delay:.14s;}
+  .kpi:nth-child(5){animation-delay:.18s;} .kpi:nth-child(6){animation-delay:.22s;}
+  .kpi:nth-child(n+7){animation-delay:.24s;}
+  .kpi:hover{transform:translateY(-3px);box-shadow:0 20px 34px -16px rgba(217,99,31,.28), var(--shadow-lg);}
+  .kpi:hover::before{filter:brightness(1.15);}
+  .kpi .num{transition:transform .18s var(--ease);}
+  .kpi:hover .num{transform:scale(1.05);}
+
+  /* panels/chart boxes: gentle lift on hover site-wide, not just the ones
+     that already opted in — makes the whole app feel more "alive" and
+     clickable/explorable without adding visual noise at rest */
+  .panel{transition:box-shadow .2s var(--ease), transform .2s var(--ease);}
+  .chart-box{animation:cardIn .4s var(--ease) both;}
+
+  /* buttons: real lift + shadow on hover instead of just a colour swap,
+     plus a brighter gradient on the primary action so the one thing you
+     should click next is obvious at a glance */
+  button{transform:translateY(0);}
+  button:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm);}
+  button:active{transform:translateY(0) scale(.97);box-shadow:none;}
+  button.primary{
+    background:linear-gradient(135deg, var(--navy) 0%, #2A3B63 100%);
+    background-size:160% 160%;
+  }
+  button.primary:hover{
+    background:linear-gradient(135deg, #1c2947 0%, #33477A 100%);
+    box-shadow:0 14px 26px -12px rgba(22,19,17,.45), var(--shadow-md);
+    transform:translateY(-1.5px);
+  }
+  button.ghost:hover, button.danger-ghost:hover{transform:none;box-shadow:none;background:rgba(15,23,42,.05);}
+  button.danger-ghost:hover{background:var(--rose-soft);}
+
+  /* tabbar: animated underline sweep on the active tab instead of a flat
+     colour swap — reads as more "app-like" than a plain toggle */
+  .tab-btn{position:relative;overflow:hidden;}
+  .tab-btn::after{
+    content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;
+    background:var(--teal);transform:scaleX(0);transform-origin:center;transition:transform .22s var(--ease);
+  }
+  .tab-btn.active::after{transform:scaleX(1);}
+  .tab-btn:hover{transform:translateY(-1px);}
+
+  /* sticky header gains depth once the page scrolls under it — toggled
+     via a tiny scroll listener (see script section); pure enhancement,
+     header works identically if JS never adds the class */
+  .app-header{transition:box-shadow .25s var(--ease);}
+  .app-header.scrolled{box-shadow:0 12px 30px -14px rgba(0,0,0,.35);}
+
+  /* table rows: a touch more presence on hover (left accent bar) so it's
+     obvious a row is interactive/clickable, and a smoother reveal for
+     freshly-rendered tables */
+  tbody tr{position:relative;}
+  tbody tr:hover{box-shadow:inset 3px 0 0 var(--teal);}
+  tbody tr td:first-child{transition:padding-left .12s var(--ease);}
+  tbody tr:hover td:first-child{padding-left:15px;}
+
+  /* badges get a little life on hover wherever they're inside an
+     interactive row/card — free affordance, no layout shift */
+  tr .badge, .kpi .badge{transition:transform .15s var(--ease);}
+  tr:hover .badge{transform:scale(1.04);}
+
+  /* progress bars: animated fill + soft gradient instead of a flat block,
+     small detail but shows up on almost every screen in this app */
+  .progress-track{background:linear-gradient(90deg,#E5E9F0,#EEF1F5);}
+  .progress-fill{
+    background:linear-gradient(90deg, var(--teal) 0%, #F0904C 100%);
+    transition:width .5s var(--ease);
+  }
+
+  /* login screen: soft entrance + a slowly drifting gradient edge on the
+     card so the first thing anyone sees already feels considered */
+  .login-card{animation:cardIn .5s var(--ease) both;}
+  .login-shell{animation:viewIn .6s var(--ease) both;}
+  .login-card{position:relative;}
+  .login-card::before{
+    content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;z-index:-1;
+    background:linear-gradient(120deg, rgba(217,99,31,.5), rgba(22,19,17,.15), rgba(21,128,61,.35));
+    background-size:200% 200%;animation:gradientDrift 6s ease-in-out infinite;
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    opacity:.7;
+  }
+  .login-card button[type=submit]{
+    background:linear-gradient(135deg, var(--teal) 0%, #E27A3D 100%);
+    background-size:160% 160%;transition:background-position .3s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
+  }
+  .login-card button[type=submit]:hover{background-position:100% 0;transform:translateY(-1px);box-shadow:0 14px 28px -12px rgba(217,99,31,.5);}
+
+  /* KPI hero / metric numbers: quiet pop-in the first time a screen with
+     real numbers renders, so data feels like it "arrives" rather than
+     just appearing mid-layout */
+  .kpi-hero .actual, .kpi-metric-card .mc-val, .evidence-grid .ev-item .v{animation:popIn .5s var(--ease) both;}
+
+  /* lightweight shimmer utility for any placeholder text/skeleton state —
+     purely opt-in via class="skeleton", nothing existing uses it yet so
+     this has zero effect until/unless applied */
+  .skeleton{
+    display:inline-block;min-width:48px;border-radius:6px;color:transparent !important;
+    background:linear-gradient(90deg, #E9EDF3 25%, #F6F8FA 37%, #E9EDF3 63%);
+    background-size:400px 100%;animation:shimmer 1.4s ease-in-out infinite;
+  }
+
+  /* "who's online" pulse + live-status dot, reused wherever a small live
+     indicator is useful — opt-in via class="live-dot" */
+  .live-dot{
+    display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 0 0 rgba(21,128,61,.5);animation:softPulse 1.8s ease-in-out infinite;
+  }
+
+  /* checkbox/radio-style filter chips and select inputs get a slightly
+     springier focus ring for a more premium feel */
+  input[type=text]:focus, select:focus{box-shadow:0 0 0 4px var(--teal-soft);}
+
+  /* scroll-triggered fade for anything marked .reveal-on-scroll — optional
+     utility, additive only (IntersectionObserver hookup in script section) */
+  .reveal-on-scroll{opacity:0;transform:translateY(14px);transition:opacity .5s var(--ease), transform .5s var(--ease);}
+  .reveal-on-scroll.revealed{opacity:1;transform:translateY(0);}
 </style>
 </head>
 <body>
@@ -769,7 +949,7 @@
       <h1>Retention Rate — Category: Retention</h1>
       <div class="actual" id="retentionHeroActual">—<small>Target 80%</small></div>
     </div>
-    <div class="stat-blk"><div class="k">Total deferred</div><div class="v" id="retentionHeroTotal">—</div></div>
+    <div class="stat-blk" title="Everyone ever registered into this self-paced tracker, regardless of current status — this is the denominator for the retention rate above, not a count of Deferred-status learners"><div class="k">Total registered</div><div class="v" id="retentionHeroTotal">—</div></div>
     <div class="stat-blk"><div class="k">Still learning / retained</div><div class="v" id="retentionHeroRetained">—</div></div>
     <div class="stat-blk"><div class="k">Left the program</div><div class="v" id="retentionHeroDropped">—</div></div>
     <div class="stat-blk"><div class="k">Variance to target</div><div class="v" id="retentionHeroVariance">—</div></div>
@@ -1719,6 +1899,34 @@ async function verifyMentorSynced_(participantId, expectedMentor){
   }
 }
 
+// Same idea as verifyMentorSynced_, but for the Lifecycle_Status column —
+// used right after Defer/Complete/Drop Off/Reactivate to prove the write
+// actually reached ParticipantDB instead of trusting the opaque no-cors
+// POST (see postMentorToSheet_'s comment: "the request didn't throw" is
+// NOT the same thing as "the Sheet actually has it" — a wrong token or a
+// restricted Apps Script deployment both look identical to success from
+// here otherwise). REQUIRES a 'getParticipantLifecycle' action added to
+// Code.gs (see lifecycle-Code.gs-snippet.txt) — until that's deployed this
+// just returns null (inconclusive), same as any other not-yet-supported
+// action, so it never falsely reports a failure.
+async function verifyLifecycleSynced_(participantId, expectedStatus){
+  if(!MENTOR_API_URL) return null;
+  try{
+    const res = await fetch(MENTOR_API_URL + '?action=getParticipantLifecycle&id=' + encodeURIComponent(participantId));
+    const data = await res.json();
+    if(!data || !data.ok) return null;
+    // The Sheet's Lifecycle_Status dropdown stores human-readable labels
+    // (Active / Deferred / Completed / Drop Off) now, not the app's
+    // internal lowercase codes — normalize what came back the same way
+    // the CSV import path does, so "Drop Off" correctly matches the
+    // internal 'dropoff' we expected instead of failing on a spacing/case
+    // difference.
+    return normalizeLifecycleStatus_(data.status) === (expectedStatus || 'active');
+  }catch(e){
+    return null; // offline / network hiccup, or action not deployed yet — inconclusive
+  }
+}
+
 async function postMentorToSheet_(participantId, mentor){
   if(!MENTOR_API_URL || !hasEditAuth()) return { ok:false, skipped:true };
   const token = await ensureAdminToken_();
@@ -1865,6 +2073,16 @@ const FIELD_TO_COLUMN_ = {
   email: 'Email',
   phone: 'Phone_Number',
   serial: 'Serial_No',
+  // ParticipantDB already has these four columns sitting ready and unused
+  // (Lifecycle_Status, "Lifecycle_Reason " (note the sheet's header has a
+  // trailing space — Code.gs/your header-matching logic needs to tolerate
+  // that or the Reason column specifically won't update), Lifecycle_At,
+  // Lifecycle_By) — this wires the Defer/Complete/Drop Off quick actions
+  // up to them so those changes sync to the Sheet like every other edit.
+  lifecycleStatus: 'Lifecycle_Status',
+  lifecycleReason: 'Lifecycle_Reason',
+  lifecycleAt: 'Lifecycle_At',
+  lifecycleBy: 'Lifecycle_By',
 };
 
 
@@ -1990,6 +2208,22 @@ function toNum_(v, fallback) {
   return isNaN(n) ? fallback : n;
 }
 
+// Manual edits in the Sheet (via the dropdown — see "adding the dropdown"
+// in chat) will read naturally: Active / Deferred / Completed / Drop Off.
+// The rest of this app compares against lowercase, no-space internal codes
+// ('active' / 'deferred' / 'completed' / 'dropoff') everywhere — this is
+// the one place that bridges the two, so the Sheet can stay human-readable
+// without breaking every filter/badge/KPI that keys off the raw value.
+// Also tolerates the app's own written values (already lowercase) and a
+// blank cell (brand-new participant, never touched) as 'active'.
+function normalizeLifecycleStatus_(raw){
+  const v = (raw || '').trim().toLowerCase().replace(/[\s-]+/g, '');
+  if(v === 'deferred') return 'deferred';
+  if(v === 'completed' || v === 'complete') return 'completed';
+  if(v === 'dropoff' || v === 'droppedoff' || v === 'left' || v === 'leftprogram') return 'dropoff';
+  return 'active';
+}
+
 // Tries each candidate header name in turn (Google Forms columns are named
 // after the literal question text, so wording can vary slightly).
 function pick_(row, candidates) {
@@ -2096,6 +2330,16 @@ async function refreshLiveData_() {
             lastCheckin: r.Last_Checkin_Date || null,
             lastTopicCompleted: r.Last_Topic_Completed || null,
             comments: r.Comments || null,
+            // Sheet-of-truth lifecycle status — synced here from
+            // ParticipantDB so Defer/Complete/Drop Off shows up on every
+            // device, not just the one that set it. See boot() below for
+            // how this is reconciled against the local, same-device
+            // fallback copy for the moments right after a save, before the
+            // published CSV cache catches up.
+            lifecycleStatus: r.Lifecycle_Status ? normalizeLifecycleStatus_(r.Lifecycle_Status) : null,
+            lifecycleReason: r.Lifecycle_Reason || null,
+            lifecycleAt: r.Lifecycle_At || null,
+            lifecycleBy: r.Lifecycle_By || null,
           };
         });
       })(),
@@ -5926,6 +6170,21 @@ function renderKpiEvidence_(weekEnding, result){
     <div class="ev-item"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
 }
 
+// Re-triggers the .view-enter fade/slide-in animation on an element even
+// if the class is already present (browsers won't replay a CSS animation
+// just because a class got re-applied) — forcing a reflow via offsetWidth
+// between removing and re-adding the class is the standard trick. Purely
+// cosmetic; if this ever throws for any reason the view still shows via
+// the display toggle in switchTab(), it just won't animate that once.
+function playViewEnter_(el){
+  if(!el) return;
+  try{
+    el.classList.remove('view-enter');
+    void el.offsetWidth; // force reflow so the browser notices the class left
+    el.classList.add('view-enter');
+  }catch(e){ /* animation is decorative — never let it block a tab switch */ }
+}
+
 function switchTab(tab){
   document.getElementById('tabDashboard').classList.toggle('active', tab==='dashboard');
   document.getElementById('tabLearners').classList.toggle('active', tab==='learners');
@@ -5938,6 +6197,11 @@ function switchTab(tab){
   document.getElementById('checkinsView').style.display = tab==='checkins' ? '' : 'none';
   document.getElementById('kpiView').style.display = tab==='kpi' ? '' : 'none';
   document.getElementById('reportsView').style.display = tab==='reports' ? '' : 'none';
+  const shown = {
+    dashboard:'dashboardView', learners:'learnersView', mentors:'mentorsView',
+    checkins:'checkinsView', kpi:'kpiView', reports:'reportsView',
+  }[tab];
+  playViewEnter_(document.getElementById(shown));
   if(tab==='learners') renderAll();
   if(tab==='mentors') renderMentorsTab();
   if(tab==='kpi') renderKpiTab();
@@ -6438,6 +6702,11 @@ async function saveDrawer(p){
 // left completely untouched. All this does is set a status flag that the
 // "Roster view" filter uses to hide them from the default Active list.
 // Nothing is deleted, and it's fully reversible via "↩ Reactivate".
+// The local blob (saveLifecycle) is written first so this device's own
+// view updates instantly, then the same change is pushed to ParticipantDB's
+// Lifecycle_* columns via updateParticipantInSheet_ — same admin-token
+// mechanism already used for mentor/profile edits — so every other device
+// sees it on its next refresh instead of it being stuck on this browser.
 async function markLifecycle(id, status){
   if(!requireEditAuth()) return;
   const p = participants.find(x=>x.id===id);
@@ -6453,9 +6722,26 @@ async function markLifecycle(id, status){
   const rec = await saveLifecycle(id, status, reason);
   p.lifecycleStatus = rec.status; p.lifecycleReason = rec.reason; p.lifecycleAt = rec.at; p.lifecycleBy = rec.by;
 
+  const syncResult = await updateParticipantInSheet_(p.id, {
+    // Write the human-readable label (Active/Deferred/Completed/Drop Off)
+    // that matches the Sheet's Lifecycle_Status dropdown exactly — not the
+    // internal lowercase code — so the cell stays a valid option in that
+    // dropdown instead of showing as an off-list value.
+    Lifecycle_Status: lifecycleLabel_(rec.status), Lifecycle_Reason: rec.reason, Lifecycle_At: rec.at, Lifecycle_By: rec.by,
+  });
+  let verifyFailed = false;
+  if(syncResult && syncResult.ok){
+    const verified = await verifyLifecycleSynced_(p.id, rec.status);
+    if(verified === false) verifyFailed = true;
+  }
+
   // Marking Completed via the quick action also flips the existing
   // completion-override machinery (section 7/26) so risk badges, KPIs, and
   // the engagement engine all agree this learner is done, not just hidden.
+  // NOTE: completionOverride/completionMeta below stay LOCAL-ONLY, same as
+  // before — ParticipantDB has no matching columns for them, so this part
+  // still won't show up on other devices. Only the Lifecycle_* status
+  // above (which is what drives the Roster view / Retention KPI) syncs.
   if(status === 'completed'){
     p.completionOverride = 'completed';
     p.completionMeta = p.completionMeta || {
@@ -6473,7 +6759,15 @@ async function markLifecycle(id, status){
   logAccess_('lifecycle', `${lifecycleLabel_(status)} ${p.name} (${p.id})${reason ? ' — ' + reason : ''}`);
   closeDrawer();
   renderAll();
-  showToast(`${p.name} marked ${lifecycleLabel_(status)} and removed from the active roster. Switch "Roster view" to see them again.`);
+  if(syncResult && !syncResult.ok && !syncResult.skipped){
+    showToast(`${p.name} marked ${lifecycleLabel_(status)} locally, but did NOT sync to the Sheet: ${syncResult.error || 'unknown error'}`);
+  } else if(verifyFailed){
+    showToast(`${p.name} marked ${lifecycleLabel_(status)} locally, but the Sheet still shows the OLD status — the write did not actually land (check the admin token, or the Apps Script deployment access setting in Code.gs).`);
+  } else if(syncResult && syncResult.ok){
+    showToast(`${p.name} marked ${lifecycleLabel_(status)} and synced to the Sheet — visible on every device.`);
+  } else {
+    showToast(`${p.name} marked ${lifecycleLabel_(status)} and removed from the active roster. Switch "Roster view" to see them again.`);
+  }
 }
 
 async function reactivateParticipant(id){
@@ -6484,10 +6778,28 @@ async function reactivateParticipant(id){
   await captureSnapshot_(`Reactivate ${p.name} (${p.id})`);
   await clearLifecycle(id);
   p.lifecycleStatus = 'active'; p.lifecycleReason = ''; p.lifecycleAt = null; p.lifecycleBy = null;
+  const syncResult = await updateParticipantInSheet_(p.id, {
+    // Same reasoning as markLifecycle() above — write the dropdown's own
+    // label ("Active"), not the internal lowercase code.
+    Lifecycle_Status: lifecycleLabel_('active'), Lifecycle_Reason: '', Lifecycle_At: '', Lifecycle_By: '',
+  });
+  let verifyFailed = false;
+  if(syncResult && syncResult.ok){
+    const verified = await verifyLifecycleSynced_(p.id, 'active');
+    if(verified === false) verifyFailed = true;
+  }
   logAccess_('lifecycle', `Reactivated ${p.name} (${p.id})`);
   closeDrawer();
   renderAll();
-  showToast(`${p.name} moved back to the active roster.`);
+  if(syncResult && !syncResult.ok && !syncResult.skipped){
+    showToast(`${p.name} moved back to the active roster locally, but did NOT sync to the Sheet: ${syncResult.error || 'unknown error'}`);
+  } else if(verifyFailed){
+    showToast(`${p.name} moved back to the active roster locally, but the Sheet still shows the OLD status — the write did not actually land (check the admin token, or the Apps Script deployment access setting in Code.gs).`);
+  } else if(syncResult && syncResult.ok){
+    showToast(`${p.name} moved back to the active roster and synced to the Sheet.`);
+  } else {
+    showToast(`${p.name} moved back to the active roster.`);
+  }
 }
 
 async function removeParticipant(id){
@@ -7070,11 +7382,23 @@ async function boot(){
   const [editsBlob, lifecycleBlob] = await Promise.all([_loadEditsBlob_(), _loadLifecycleBlob_()]);
   for(const p of all){
     Object.assign(p, editsBlob[p.id] || {});
+    // Lifecycle status now comes from the Sheet first (see the CSV parse
+    // above, and markLifecycle_/reactivateParticipant below which push
+    // there) — that's what makes Defer/Complete/Drop Off visible across
+    // devices. The local blob is only used when it's the more recent
+    // record: right after a save on THIS device, before the Sheet's
+    // publish-to-web CSV cache has refreshed, or if the sync-to-Sheet call
+    // failed and only this browser knows about the change yet.
     const lc = lifecycleBlob[p.id] || null;
-    p.lifecycleStatus = lc ? lc.status : 'active';
-    p.lifecycleReason = lc ? lc.reason : '';
-    p.lifecycleAt = lc ? lc.at : null;
-    p.lifecycleBy = lc ? lc.by : null;
+    const sheetAt = p.lifecycleAt ? new Date(p.lifecycleAt).getTime() : 0;
+    const localAt = (lc && lc.at) ? new Date(lc.at).getTime() : -1;
+    if(lc && localAt >= sheetAt){
+      p.lifecycleStatus = lc.status; p.lifecycleReason = lc.reason || ''; p.lifecycleAt = lc.at; p.lifecycleBy = lc.by;
+    } else if(!p.lifecycleStatus){
+      p.lifecycleStatus = 'active'; p.lifecycleReason = ''; p.lifecycleAt = null; p.lifecycleBy = null;
+    } else {
+      p.lifecycleReason = p.lifecycleReason || '';
+    }
   }
   participants = all;
 
@@ -7146,6 +7470,38 @@ async function boot(){
   }
 }
 initLoginGate();
+
+// ---- purely cosmetic, one-time setup (deliberately OUTSIDE boot(), which
+// can re-run — e.g. after "Restore previous version" — and would otherwise
+// stack duplicate scroll listeners each time) ----
+// 1) Adds .scrolled to the header once the page scrolls under it, for a
+//    bit of depth (see .app-header.scrolled in <style>). Purely visual —
+//    if this never fires for any reason the header just stays as-is.
+(function setupScrollHeaderShadow_(){
+  const header = document.querySelector('.app-header');
+  if(!header) return;
+  let ticking = false;
+  window.addEventListener('scroll', ()=>{
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(()=>{
+      header.classList.toggle('scrolled', window.scrollY > 4);
+      ticking = false;
+    });
+  }, { passive:true });
+})();
+
+// 2) Fades in any element marked class="reveal-on-scroll" once it enters
+//    the viewport (see .reveal-on-scroll in <style>). Nothing uses that
+//    class yet, so this is inert today — a ready-made hook for future
+//    additions rather than something the current UI depends on.
+(function setupRevealOnScroll_(){
+  if(!('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('revealed'); io.unobserve(en.target); } });
+  }, { threshold: .12 });
+  document.querySelectorAll('.reveal-on-scroll').forEach(el=>io.observe(el));
+})();
 </script>
 </body>
 </html>
