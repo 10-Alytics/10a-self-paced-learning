@@ -575,7 +575,7 @@
           <input type="checkbox" id="loginPasswordToggle" style="width:auto;margin:0;" onchange="document.getElementById('loginPassword').type = this.checked ? 'text' : 'password';">
           Show password
         </label>
-        <button type="submit">Sign in →</button>
+        <button type="submit" id="loginSubmitBtn">Sign in →</button>
         <div class="login-error" id="loginError"></div>
       </form>
     </div>
@@ -1173,15 +1173,10 @@ const PROGRAMMES = {};
 BUNDLE.programmes.forEach(p => PROGRAMMES[p.code] = p);
 BUNDLE.modules = BUNDLE.modules || []; // populated live if DATA_SOURCE.modulesCsvUrl is set
 
-// Snapshot of the known-good, hand-verified programme module counts, taken
-// BEFORE refreshLiveData_ can overwrite BUNDLE.programmes with whatever the
-// live Programmes sheet says. Used only to flag a mismatch (see
-// refreshLiveData_) — never to silently override the sheet.
-const PROGRAMMES_FALLBACK_ = BUNDLE.programmes.map(p => ({ ...p }));
-// Set by refreshLiveData_ if the live Programmes tab's Total_Modules for any
-// code disagrees with PROGRAMMES_FALLBACK_ above. Surfaced on the
-// data-source badge so a typo in the sheet doesn't quietly throw off every
-// lesson-plan calendar for that programme.
+// Set by refreshLiveData_ if a programme's Total_Modules (Programmes tab)
+// disagrees with its actual row count in the Modules tab. Surfaced on the
+// data-source badge so a real drift between the two tabs doesn't quietly
+// throw off that programme's lesson-plan calendar.
 let PROGRAMMES_SYNC_WARNING_ = null;
 
 const STORE_PREFIX = 'splms-tracker-v2';
@@ -1229,12 +1224,11 @@ if (typeof window.storage === 'undefined') {
 const DATA_SOURCE = {
   participantsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=923648041&single=true&output=csv',
   // Re-enabled (was blank) now that the Programmes tab is published. Kept
-  // safe on purpose: refreshLiveData_ below cross-checks every row's
-  // Total_Modules against the known-good counts baked into
-  // PROGRAMMES_FALLBACK_ (a snapshot of the old hardcoded BUNDLE.programmes
-  // taken at load time) and surfaces a warning on the data-source badge
-  // instead of silently trusting a wrong number — a typo in this tab would
-  // otherwise throw off every lesson-plan calendar for that programme.
+  // safe on purpose: refreshLiveData_ below cross-checks each row's
+  // Total_Modules against the actual row count for that programme in the
+  // (also live) Modules tab, and surfaces a warning on the data-source
+  // badge if the two disagree — instead of one silently drifting from the
+  // other unnoticed.
   programmesCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1912207092&single=true&output=csv',
   settingsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSlK_xFOk7cWpZG0ttc1QuuNaFVAhcTplQn9sbYFGplsdexBzsatw20e2Vdea1Y-ZsXdKlcm4wCRRDQ/pub?gid=1407597732&single=true&output=csv',
   // Weekly check-in responses. Point this at the "Publish to web > CSV" link
@@ -1654,7 +1648,13 @@ const MONDAY_REMINDER_BCC = ['Aisosa@10alytics.org', 'lola@10alytics.org', 'josh
 // no backend confirming the person owns that mailbox) — it just blocks
 // random internet visitors. If you later want real verification, swap this
 // for Google Sign-In restricted to the Workspace domain.
-const SITE_PASSWORD = 'SPL-10Alytics#2026';
+// NOTE: the site password used to be hardcoded here as SITE_PASSWORD — but
+// this file is served publicly (GitHub Pages), so anything hardcoded in it
+// is readable by anyone via view-source, no login attempt needed. It's now
+// checked server-side by Code.gs's 'verifySitePassword' action (see
+// initLoginGate below), which only ever returns true/false and never the
+// real password. If MENTOR_API_URL isn't configured yet, sign-in is
+// disabled rather than silently falling back to a value in this file.
 
 // Any address ending in one of these domains + the password above gets in.
 // NOTE: this does NOT confirm the person actually owns that mailbox — it
@@ -1669,20 +1669,42 @@ const ALLOWED_EMAIL_DOMAINS = ['@10alytics.org', '@10alytics.io', '@10alytics.ca
 const ADMIN_EMAIL = 'ubong@10alytics.org';
 
 // -----------------------------------------------------------------------
-// SUPERADMIN — "Restore previous version"
+// SUPERADMIN — "Restore previous version" + edit passcode
 // -----------------------------------------------------------------------
-// A separate secret key (NOT tied to any one email address) that unlocks
-// the version-history / restore panel. Anyone signed in can see that the
-// feature exists, but only someone who knows this key can actually open
-// a past snapshot and roll the tracker back to it, or bring back a
-// participant that was removed by mistake. Change this string any time —
-// nothing else needs to be updated.
-const SUPERADMIN_KEY = '10Alytics LearnOps';
+// This used to be a separate hardcoded string (SUPERADMIN_KEY) compared
+// locally — but like SITE_PASSWORD, anything hardcoded in this file is
+// readable by anyone via view-source, so it was never really a secret.
+// It now reuses Code.gs's existing 'verifyToken' action (the same one that
+// checks the admin write token) — the real value only ever lives in
+// Code.gs's ADMIN_TOKEN, and this file never sees it, only a true/false
+// answer. This is the same secret as the "Admin write token" field
+// elsewhere on the site, on purpose — one passcode to remember, not two.
+//
+// unlockSuperAdmin() uses a SYNCHRONOUS request on purpose: every one of
+// its 8 call sites below (requireEditAuth + the restore panel) expects an
+// immediate true/false answer, the same way the old local string
+// comparison worked — turning this into an async check would mean
+// reworking every place in this file that gates an edit, which is a much
+// bigger, riskier change than fixing the actual security hole. A blocking
+// request here only ever happens once per browser tab per session (the
+// result is cached in sessionStorage below), and only when someone is
+// actively entering the passcode — not during normal browsing.
 function isSuperAdmin(){ return sessionStorage.getItem('splms-superadmin-ok') === '1'; }
 function unlockSuperAdmin(key){
-  if((key||'').trim() === SUPERADMIN_KEY){
-    sessionStorage.setItem('splms-superadmin-ok', '1');
-    return true;
+  const guess = (key||'').trim();
+  if(!guess || !MENTOR_API_URL) return false;
+  try{
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', MENTOR_API_URL + '?action=verifyToken&token=' + encodeURIComponent(guess), false);
+    xhr.send(null);
+    const data = JSON.parse(xhr.responseText);
+    if(data && data.ok && data.valid){
+      sessionStorage.setItem('splms-superadmin-ok', '1');
+      return true;
+    }
+  }catch(e){
+    // Network/parse failure — treat as "not verified", same as a wrong
+    // passcode, rather than throwing and breaking the calling code.
   }
   return false;
 }
@@ -1691,11 +1713,9 @@ function lockSuperAdmin(){ sessionStorage.removeItem('splms-superadmin-ok'); }
 // -----------------------------------------------------------------------
 // EDIT AUTHORISATION (section 13) — everyone with dashboard access can
 // VIEW freely; changing anything (mentor, programme, completion status,
-// tracking fields, etc.) requires this separate passcode. It reuses the
-// same secret as the superadmin/"Restore previous version" unlock
-// (SUPERADMIN_KEY = '10Alytics LearnOps') so there's one passcode to
-// remember, not two. The admin account (ADMIN_EMAIL) always has full
-// access and is never prompted.
+// tracking fields, etc.) requires this separate passcode (see
+// unlockSuperAdmin above for how it's verified). The admin account
+// (ADMIN_EMAIL) always has full access and is never prompted.
 // -----------------------------------------------------------------------
 function hasEditAuth(){ return isAdmin() || isSuperAdmin(); }
 function requireEditAuth(){
@@ -1744,18 +1764,39 @@ function initLoginGate(){
     return;
   }
   try{
-    document.getElementById('loginForm').addEventListener('submit', (e)=>{
+    document.getElementById('loginForm').addEventListener('submit', async (e)=>{
       e.preventDefault();
       const email = document.getElementById('loginEmail').value.trim().toLowerCase();
       const password = document.getElementById('loginPassword').value;
       const errEl = document.getElementById('loginError');
+      const submitBtn = document.getElementById('loginSubmitBtn');
+      errEl.textContent = '';
 
       // Staff & mentors only — company domain + shared staff password.
       if(!ALLOWED_EMAIL_DOMAINS.some(d => email.endsWith(d))){
         errEl.textContent = 'This tracker is for authorised staff and mentors only.';
         return;
       }
-      if(password !== SITE_PASSWORD){
+      if(!MENTOR_API_URL){
+        errEl.textContent = 'Sign-in is not configured yet. Contact your administrator.';
+        return;
+      }
+
+      // Verified server-side (Code.gs's verifySitePassword action) instead
+      // of against a value stored in this file — see the note above.
+      if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
+      let valid = false;
+      try{
+        const res = await fetch(MENTOR_API_URL + '?action=verifySitePassword&password=' + encodeURIComponent(password));
+        const data = await res.json();
+        valid = !!(data && data.ok && data.valid);
+      }catch(err){
+        if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Sign in'; }
+        errEl.textContent = "Couldn't reach the sign-in server. Check your connection and try again.";
+        return;
+      }
+      if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Sign in'; }
+      if(!valid){
         errEl.textContent = 'Incorrect password.';
         return;
       }
@@ -2322,17 +2363,6 @@ async function refreshLiveData_() {
           standardWeeks: toNum_(r.Standard_Programme_Duration_Weeks, 16),
         }));
         if (!live.length) return; // keep last-known-good instead of wiping it
-        const mismatches = [];
-        live.forEach((lp) => {
-          const known = PROGRAMMES_FALLBACK_.find((f) => f.code === lp.code);
-          if (known && lp.totalModules && lp.totalModules !== known.totalModules) {
-            mismatches.push(lp.code + ' (sheet: ' + lp.totalModules + ', expected: ' + known.totalModules + ')');
-          }
-        });
-        PROGRAMMES_SYNC_WARNING_ = mismatches.length
-          ? 'Total_Modules mismatch in Programmes tab — ' + mismatches.join(', ')
-          : null;
-        if (PROGRAMMES_SYNC_WARNING_) console.warn(PROGRAMMES_SYNC_WARNING_);
         BUNDLE.programmes = live;
       })(),
       (async () => {
@@ -2452,6 +2482,33 @@ async function refreshLiveData_() {
         await fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl);
       })(),
     ]);
+    // Cross-check each programme's Total_Modules (Programmes tab) against
+    // the actual number of rows for that programme in the Modules tab —
+    // catches a real drift between the two tabs (e.g. a module row added to
+    // one but not reflected in the other's total). Only runs when BOTH
+    // tabs are live; comparing a live tab against the old baked-in snapshot
+    // is what caused a mismatch on nearly every programme the first time
+    // this ran (the baked snapshot didn't count the Onboarding row the same
+    // way, and a couple of programmes had grown a session since it was
+    // taken) — none of that was actually wrong data, just a stale
+    // reference point, so that comparison has been removed.
+    if (DATA_SOURCE.programmesCsvUrl && DATA_SOURCE.modulesCsvUrl) {
+      const moduleCounts = {};
+      BUNDLE.modules.forEach((m) => { moduleCounts[m.programme] = (moduleCounts[m.programme] || 0) + 1; });
+      const mismatches = [];
+      BUNDLE.programmes.forEach((p) => {
+        const count = moduleCounts[p.code];
+        if (count && p.totalModules && count !== p.totalModules) {
+          mismatches.push(p.code + ' (Programmes tab says ' + p.totalModules + ', Modules tab has ' + count + ' rows)');
+        }
+      });
+      PROGRAMMES_SYNC_WARNING_ = mismatches.length
+        ? 'Total_Modules vs Modules-tab row count mismatch — ' + mismatches.join(', ')
+        : null;
+      if (PROGRAMMES_SYNC_WARNING_) console.warn(PROGRAMMES_SYNC_WARNING_);
+    } else {
+      PROGRAMMES_SYNC_WARNING_ = null;
+    }
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     if (PROGRAMMES_SYNC_WARNING_) {
