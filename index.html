@@ -1786,9 +1786,18 @@ function initLoginGate(){
       // of against a value stored in this file — see the note above.
       if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
       let valid = false;
+      let serverUnderstoodRequest = false;
       try{
         const res = await fetch(MENTOR_API_URL + '?action=verifySitePassword&password=' + encodeURIComponent(password));
         const data = await res.json();
+        // Distinguish "server doesn't know this action yet" (data.ok is
+        // false/missing — almost always means Code.gs hasn't been
+        // redeployed since verifySitePassword was added) from "server
+        // checked it and the password was wrong" (data.ok true, data.valid
+        // false). Showing "Incorrect password" for the first case is
+        // actively misleading, since the real fix is redeploying Code.gs,
+        // not retyping a correct password.
+        serverUnderstoodRequest = !!(data && data.ok);
         valid = !!(data && data.ok && data.valid);
       }catch(err){
         if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Sign in'; }
@@ -1796,6 +1805,10 @@ function initLoginGate(){
         return;
       }
       if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Sign in'; }
+      if(!serverUnderstoodRequest){
+        errEl.textContent = "Sign-in server didn't recognise this request — Code.gs likely needs to be redeployed as a new version (Deploy \u2192 Manage deployments \u2192 pencil icon \u2192 New version \u2192 Deploy).";
+        return;
+      }
       if(!valid){
         errEl.textContent = 'Incorrect password.';
         return;
