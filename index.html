@@ -1173,12 +1173,6 @@ const PROGRAMMES = {};
 BUNDLE.programmes.forEach(p => PROGRAMMES[p.code] = p);
 BUNDLE.modules = BUNDLE.modules || []; // populated live if DATA_SOURCE.modulesCsvUrl is set
 
-// Set by refreshLiveData_ if a programme's Total_Modules (Programmes tab)
-// disagrees with its actual row count in the Modules tab. Surfaced on the
-// data-source badge so a real drift between the two tabs doesn't quietly
-// throw off that programme's lesson-plan calendar.
-let PROGRAMMES_SYNC_WARNING_ = null;
-
 const STORE_PREFIX = 'splms-tracker-v2';
 
 // -----------------------------------------------------------------------
@@ -2495,44 +2489,28 @@ async function refreshLiveData_() {
         await fetchAdminDashboardSheet_(DATA_SOURCE.adminDashboardCsvUrl);
       })(),
     ]);
-    // Cross-check each programme's Total_Modules (Programmes tab) against
-    // the actual number of rows for that programme in the Modules tab —
-    // catches a real drift between the two tabs (e.g. a module row added to
-    // one but not reflected in the other's total). Only runs when BOTH
-    // tabs are live; comparing a live tab against the old baked-in snapshot
-    // is what caused a mismatch on nearly every programme the first time
-    // this ran (the baked snapshot didn't count the Onboarding row the same
-    // way, and a couple of programmes had grown a session since it was
-    // taken) — none of that was actually wrong data, just a stale
-    // reference point, so that comparison has been removed.
-    if (DATA_SOURCE.programmesCsvUrl && DATA_SOURCE.modulesCsvUrl) {
+    // Reconcile each programme's totalModules against the actual number of
+    // rows for that programme in the Modules tab. The Modules tab is ground
+    // truth — it's what actually drives the lesson-plan calendar — so
+    // rather than flagging a disagreement as an error for someone to go fix
+    // in the Sheet, just use the real row count. This makes the two tabs
+    // self-consistent automatically instead of needing them hand-matched.
+    if (DATA_SOURCE.modulesCsvUrl) {
       const moduleCounts = {};
       BUNDLE.modules.forEach((m) => { moduleCounts[m.programme] = (moduleCounts[m.programme] || 0) + 1; });
-      const mismatches = [];
       BUNDLE.programmes.forEach((p) => {
         const count = moduleCounts[p.code];
-        if (count && p.totalModules && count !== p.totalModules) {
-          mismatches.push(p.code + ' (Programmes tab says ' + p.totalModules + ', Modules tab has ' + count + ' rows)');
+        if (count && count !== p.totalModules) {
+          console.info('Programme ' + p.code + ': using Modules-tab row count (' + count + ') instead of Programmes tab\'s Total_Modules (' + p.totalModules + ').');
+          p.totalModules = count;
         }
       });
-      PROGRAMMES_SYNC_WARNING_ = mismatches.length
-        ? 'Total_Modules vs Modules-tab row count mismatch — ' + mismatches.join(', ')
-        : null;
-      if (PROGRAMMES_SYNC_WARNING_) console.warn(PROGRAMMES_SYNC_WARNING_);
-    } else {
-      PROGRAMMES_SYNC_WARNING_ = null;
     }
     PROGRAMMES_LIVE_REBUILD_();
     const stamp = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    if (PROGRAMMES_SYNC_WARNING_) {
-      badge.textContent = 'Live data — refreshed ' + stamp + ' ⚠️ ' + PROGRAMMES_SYNC_WARNING_;
-      badge.className = 'rule-pill error';
-      badge.title = PROGRAMMES_SYNC_WARNING_;
-    } else {
-      badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
-      badge.className = 'rule-pill live';
-      badge.title = '';
-    }
+    badge.textContent = 'Live data — refreshed ' + stamp + ' (' + BUNDLE.participants.length + ' participants)';
+    badge.className = 'rule-pill live';
+    badge.title = '';
   } catch (err) {
     badge.textContent = 'Could not reach data source — showing last-known snapshot.';
     badge.className = 'rule-pill error';
