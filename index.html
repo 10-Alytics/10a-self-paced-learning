@@ -62,6 +62,8 @@ dialog menu{display:flex;gap:10px;justify-content:flex-end;padding:0;margin:14px
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22C55E;margin-right:6px;animation:pl 1.8s infinite}@keyframes pl{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}100%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
 #pop{position:absolute;right:28px;top:66px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:260px;box-shadow:var(--sh);display:none;z-index:9}#pop.on{display:block}#pop p{margin:6px 0}
 .act{padding:5px 8px}
+.gauge{position:relative;height:14px;border-radius:99px;background:var(--track);margin-top:16px}.gauge i{display:block;height:100%;border-radius:99px}.gauge u{position:absolute;top:-6px;bottom:-6px;left:80%;width:2px;background:var(--ink)}
+.gl2{display:flex;justify-content:flex-end;width:80%;font-size:12px;color:var(--soft);margin-top:8px}ol.st{margin:0;padding:14px 16px 14px 36px;line-height:1.7}ol.st b{color:var(--or)}
 @media(max-width:820px){.shell{flex-direction:column}.gl{display:none}.g2{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
@@ -109,7 +111,7 @@ const TH={get:()=>{try{return localStorage.getItem('spth')}catch(e){return null}
 const setTheme=v=>{document.documentElement.dataset.theme=v;document.querySelectorAll('.tg').forEach(b=>b.textContent=v=='dark'?'☀':'☾')};
 setTheme(TH.get()||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
 document.querySelectorAll('.tg').forEach(b=>b.onclick=()=>{const v=document.documentElement.dataset.theme=='dark'?'light':'dark';TH.set(v);setTheme(v)});
-const S={L:[],ci:[],fb:[],view:'dash',sf:'active',risk:'',on:{},wk:'',mode:'demo',err:''};
+const S={L:[],ci:[],fb:[],defl:true,view:'dash',sf:'active',risk:'',on:{},wk:'',mode:'demo',err:''};
 function demo(){const M=['Stephen Adeleye','Dolapo Olaboshinde','Aanu Oke','Excel Abioye'],PR=['DA','CS','HRA','APM'],rk=['Green','Green','Amber','Red'];
  const L=[...Array(30)].map((_,i)=>({Participant_ID:'DAC26-0'+i,Full_Name:'Learner '+(i+1),Email:'l'+i+'@example.com',Programme_Code:PR[i%4],Cohort_ID:'C26-0'+(i%4+1),Assigned_Mentor:M[i%4],Progress_Percent:String(10+i*3),Modules_Completed:String(i%9),Total_Modules:'11',Current_Topic:'Power BI basics',Risk_Status:rk[i%4],Days_Since_Last_Activity:String(i*2),Participant_Status:'Active',Predicted_Final_Completion_Date:'2026-12-01'}));
  const ci=[];['2026-09-28','2026-09-21'].forEach((w,k)=>L.forEach((p,i)=>ci.push({'Participant ID (source)':p.Participant_ID,Name:p.Full_Name,Mentor:p.Assigned_Mentor,'Week Of':w,'Wednesday Status':(i+k)%5?'Checked In':'','Friday Status':(i+k)%3?'Checked In':'','Wednesday Comment':(i+k)%5?'':'No response','Friday Comment':'',Source:k?'Historical':'Live Snapshot'})));
@@ -132,6 +134,35 @@ const cur=()=>S.L.filter(p=>(!$('#pf').value||p.Programme_Code===$('#pf').value)
 const LC={active:'Active',deferred:'Deferred',completed:'Completed',dropoff:'Drop Off',defaulted:'Defaulted'},SC={active:'ok',deferred:'w',completed:'ok',dropoff:'b',defaulted:'b'};
 const ov=()=>{try{return JSON.parse(sessionStorage.getItem('sov')||'{}')}catch(e){return{}}};
 function st(p){const raw=(ov()[p.Participant_ID]||p.Lifecycle_Status||'').toLowerCase().replace(/[^a-z]/g,'');if(/^defer/.test(raw))return'deferred';if(/^complet/.test(raw))return'completed';if(/^drop/.test(raw))return'dropoff';if(raw==='active')return'active';if(/complet/i.test(p.Participant_Status))return'completed';if(/default/i.test(p.Participant_Status))return'defaulted';return'active'}
+const lost=p=>st(p)==='dropoff'||(S.defl&&st(p)==='defaulted');
+function ret(){const X=cur(),n=X.length,l=X.filter(lost).length;return{n,l,r:n?Math.round((n-l)/n*1000)/10:0,buf:Math.floor(n*.2)-l}}
+const NR='Not reached this week',STEP={'Red risk':'Call within 48 hours and agree a two-module mini-plan.','Low engagement':'Send a personal message and book a 15-minute catch-up.',[NR]:'Try another channel (WhatsApp or email) and log the outcome in the SOT.'};
+function flags(p){const f=[],d=num(p.Days_Since_Last_Activity),w=wkRows().find(r=>r.pid===p.Participant_ID);
+ if(/red/i.test(p.Risk_Status))f.push('Red risk');if(eng(p)<40)f.push('Low engagement');if(p.Days_Since_Last_Activity!==''&&d>14)f.push('Inactive '+d+' days');if(!w||!(IN(w['Wednesday Status'])||IN(w['Friday Status'])))f.push(NR);return f}
+const stepOf=f=>f.some(x=>/^Inactive/.test(x))?'Escalate to LearnOps and offer a deferral if there is a life event.':f.includes('Red risk')?STEP['Red risk']:f.includes('Low engagement')?STEP['Low engagement']:STEP[NR];
+const watch=()=>cur().filter(active).map(p=>({p,f:flags(p)})).filter(x=>x.f.length).sort((a,b)=>b.f.length-a.f.length);
+const byMentor=()=>{const m={};watch().forEach(x=>{const k=x.p.Assigned_Mentor||'Unassigned';(m[k]=m[k]||[]).push(x)});return m};
+function brief(m,html){const L=byMentor()[m]||[],ln=L.map((x,i)=>`${i+1}. ${x.p.Full_Name} (${x.p.Participant_ID}): ${x.f.join(', ')}. Next step: ${stepOf(x.f)}`),head=`Hi ${m.split(' ')[0]}, these ${L.length} learners need follow-up this week (week of ${nice(S.wk)}):`,foot='Please log each outcome in the Self-Paced Check-ins tab of the LearnOps SOT by Friday. Thank you.';
+ return html?[head,...ln,foot].map(E).join('<br><br>'):[head,'',...ln,'',foot].join('\n')}
+async function tok(){let k=sessionStorage.getItem('stok');if(k)return k;k=(prompt('Enter the admin write token')||'').trim();if(!k)return'';
+ try{const v=await(await fetch(CFG.api+'?action=verifyToken&token='+encodeURIComponent(k))).json();if(!v.valid){toast('That token is not valid.','b');return''}}catch(e){toast('Could not reach the server.','b');return''}sessionStorage.setItem('stok',k);return k}
+async function push(m){const k=await tok();if(!k)return;
+ try{if(!S.mm)S.mm=(await(await fetch(CFG.api+'?action=getMentors')).json()).mentors||[]}catch(e){}
+ const e=((S.mm||[]).find(x=>x.name.toLowerCase()===m.toLowerCase())||{}).email;if(!e){toast('No email on file for '+m+'. Add it in the Mentors tab.','b');return false}
+ const n=(byMentor()[m]||[]).length;await fetch(CFG.api,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'sendMentorNudge',token:k,to:e,bcc:sessionStorage.getItem('sem'),subject:`Follow-up list: ${n} learners need you this week`,htmlBody:brief(m,1),mentor:m})});
+ toast('Email requested for '+m+'. You are copied by BCC.');return true}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-push],[data-copy],[data-all]');if(!b)return;
+ if(b.dataset.copy!==undefined){try{await navigator.clipboard.writeText(brief(b.dataset.copy));toast('Message copied. Paste it into WhatsApp or email.')}catch(x){toast('Could not copy. Select the text manually.','b')}}
+ else if(b.dataset.push!==undefined)push(b.dataset.push);else for(const m of Object.keys(byMentor()))if(m!=='Unassigned')await push(m)});
+function vRet(){const R=ret(),X=cur(),c=k=>X.filter(p=>st(p)===k).length,W=watch(),M=byMentor(),cov=pct(W.filter(x=>!x.f.includes(NR)).length,W.length),ok=R.r>=80;
+ const msg=R.buf>=0?`You can lose ${R.buf} more learner${R.buf==1?'':'s'} and still meet the goal.`:`${-R.buf} learner${R.buf==-1?' is':'s are'} over the limit. Reactivating ${-R.buf} would restore the goal.`,pg={};X.forEach(p=>{const k=p.Programme_Code||'—';(pg[k]=pg[k]||[]).push(p)});
+ const steps=['Check this page every Monday and open the mentor lists.','Push each mentor their list. It names the learner, the warning signs and the next step.','Mentors contact each learner within 48 hours and log the outcome in the SOT check-ins.','If a learner cannot continue, defer instead of dropping off, and set a return date.','Re-check on Friday. Follow-up coverage should reach 100% of the watchlist.'];
+ return`<div class="panel"><h3>Goal: keep 80% of self-paced learners in the programme</h3><div style="padding:18px 20px"><div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap"><b style="font:800 44px var(--mono);color:var(--${ok?'green':'rose'})">${R.r}%</b><span class="tag ${ok?'ok':'b'}">${ok?'On target':'Below target'}</span><span>${R.n-R.l} of ${R.n} learners retained</span></div><div class="gauge"><i style="width:${R.r}%;background:var(--${ok?'green':'rose'})"></i><u></u></div><div class="gl2">Goal 80%</div><p style="margin:8px 0 0">${msg}</p><label class="show"><input type="checkbox" id="df" ${S.defl?'checked':''}> Count defaulted learners as lost</label></div></div>
+ <div class="strip">${[[c('dropoff'),'Dropped off'],[c('defaulted'),'Defaulted'],[c('deferred'),'Deferred'],[c('completed'),'Completed'],[W.length,'On the watchlist'],[cov+'%','Watchlist reached this week']].map(([n,l])=>`<div><b>${n}</b><span>${l}</span></div>`).join('')}</div>
+ <div class="panel"><h3>Steps to take</h3><ol class="st">${steps.map(s=>`<li>${s}</li>`).join('')}</ol></div>
+ <div class="panel"><h3>Push to mentors</h3><div class="tools"><span style="color:var(--soft);align-self:center">Watchlist: active learners with red risk, low engagement, 14+ inactive days or no check-in this week.</span><button class="btn" data-all="1" style="margin-left:auto">Email all mentors</button></div>
+ ${Object.entries(M).sort((a,b)=>b[1].length-a[1].length).map(([m,l])=>`<div style="border-top:1px solid var(--line)"><div class="tools"><b>${E(m)}</b><span class="tag w">${l.length} to follow up</span><span style="margin-left:auto;display:flex;gap:8px"><button class="btn" data-copy="${E(m)}">Copy message</button><button class="btn" data-push="${E(m)}" style="background:var(--or);color:#fff;border-color:var(--or)">Email ${E(m.split(' ')[0])}</button></span></div><div class="sc" style="max-height:260px"><table><thead><tr><th>Learner</th><th>Warning signs</th><th>Next step</th></tr></thead>${l.slice(0,30).map(x=>`<tr class="c" data-id="${E(x.p.Participant_ID)}"><td>${E(x.p.Full_Name)}<br><small>${E(x.p.Participant_ID)}</small></td><td>${x.f.map(z=>`<span class="tag ${z=='Red risk'?'b':'w'}">${E(z)}</span>`).join(' ')}</td><td class="wide">${E(stepOf(x.f))}</td></tr>`).join('')}</table></div></div>`).join('')||'<div class="empty">No learners need follow-up right now.</div>'}</div>
+ <div class="panel"><h3>Retention by programme</h3><table><thead><tr><th>Programme</th><th>Learners</th><th>Lost</th><th>Retention</th></tr></thead>${Object.entries(pg).sort((a,b)=>b[1].length-a[1].length).map(([k,a])=>{const l=a.filter(lost).length,r=Math.round((a.length-l)/a.length*100);return`<tr><td><b>${E(k)}</b></td><td>${a.length}</td><td>${l}</td><td><span class="tag ${r>=80?'ok':'b'}">${r}%</span><div class="pb"><i style="width:${r}%"></i></div></td></tr>`}).join('')}</table></div>`}
 const active=p=>st(p)==='active';
 const toast=(m,c='')=>{const e=$('#ts');e.textContent=m;e.className=c;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',4200)};
 let A={};
@@ -161,7 +192,7 @@ function mstats(rows){const m={};rows.forEach(r=>{const k=r.Mentor||'Unassigned'
 const K=(n,l,c='')=>`<div class="kpi ${c}"><b>${n}</b><span>${l}</span></div>`;
 function kpis(){const X=cur(),c=k=>X.filter(p=>st(p)===k).length,red=X.filter(p=>st(p)==='active'&&/red/i.test(p.Risk_Status)).length;
  const Q=(n,l,cl,k)=>`<div class="kpi ${cl}" data-k="${k}" tabindex="0" role="button"><b>${n}</b><span>${l}</span></div>`;
- $('#kpis').innerHTML=Q(X.length,'Total participants','','')+Q(c('active'),'Active','g','active')+Q(c('deferred'),'Deferred','a','deferred')+Q(c('completed'),'Completed','g','completed')+Q(c('dropoff'),'Drop-off','r','dropoff')+Q(red,'Red risk (active)','r','red')}
+ $('#kpis').innerHTML=Q(ret().r+'%','Retention (goal 80%)',ret().r>=80?'g':'r','ret')+Q(X.length,'Total participants','','')+Q(c('active'),'Active','g','active')+Q(c('deferred'),'Deferred','a','deferred')+Q(c('completed'),'Completed','g','completed')+Q(c('dropoff'),'Drop-off','r','dropoff')+Q(red,'Red risk (active)','r','red')}
 function wkStrip(){const L=cur().filter(active),ids=new Set(L.map(p=>p.Participant_ID)),w=wkRows().filter(r=>ids.has(r.pid)),h=w.filter(r=>IN(r['Wednesday Status'])||IN(r['Friday Status'])).length;
  return`<div class="strip">${[[pct(h,w.length)+'%','Reached this week'],[S.fb.filter(x=>D(f(x,/submitted|timestamp/i))>=S.wk).length,'Feedback this week'],[L.filter(p=>eng(p)<40).length,'Low engagement'],[Math.round(L.reduce((a,p)=>a+num(p.Progress_Percent),0)/(L.length||1))+'%','Average progress']].map(([n,l])=>`<div><b>${n}</b><span>${l}</span></div>`).join('')}</div>`}
 const mtab=(rows,full)=>{const m=mstats(rows);return m.length?`<div class="sc"><table><thead><tr><th>Mentor</th><th>Learners</th><th>Wednesday</th><th>Friday</th>${full?'<th>Notes</th>':''}<th>Not reached</th></tr></thead>${m.map(([k,o])=>`<tr><td><b>${E(k)}</b></td><td>${o.n}</td><td>${pct(o.w,o.n)}%<div class="pb"><i style="width:${pct(o.w,o.n)}%"></i></div></td><td>${pct(o.f,o.n)}%<div class="pb"><i style="width:${pct(o.f,o.n)}%"></i></div></td>${full?`<td>${o.notes}</td>`:''}<td>${o.none?`<span class="tag b">${o.none}</span>`:0}</td></tr>`).join('')}</table></div>`:'<div class="empty">No check-ins for this week.</div>'};
@@ -196,16 +227,16 @@ function drawer(id){const p=S.L.find(x=>x.Participant_ID===id);if(!p)return;cons
  <h3>Recent feedback</h3>${fb.map(o=>`<p><b>${nice(D(f(o,/submitted|timestamp/i)))}</b><br><small>${E(f(o,/challenge/i))}</small></p>`).join('')||'<small>No feedback yet.</small>'}`;
  $('#dr').classList.add('on');$('#dr .x').onclick=()=>$('#dr').classList.remove('on')}
 
-const V={dash:['Dashboard',vDash],learn:['Learners',vLearn,fillLearn],ment:['Mentors',vMent],check:['Check-ins',vCheck,fillCheck],fb:['Weekly feedback',vFb]};
-function render(){kpis();$('#wkw').style.display=['dash','ment','check'].includes(S.view)?'':'none';$('#tabs').innerHTML=Object.entries(V).map(([k,v])=>`<button class="tab ${k===S.view?'on':''}" data-t="${k}">${v[0]}</button>`).join('');
+const V={dash:['Dashboard',vDash],ret:['Retention goal',vRet],learn:['Learners',vLearn,fillLearn],ment:['Mentors',vMent],check:['Check-ins',vCheck,fillCheck],fb:['Weekly feedback',vFb]};
+function render(){kpis();$('#wkw').style.display=['dash','ret','ment','check'].includes(S.view)?'':'none';$('#tabs').innerHTML=Object.entries(V).map(([k,v])=>`<button class="tab ${k===S.view?'on':''}" data-t="${k}">${v[0]}</button>`).join('');
  $('#v').innerHTML=V[S.view][1]();const fn=V[S.view][2];if(fn){fn();$('#v').querySelectorAll('input,select').forEach(e=>e.oninput=fn)}}
 document.addEventListener('click',e=>{const T=x=>e.target.closest(x);
  if(T('select,dialog'))return;const a=T('[data-act]'),k=T('[data-k]'),c=T('[data-sf]'),t=T('[data-t]'),r=T('tr[data-id]');
- if(a)openAct(a.dataset.id,a.dataset.act);else if(k){S.view='learn';S.risk=k.dataset.k==='red'?'Red':'';S.sf=k.dataset.k==='red'?'active':k.dataset.k;render()}
+ if(a)openAct(a.dataset.id,a.dataset.act);else if(k&&k.dataset.k==='ret'){S.view='ret';render()}else if(k){S.view='learn';S.risk=k.dataset.k==='red'?'Red':'';S.sf=k.dataset.k==='red'?'active':k.dataset.k;render()}
  else if(c){S.sf=c.dataset.sf;fillLearn()}else if(t){S.view=t.dataset.t;render()}else if(T('#ex')){const h=['Participant_ID','Full_Name','Email','Programme_Code','Cohort_ID','Assigned_Mentor','Progress_Percent','Risk_Status'];const z=[h.concat('Status').join(',')].concat((S.cur||[]).map(p=>h.map(x=>'"'+String(p[x]||'').replace(/"/g,'""')+'"').concat(LC[st(p)]).join(',')));const a2=document.createElement('a');a2.href=URL.createObjectURL(new Blob([z.join('\n')],{type:'text/csv'}));a2.download='participants.csv';a2.click()}
  else if(r)drawer(r.dataset.id);
  if(!T('#pop,#onl'))$('#pop').classList.remove('on')});
-document.addEventListener('change',e=>{const s=e.target.closest('.act');if(s&&s.value){openAct(s.dataset.id,s.value);s.value=''}});
+document.addEventListener('change',e=>{if(e.target.id==='df'){S.defl=e.target.checked;render();return}const s=e.target.closest('.act');if(s&&s.value){openAct(s.dataset.id,s.value);s.value=''}});
 $('#onl').onclick=()=>{$('#pop').classList.toggle('on');onlUI()};
 const ago=t=>{const m=Math.round((Date.now()-t)/6e4);return m<1?'just now':m+' min ago'};
 function onlUI(){const me=sessionStorage.getItem('sem'),m={...S.on,[me]:Date.now()},l=Object.entries(m).sort((a,b)=>b[1]-a[1]);$('#onl').innerHTML='<span class="dot"></span>'+l.length+' online';$('#pop').innerHTML='<b>Active in the last 5 minutes</b>'+l.map(([e,t])=>`<p><span class="dot"></span>${E(e)}${e===me?' (you)':''} <small>${ago(t)}</small></p>`).join('')}
